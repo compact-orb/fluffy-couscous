@@ -36,7 +36,18 @@ rm /tmp/$latest_stage3_filename
 
 cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
 
-systemd-nspawn --directory=/mnt/gentoo /bin/bash --login -c "
+mount --bind /mnt/gentoo /mnt/gentoo
+mount --make-private /mnt/gentoo
+
+mount --types proc /proc /mnt/gentoo/proc
+mount --rbind /sys /mnt/gentoo/sys
+mount --make-rslave /mnt/gentoo/sys
+mount --rbind /dev /mnt/gentoo/dev
+mount --make-rslave /mnt/gentoo/dev
+mount --bind /run /mnt/gentoo/run
+mount --make-slave /mnt/gentoo/run
+
+chroot /mnt/gentoo /bin/bash --login -c "
 emerge-webrsync
 
 echo 'dev-util/catalyst ~amd64' > /etc/portage/package.accept_keywords/catalyst
@@ -73,18 +84,25 @@ gpg --decrypt --quiet | awk -v path="$latest_catalyst_stage3_path" '
 
 latest_catalyst_stage3_filename=$(basename $latest_catalyst_stage3_path)
 
-curl --output /mnt/gentoo/var/tmp/catalyst/builds/latest-stage3-amd64-llvm-systemd.tar.xz --silent \
+mkdir --parents /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey
+
+curl --output /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-llvm-systemd.tar.xz --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_catalyst_stage3_path}
 
-echo $latest_catalyst_stage3_hash /tmp/$latest_catalyst_stage3_filename |
+echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-llvm-systemd.tar.xz |
 b2sum --check --status
 
-cp --recursive . /mnt/gentoo
+cp --recursive ../ /mnt/gentoo
 
-git clone --depth=1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/usr/portage/repos/automatic-journey
+git clone --depth=1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/var/db/repos/automatic-journey
 
-systemd-nspawn --directory=/mnt/gentoo /bin/bash --login -c "
-echo 'jobs = $(nproc)' >> /etc/catalyst/catalyst.conf
+cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf/
 
-catalyst -f /fluffy-conscous/specs/stage1-amd64-llvm-libstc++-hardened-optimize-x86-64-v3-systemd.spec
+mkdir --parents /mnt/gentoo/etc/portage/repos.conf
+cp --recursive /mnt/gentoo/fluffy-couscous/portage/stages/repos.conf/* /mnt/gentoo/etc/portage/repos.conf/
+
+chroot /mnt/gentoo /bin/bash --login -c "
+echo 'jobs = \$(nproc)' >> /etc/catalyst/catalyst.conf
+
+catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-optimize-x86-64-v3-systemd.spec
 "
