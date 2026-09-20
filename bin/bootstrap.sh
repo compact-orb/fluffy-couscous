@@ -36,9 +36,7 @@ rm /tmp/$latest_stage3_filename
 
 cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
 
-systemd-nspawn --directory=/mnt/gentoo /bin/bash -c "
-source /etc/profile
-
+systemd-nspawn --directory=/mnt/gentoo /bin/bash --login -c "
 emerge-webrsync
 
 echo 'dev-util/catalyst ~amd64' > /etc/portage/package.accept_keywords/catalyst
@@ -85,9 +83,7 @@ cp --recursive . /mnt/gentoo
 
 git clone --depth=1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/usr/portage/repos/automatic-journey
 
-systemd-nspawn --directory=/mnt/gentoo /bin/bash -c "
-source /etc/profile
-
+systemd-nspawn --directory=/mnt/gentoo /bin/bash --login -c "
 echo 'jobs = $(nproc)' >> /etc/catalyst/catalyst.conf
 
 catalyst -f /fluffy-conscous/specs/stage1-amd64-llvm-libstc++-hardened-optimize-x86-64-v3-systemd.spec
