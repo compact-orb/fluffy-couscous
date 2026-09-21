@@ -46,6 +46,7 @@ mount --rbind /dev /mnt/gentoo/dev
 mount --make-rslave /mnt/gentoo/dev
 mount --bind /run /mnt/gentoo/run
 mount --make-slave /mnt/gentoo/run
+
 mkdir --parents /mnt/gentoo/etc/portage/patches/dev-util/catalyst
 cp --recursive patches/* /mnt/gentoo/etc/portage/patches/dev-util/catalyst/
 
@@ -102,8 +103,9 @@ mkdir --parents /mnt/gentoo/etc/portage/repos.conf
 
 cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
 
-chroot /mnt/gentoo /bin/bash --login -c "
-echo 'jobs = $(nproc)' >> /etc/catalyst/catalyst.conf
+rm /mnt/gentoo/etc/catalyst/catalyst.conf
+echo "jobs = $(nproc)" >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
+chroot /mnt/gentoo /bin/bash --login -c "
 catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
 "

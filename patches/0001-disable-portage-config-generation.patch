@@ -1,5 +1,5 @@
 diff --git a/catalyst/base/stagebase.py b/catalyst/base/stagebase.py
-index 80cbbe74..476ee0a7 100644
+index 80cbbe74..02300c84 100644
 --- a/catalyst/base/stagebase.py
 +++ b/catalyst/base/stagebase.py
 @@ -88,7 +88,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
@@ -10,7 +10,33 @@ index 80cbbe74..476ee0a7 100644
          ]
          self.build_sequence = [
              self.bind,
-@@ -1161,23 +1160,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+@@ -942,17 +941,22 @@ class StageBase(TargetBase, ClearBase, GenBase):
+                 'Resume point detected, skipping setup_confdir operation...')
+             return
+ 
++        dest = normpath(
++            self.settings['chroot_path'] + '/' + self.settings['port_conf'])
++        if os.path.exists(dest):
++            for item in os.listdir(dest):
++                if item != 'make.profile':
++                    clear_path(os.path.join(dest, item))
++
+         if "portage_confdir" in self.settings:
+             log.info('Configuring %s...', self.settings['port_conf'])
+-            dest = normpath(
+-                self.settings['chroot_path'] + '/' + self.settings['port_conf'])
+             ensure_dirs(dest)
+             # The trailing slashes on both paths are important:
+             # We want to make sure rsync copies the dirs into each
+             # other and not as subdirs.
+             cmd(['rsync', '-a', self.settings['portage_confdir'] + '/', dest + '/'],
+                 env=self.env)
+-            self.resume.enable("setup_confdir")
++        self.resume.enable("setup_confdir")
+ 
+     def to_chroot(self, path):
+         """ Prepend chroot path to the given path. """
+@@ -1161,23 +1165,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
              os.rename(hosts_file, hosts_file + '.catalyst')
              shutil.copy('/etc/hosts', hosts_file)
  
@@ -34,7 +60,7 @@ index 80cbbe74..476ee0a7 100644
          self.resume.enable("chroot_setup")
  
          # ensure that code running in the chroot can access the jobserver
-@@ -1380,11 +1362,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+@@ -1380,11 +1367,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
              if name in self.settings['keep_repos']:
                  continue
  
@@ -46,7 +72,7 @@ index 80cbbe74..476ee0a7 100644
              # The repo has already been unmounted, remove the mount point
              location = self.get_repo_location(name)
              chroot_location = self.to_chroot(location)
-@@ -1395,10 +1372,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+@@ -1395,10 +1377,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
              cmd(['chown', '-R', 'portage:portage',
                  self.settings['stage_path']+self.settings['repo_basedir']])
  
