@@ -50,8 +50,11 @@ mount --make-slave /mnt/gentoo/run
 mkdir --parents /mnt/gentoo/etc/portage/patches/dev-util/catalyst
 cp --recursive patches/* /mnt/gentoo/etc/portage/patches/dev-util/catalyst/
 
+mkdir --parents /mnt/gentoo/etc/portage/repos.conf
+cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
+
 chroot /mnt/gentoo /bin/bash --login -c "
-emerge-webrsync
+emerge --sync
 
 echo 'dev-util/catalyst **' > /etc/portage/package.accept_keywords/catalyst
 echo 'sys-apps/util-linux python' > /etc/portage/package.use/util-linux
@@ -96,12 +99,6 @@ echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-
 b2sum --check --status
 
 cp --recursive ../ /mnt/gentoo
-
-git clone --depth=1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/var/db/repos/automatic-journey
-
-mkdir --parents /mnt/gentoo/etc/portage/repos.conf
-
-cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
 
 rm /mnt/gentoo/etc/catalyst/catalyst.conf
 echo "jobs = $(nproc)" >> /mnt/gentoo/etc/catalyst/catalyst.conf
