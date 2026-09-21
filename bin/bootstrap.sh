@@ -50,7 +50,7 @@ mount --make-slave /mnt/gentoo/run
 chroot /mnt/gentoo /bin/bash --login -c "
 emerge-webrsync
 
-echo 'dev-util/catalyst ~amd64' > /etc/portage/package.accept_keywords/catalyst
+echo 'dev-util/catalyst **' > /etc/portage/package.accept_keywords/catalyst
 echo 'sys-apps/util-linux python' > /etc/portage/package.use/util-linux
 echo 'sys-boot/grub grub_platforms_efi-32' > /etc/portage/package.use/grub
 
@@ -96,13 +96,12 @@ cp --recursive ../ /mnt/gentoo
 
 git clone --depth=1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/var/db/repos/automatic-journey
 
-cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf/
-
 mkdir --parents /mnt/gentoo/etc/portage/repos.conf
-cp --recursive /mnt/gentoo/fluffy-couscous/portage/stages/repos.conf/* /mnt/gentoo/etc/portage/repos.conf/
+
+cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
 
 chroot /mnt/gentoo /bin/bash --login -c "
-echo 'jobs = \$(nproc)' >> /etc/catalyst/catalyst.conf
+echo 'jobs = $(nproc)' >> /etc/catalyst/catalyst.conf
 
-catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-optimize-x86-64-v3-systemd.spec
+catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
 "
