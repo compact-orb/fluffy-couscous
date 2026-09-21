@@ -1,0 +1,129 @@
+diff --git a/catalyst/base/stagebase.py b/catalyst/base/stagebase.py
+index 80cbbe74..476ee0a7 100644
+--- a/catalyst/base/stagebase.py
++++ b/catalyst/base/stagebase.py
+@@ -88,7 +88,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+             self.unpack,
+             self.config_profile_link,
+             self.setup_confdir,
+-            self.process_repos,
+         ]
+         self.build_sequence = [
+             self.bind,
+@@ -1161,23 +1160,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+             os.rename(hosts_file, hosts_file + '.catalyst')
+             shutil.copy('/etc/hosts', hosts_file)
+ 
+-        # write out the make.conf
+-        try:
+-            self.write_make_conf(setup=True)
+-        except OSError as e:
+-            raise CatalystError('Could not write %s: %s' % (
+-                normpath(self.settings["chroot_path"] +
+-                         self.settings["make_conf"]), e)) from e
+-
+-        # write out the binrepos.conf
+-        # we do this here for later user convenience, but normally
+-        # it should not affect stage builds (which only get --usepkg,
+-        # but never --getbinpkg as emerge parameters).
+-        try:
+-            self.write_binrepos_conf()
+-        except OSError as e:
+-            raise CatalystError('Could not write binrepos.conf: %s' % ( e )) from e
+-
+         self.resume.enable("chroot_setup")
+ 
+         # ensure that code running in the chroot can access the jobserver
+@@ -1380,11 +1362,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+             if name in self.settings['keep_repos']:
+                 continue
+ 
+-            # Remove repos.conf entry
+-            repo_conf = self.get_repo_conf_path(name)
+-            chroot_repo_conf = self.to_chroot(repo_conf)
+-            chroot_repo_conf.unlink(missing_ok=True)
+-
+             # The repo has already been unmounted, remove the mount point
+             location = self.get_repo_location(name)
+             chroot_location = self.to_chroot(location)
+@@ -1395,10 +1372,6 @@ class StageBase(TargetBase, ClearBase, GenBase):
+             cmd(['chown', '-R', 'portage:portage',
+                 self.settings['stage_path']+self.settings['repo_basedir']])
+ 
+-        if "sticky-config" not in self.settings["options"]:
+-            # re-write the make.conf to be sure it is clean
+-            self.write_make_conf(setup=False)
+-
+         # Clean up old and obsoleted files in /etc
+         if os.path.exists(self.settings["stage_path"]+"/etc"):
+             cmd(['find', self.settings['stage_path'] + '/etc',
+diff --git a/targets/stage1/chroot.sh b/targets/stage1/chroot.sh
+index 1eb884b5..87601deb 100755
+--- a/targets/stage1/chroot.sh
++++ b/targets/stage1/chroot.sh
+@@ -61,7 +61,7 @@ mkdir -p "$ROOT"
+ # First, we drop in a known-good baselayout
+ [ -e ${clst_make_conf} ] && echo "USE=\"${USE} build\"" >> ${clst_make_conf}
+ run_merge --oneshot --nodeps sys-apps/baselayout
+-sed -i "/USE=\"${USE} build\"/d" ${clst_make_conf}
++[ -e ${clst_make_conf} ] && sed -i "/USE=\"${USE} build\"/d" ${clst_make_conf}
+ 
+ echo "$locales" > /etc/locale.gen
+ for etc in /etc "$ROOT"/etc; do
+@@ -97,11 +97,13 @@ if [ -x "$(command -v locale-gen)" ]; then
+ fi
+ 
+ # Why are we removing these? Don't we need them for final make.conf?
+-for useexpand in ${clst_HOSTUSEEXPAND}; do
+-	x="clst_${useexpand}"
+-	sed -i "/${useexpand}=\"${!x}\"/d" \
+-	${clst_make_conf}
+-done
++if [ -e ${clst_make_conf} ]; then
++	for useexpand in ${clst_HOSTUSEEXPAND}; do
++		x="clst_${useexpand}"
++		sed -i "/${useexpand}=\"${!x}\"/d" \
++		${clst_make_conf}
++	done
++fi
+ 
+ # Clear USE
+ [ -e ${clst_make_conf} ] && sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
+diff --git a/targets/stage1/controller.sh b/targets/stage1/controller.sh
+index 0db1614d..974ff0fa 100755
+--- a/targets/stage1/controller.sh
++++ b/targets/stage1/controller.sh
+@@ -11,7 +11,8 @@ case "$1" in
+ 		install -d "${clst_stage_path}/${clst_port_conf}"
+ 
+ 		# Setup make.conf and make.profile link in "ROOT in chroot":
+-		copy_to_chroot "${clst_chroot_path}${clst_make_conf}" "${clst_root_path}${clst_port_conf}"
++		[ -e "${clst_chroot_path}${clst_make_conf}" ] && \
++			copy_to_chroot "${clst_chroot_path}${clst_make_conf}" "${clst_root_path}${clst_port_conf}"
+ 
+ 		# Enter chroot, execute our build script
+ 		exec_in_chroot \
+diff --git a/targets/support/chroot-functions.sh b/targets/support/chroot-functions.sh
+index 08738d0a..662a4b56 100755
+--- a/targets/support/chroot-functions.sh
++++ b/targets/support/chroot-functions.sh
+@@ -76,7 +76,7 @@ setup_features() {
+ 		else
+ 			ROOT=/ run_merge --oneshot --noreplace sys-devel/distcc
+ 		fi
+-		sed -i '/USE="${USE} -avahi -gtk -gnome"/d' ${clst_make_conf}
++		[ -e ${clst_make_conf} ] && sed -i '/USE="${USE} -avahi -gtk -gnome"/d' ${clst_make_conf}
+ 		mkdir -p /etc/distcc
+ 		echo "${clst_distcc_hosts}" > /etc/distcc/hosts
+ 
+@@ -215,8 +215,8 @@ cleanup_stages() {
+ 	esac
+ 
+ 	# Remove bindist from use
+-	sed -i "/USE=\"\${USE} bindist\"/d" "${clst_make_conf}"
+-	sed -i "/USE=\"bindist\"/d" "${clst_make_conf}"
++	[ -e "${clst_make_conf}" ] && sed -i "/USE=\"\${USE} bindist\"/d" "${clst_make_conf}"
++	[ -e "${clst_make_conf}" ] && sed -i "/USE=\"bindist\"/d" "${clst_make_conf}"
+ 
+ 	rm -f /var/log/emerge.log /var/log/portage/elog/*
+ }

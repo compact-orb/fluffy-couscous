@@ -46,6 +46,8 @@ mount --rbind /dev /mnt/gentoo/dev
 mount --make-rslave /mnt/gentoo/dev
 mount --bind /run /mnt/gentoo/run
 mount --make-slave /mnt/gentoo/run
+mkdir --parents /mnt/gentoo/etc/portage/patches/dev-util/catalyst
+cp --recursive patches/* /mnt/gentoo/etc/portage/patches/dev-util/catalyst/
 
 chroot /mnt/gentoo /bin/bash --login -c "
 emerge-webrsync
