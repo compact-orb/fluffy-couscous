@@ -102,10 +102,16 @@ git clone --depth 1 https://github.com/compact-orb/automatic-journey.git /mnt/ge
 cp --recursive ../ /mnt/gentoo
 
 rm /mnt/gentoo/etc/catalyst/catalyst.conf
-echo "jobs = $(nproc)" >> /mnt/gentoo/etc/catalyst/catalyst.conf
+echo "jobs = $(nproc)" > /mnt/gentoo/etc/catalyst/catalyst.conf
+echo 'options = []' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
 chroot /mnt/gentoo /bin/bash --login -c "
 catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
+"
 
+echo "jobs = $(nproc)" > /mnt/gentoo/etc/catalyst/catalyst.conf
+echo 'options = ["pkgcache"]' >> /mnt/gentoo/etc/catalyst/catalyst.conf
+
+chroot /mnt/gentoo /bin/bash --login -c "
 catalyst -f /fluffy-couscous/specs/stage3-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
 "
