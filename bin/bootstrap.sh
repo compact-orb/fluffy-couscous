@@ -133,7 +133,6 @@ umount --recursive /mnt/gentoo/tmp/seed/sys
 umount /mnt/gentoo/tmp/seed/proc
 
 rm --force /mnt/gentoo/tmp/seed/etc/resolv.conf
-ln --symbolic ../run/systemd/resolve/stub-resolv.conf /mnt/gentoo/tmp/seed/etc/resolv.conf
 
 XZ_OPT="-T0" tar --directory=/mnt/gentoo/tmp/seed --create --auto-compress \
 --file=/mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz \
