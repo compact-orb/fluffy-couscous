@@ -116,7 +116,10 @@ mkdir --parents /mnt/gentoo/tmp/seed/var/db/repos/gentoo
 mount --bind /mnt/gentoo/var/db/repos/gentoo /mnt/gentoo/tmp/seed/var/db/repos/gentoo
 
 chroot /mnt/gentoo/tmp/seed /bin/bash --login -c "
-emerge --getbinpkg --quiet llvm-core/lld
+mkdir --parents /etc/portage/package.use
+echo 'llvm-runtimes/clang-runtime polly' > /etc/portage/package.use/clang-runtime
+
+emerge --getbinpkg --quiet llvm-core/lld llvm-runtimes/clang-runtime
 env-update
 
 rm --force --recursive /var/cache/distfiles /var/cache/binpkgs /var/tmp/portage
