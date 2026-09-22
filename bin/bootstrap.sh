@@ -153,7 +153,7 @@ echo "jobs = $(nproc)" > /mnt/gentoo/etc/catalyst/catalyst.conf
 echo "envscript = "/etc/catalyst/catalystrc"" >> /mnt/gentoo/etc/catalyst/catalyst.conf
 echo 'options = ["autoresume"]' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
-echo 'EMERGE_DEFAULT_OPTS="--with-bdeps=y"' >> /mnt/gentoo/etc/catalyst/catalystrc
+echo 'EMERGE_DEFAULT_OPTS="--with-bdeps=y"' > /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_GPG_SIGNING_KEY="AFF6DFAE8CEC37E607696622B4C778986842630B"' >> /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_COMPRESS="zstd"' >> /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_COMPRESS_FLAGS="-19 -T4 --long"' >> /mnt/gentoo/etc/catalyst/catalystrc
