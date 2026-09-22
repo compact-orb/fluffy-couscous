@@ -2,8 +2,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Install systemd-container
-
 gpg --import keys/gentoo-release.asc
 
 latest_stage3_path=$(curl --silent \
