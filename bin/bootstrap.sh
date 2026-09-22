@@ -119,7 +119,7 @@ chroot /mnt/gentoo/tmp/seed /bin/bash --login -c "
 mkdir --parents /etc/portage/package.use
 echo 'llvm-runtimes/clang-runtime polly' > /etc/portage/package.use/clang-runtime
 
-emerge --getbinpkg --quiet app-arch/zstd llvm-core/lld llvm-runtimes/clang-runtime
+emerge --getbinpkg --quiet app-arch/zstd llvm-core/lld llvm-runtimes/clang-runtime net-misc/aria2
 env-update
 
 rm --force --recursive /var/cache/distfiles /var/cache/binpkgs /var/tmp/portage
