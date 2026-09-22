@@ -6,7 +6,7 @@ gpg --import keys/gentoo-release.asc
 
 latest_stage3_path=$(curl --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-systemd.txt |
-gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}' >&2 /dev/null)
+gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}')
 
 latest_stage3_hash=$(curl --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_stage3_path}.DIGESTS |
@@ -15,7 +15,7 @@ gpg --decrypt --quiet | awk -v path="$latest_stage3_path" '
   /^# BLAKE2B/ { b=1; next }
   /^#/         { b=0 }
   b && $2 == path { print $1; exit }
-' >&2 /dev/null)
+')
 
 latest_stage3_filename=$(basename $latest_stage3_path)
 
@@ -63,7 +63,7 @@ emerge --getbinpkg --quiet app-eselect/eselect-repository dev-util/catalyst
 
 latest_snapshot_hash=$(curl --silent \
 https://distfiles.gentoo.org/snapshots/squashfs/gentoo-current.sha512sum.txt |
-gpg --decrypt --quiet | awk '$2 == "gentoo-current.xz.sqfs" {print $1; exit}' >&2 /dev/null)
+gpg --decrypt --quiet | awk '$2 == "gentoo-current.xz.sqfs" {print $1; exit}')
 
 mkdir --parents /mnt/gentoo/var/tmp/catalyst/snapshots
 
@@ -75,7 +75,7 @@ sha512sum --check --status
 
 latest_catalyst_stage3_path=$(curl --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-llvm-systemd.txt |
-gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}' >&2 /dev/null)
+gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}')
 
 latest_catalyst_stage3_hash=$(curl --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_catalyst_stage3_path}.DIGESTS |
@@ -84,7 +84,7 @@ gpg --decrypt --quiet | awk -v path="$latest_catalyst_stage3_path" '
   /^# BLAKE2B/ { b=1; next }
   /^#/         { b=0 }
   b && $2 == path { print $1; exit }
-' >&2 /dev/null)
+')
 
 latest_catalyst_stage3_filename=$(basename $latest_catalyst_stage3_path)
 
@@ -103,4 +103,6 @@ echo "jobs = $(nproc)" >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
 chroot /mnt/gentoo /bin/bash --login -c "
 catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
+
+catalyst -f /fluffy-couscous/specs/stage3-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
 "
