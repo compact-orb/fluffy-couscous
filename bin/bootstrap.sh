@@ -48,11 +48,8 @@ mount --make-slave /mnt/gentoo/run
 mkdir --parents /mnt/gentoo/etc/portage/patches/dev-util/catalyst
 cp --recursive patches/* /mnt/gentoo/etc/portage/patches/dev-util/catalyst/
 
-mkdir --parents /mnt/gentoo/etc/portage/repos.conf
-cp --recursive /mnt/gentoo/fluffy-couscous/portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
-
 chroot /mnt/gentoo /bin/bash --login -c "
-emerge --sync
+emerge-webrsync
 
 echo 'dev-util/catalyst **' > /etc/portage/package.accept_keywords/catalyst
 echo 'sys-apps/util-linux python' > /etc/portage/package.use/util-linux
@@ -95,6 +92,12 @@ https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_catalyst_stage3_
 
 echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-llvm-systemd.tar.xz |
 b2sum --check --status
+
+mkdir --parents /mnt/gentoo/etc/portage/repos.conf
+# Doing this before emerge-webrsync will break it becuase the repos are
+# configured for git. Just keep that in mind.
+cp --recursive ./portage/stage1/repos.conf/* /mnt/gentoo/etc/portage/repos.conf
+git clone --depth 1 https://github.com/compact-orb/automatic-journey.git /mnt/gentoo/var/db/repos/automatic-journey
 
 cp --recursive ../ /mnt/gentoo
 
