@@ -93,6 +93,51 @@ https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_catalyst_stage3_
 echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz |
 b2sum --check --status
 
+mkdir --parents /mnt/gentoo/tmp/seed
+
+tar --directory=/mnt/gentoo/tmp/seed --extract \
+--file=/mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz \
+--numeric-owner --xattrs-include='*.*'
+
+rm /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz
+
+rm --force /mnt/gentoo/tmp/seed/etc/resolv.conf
+cp --dereference /etc/resolv.conf /mnt/gentoo/tmp/seed/etc/
+
+mount --types proc /proc /mnt/gentoo/tmp/seed/proc
+mount --rbind /sys /mnt/gentoo/tmp/seed/sys
+mount --make-rslave /mnt/gentoo/tmp/seed/sys
+mount --rbind /dev /mnt/gentoo/tmp/seed/dev
+mount --make-rslave /mnt/gentoo/tmp/seed/dev
+mount --bind /run /mnt/gentoo/tmp/seed/run
+mount --make-slave /mnt/gentoo/tmp/seed/run
+
+mkdir --parents /mnt/gentoo/tmp/seed/var/db/repos/gentoo
+mount --bind /mnt/gentoo/var/db/repos/gentoo /mnt/gentoo/tmp/seed/var/db/repos/gentoo
+
+chroot /mnt/gentoo/tmp/seed /bin/bash --login -c "
+emerge --getbinpkg --quiet llvm-core/lld
+env-update
+
+rm --force --recursive /var/cache/distfiles /var/cache/binpkgs /var/tmp/portage
+mkdir --parents /var/cache/distfiles /var/cache/binpkgs /var/tmp/portage
+"
+
+umount /mnt/gentoo/tmp/seed/var/db/repos/gentoo
+umount /mnt/gentoo/tmp/seed/run
+umount --recursive /mnt/gentoo/tmp/seed/dev
+umount --recursive /mnt/gentoo/tmp/seed/sys
+umount /mnt/gentoo/tmp/seed/proc
+
+rm --force /mnt/gentoo/tmp/seed/etc/resolv.conf
+ln --symbolic ../run/systemd/resolve/stub-resolv.conf /mnt/gentoo/tmp/seed/etc/resolv.conf
+
+XZ_OPT="-T0" tar --directory=/mnt/gentoo/tmp/seed --create --auto-compress \
+--file=/mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz \
+--numeric-owner --xattrs-include='*.*' .
+
+rm --recursive /mnt/gentoo/tmp/seed
+
 mkdir --parents /mnt/gentoo/etc/portage/repos.conf
 # Doing this before emerge-webrsync will break it becuase the repos are
 # configured for git. Just keep that in mind.

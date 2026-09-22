@@ -7,7 +7,7 @@ snapshot_treeish: current.xz
 source_subpath: automatic-journey/latest-stage3-amd64-desktop-systemd
 compression_mode: pixz
 update_seed: yes
-update_seed_command: --update --deep --newuse @world llvm-core/lld
+update_seed_command: --update --deep --newuse @world
 portage_confdir: /fluffy-couscous/portage/stage1
 portage_prefix: fluffy-couscous
 repos: /var/db/repos/automatic-journey
