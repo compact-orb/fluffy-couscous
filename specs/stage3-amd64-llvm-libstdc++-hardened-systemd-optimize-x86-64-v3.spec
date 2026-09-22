@@ -1,0 +1,12 @@
+subarch: amd64
+target: stage3
+version_stamp: llvm-libstdc++-hardened-systemd-optimize-x86-64-v3
+rel_type: automatic-journey
+profile: automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3
+snapshot_treeish: current.xz
+source_subpath: automatic-journey/stage1-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3
+compression_mode: pixz
+portage_confdir: /fluffy-couscous/portage/stage3
+portage_prefix: fluffy-couscous
+binrepo_path: amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3
+repos: /var/db/repos/automatic-journey
