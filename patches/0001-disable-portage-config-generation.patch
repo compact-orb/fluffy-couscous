@@ -84,7 +84,7 @@ index 80cbbe74..02300c84 100644
          if os.path.exists(self.settings["stage_path"]+"/etc"):
              cmd(['find', self.settings['stage_path'] + '/etc',
 diff --git a/targets/stage1/chroot.sh b/targets/stage1/chroot.sh
-index 1eb884b5..87601deb 100755
+index 1eb884b5..ec7c27af 100755
 --- a/targets/stage1/chroot.sh
 +++ b/targets/stage1/chroot.sh
 @@ -61,7 +61,7 @@ mkdir -p "$ROOT"
@@ -96,7 +96,7 @@ index 1eb884b5..87601deb 100755
  
  echo "$locales" > /etc/locale.gen
  for etc in /etc "$ROOT"/etc; do
-@@ -97,11 +97,13 @@ if [ -x "$(command -v locale-gen)" ]; then
+@@ -97,12 +97,14 @@ if [ -x "$(command -v locale-gen)" ]; then
  fi
  
  # Why are we removing these? Don't we need them for final make.conf?
@@ -111,10 +111,14 @@ index 1eb884b5..87601deb 100755
 +		sed -i "/${useexpand}=\"${!x}\"/d" \
 +		${clst_make_conf}
 +	done
-+fi
  
- # Clear USE
- [ -e ${clst_make_conf} ] && sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
+-# Clear USE
+-[ -e ${clst_make_conf} ] && sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
+-[ -e ${clst_make_conf} ] && sed -i -e "/^USE=\"/s/\${CATALYST_USE} ${USE} ${BOOTSTRAP_USE}//" ${clst_make_conf}
++	# Clear USE
++	sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
++	sed -i -e "/^USE=\"/s/\${CATALYST_USE} ${USE} ${BOOTSTRAP_USE}//" ${clst_make_conf}
++fi
 diff --git a/targets/stage1/controller.sh b/targets/stage1/controller.sh
 index 0db1614d..974ff0fa 100755
 --- a/targets/stage1/controller.sh
