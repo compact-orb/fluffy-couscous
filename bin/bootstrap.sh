@@ -71,7 +71,7 @@ echo $latest_snapshot_hash /mnt/gentoo/var/tmp/catalyst/snapshots/gentoo-current
 sha512sum --check --status
 
 latest_catalyst_stage3_path=$(curl --silent \
-https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-llvm-systemd.txt |
+https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-desktop-systemd.txt |
 gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}')
 
 latest_catalyst_stage3_hash=$(curl --silent \
@@ -87,10 +87,10 @@ latest_catalyst_stage3_filename=$(basename $latest_catalyst_stage3_path)
 
 mkdir --parents /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey
 
-curl --output /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-llvm-systemd.tar.xz --silent \
+curl --output /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz --silent \
 https://distfiles.gentoo.org/releases/amd64/autobuilds/${latest_catalyst_stage3_path}
 
-echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-llvm-systemd.tar.xz |
+echo $latest_catalyst_stage3_hash /mnt/gentoo/var/tmp/catalyst/builds/automatic-journey/latest-stage3-amd64-desktop-systemd.tar.xz |
 b2sum --check --status
 
 mkdir --parents /mnt/gentoo/etc/portage/repos.conf
