@@ -150,14 +150,14 @@ cp --recursive ../ /mnt/gentoo
 
 rm /mnt/gentoo/etc/catalyst/catalyst.conf
 echo "jobs = $(nproc)" > /mnt/gentoo/etc/catalyst/catalyst.conf
-echo "envscript = "/etc/catalyst/catalystrc"" >> /mnt/gentoo/etc/catalyst/catalyst.conf
+echo 'envscript = "/etc/catalyst/catalystrc"' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 echo 'options = ["autoresume"]' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
-echo 'EMERGE_DEFAULT_OPTS="--with-bdeps=y"' > /mnt/gentoo/etc/catalyst/catalystrc
+echo 'EMERGE_DEFAULT_OPTS="--getbinpkgonly=n --with-bdeps=y"' > /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_GPG_SIGNING_KEY="AFF6DFAE8CEC37E607696622B4C778986842630B"' >> /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_COMPRESS="zstd"' >> /mnt/gentoo/etc/catalyst/catalystrc
 echo 'BINPKG_COMPRESS_FLAGS="-19 -T4 --long"' >> /mnt/gentoo/etc/catalyst/catalystrc
-echo 'FEATURES="binpkg-request-signature binpkg-signing gpg-keepalive"' >> /mnt/gentoo/etc/catalyst/catalystrc
+echo 'FEATURES="binpkg-signing gpg-keepalive"' >> /mnt/gentoo/etc/catalyst/catalystrc
 echo 'INSTALL_MASK="/boot"' >> /mnt/gentoo/etc/catalyst/catalystrc
 
 # Create key
@@ -165,15 +165,15 @@ echo 'INSTALL_MASK="/boot"' >> /mnt/gentoo/etc/catalyst/catalystrc
 # Temporary for testing. Create new and protect for prod
 private_key="lFgEarKdRBYJKwYBBAHaRw8BAQdAASNi9QUTRl5irOA1FdH68+Ru3r1dHrMwrsovIGohuE4AAP91qBgCDnFSvhPmQTusA11MMaKDhjvMJq/UCvL1yupPLg9AtBZmbHVmZnktY291c2NvdXMgYmlucGtniK8EExYKAFcWIQSv9t+ujOw35gdpZiK0x3iYaEJjCwUCarKdRBsUgAAAAAAEAA5tYW51MiwyLjUrMS4xMiwyLDICGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4AACgkQtMd4mGhCYwvJLQD/eKXPTPgrYfB43YSIrqI5Eu3Fnee1iwbhB7/smJzx8/8BAIotPe678eSr+LeT9g14XoPXY/xjp2GnZRqasHq/3WMH"
 chroot /mnt/gentoo /bin/bash --login -c "getuto"
-echo $private_key | base64 --decode | gpg --homedir "/mnt/gentoo/root/.gnupg" --batch --import
-chroot /mnt/gentoo /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --batch --import-ownertrust"
+echo $private_key | base64 --decode | gpg --homedir "/mnt/gentoo/etc/portage/gnupg" --batch --import
+chroot /mnt/gentoo /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir "/etc/portage/gnupg" --batch --import-ownertrust"
 
 chroot /mnt/gentoo /bin/bash --login -c "
 catalyst -f /fluffy-couscous/specs/stage1-amd64-llvm-libstdc++-hardened-systemd-optimize-x86-64-v3.spec
 "
 
 echo "jobs = $(nproc)" > /mnt/gentoo/etc/catalyst/catalyst.conf
-echo "envscript = "/etc/catalyst/catalystrc"" >> /mnt/gentoo/etc/catalyst/catalyst.conf
+echo 'envscript = "/etc/catalyst/catalystrc"' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 echo 'options = ["autoresume", "pkgcache"]' >> /mnt/gentoo/etc/catalyst/catalyst.conf
 
 chroot /mnt/gentoo /bin/bash --login -c "

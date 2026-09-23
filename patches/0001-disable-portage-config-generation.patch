@@ -84,41 +84,73 @@ index 80cbbe74..02300c84 100644
          if os.path.exists(self.settings["stage_path"]+"/etc"):
              cmd(['find', self.settings['stage_path'] + '/etc',
 diff --git a/targets/stage1/chroot.sh b/targets/stage1/chroot.sh
-index 1eb884b5..ec7c27af 100755
+index 1eb884b5..c377f756 100755
 --- a/targets/stage1/chroot.sh
 +++ b/targets/stage1/chroot.sh
-@@ -61,7 +61,7 @@ mkdir -p "$ROOT"
+@@ -27,10 +27,6 @@ FEATURES="${FEATURES} nodoc noman noinfo"
+ sed -i -e 's:BINPKG_COMPRESS="bzip2":BINPKG_COMPRESS="zstd":' \
+ 	/usr/share/portage/config/make.globals
+ 
+-# We need to ensure the base stage3 has USE="bindist"
+-# if BINDIST is set to avoid issues with openssl / openssh
+-[ -e ${clst_make_conf} ] && echo "USE=\"${BINDIST} ${USE}\"" >> ${clst_make_conf}
+-
+ # Update stage3
+ if [ -n "${clst_update_seed}" ]; then
+ 	if [ "${clst_update_seed}" == "yes" ]; then
+@@ -51,17 +47,12 @@ else
+ 	echo "Skipping seed stage update..."
+ fi
+ 
+-# Clear USE
+-[ -e ${clst_make_conf} ] && sed -i -e "/^USE=\"${BINDIST} ${USE}\"/d" ${clst_make_conf}
+-
+ export ROOT="${clst_root_path}"
+ mkdir -p "$ROOT"
+ 
+ ## START BUILD
  # First, we drop in a known-good baselayout
- [ -e ${clst_make_conf} ] && echo "USE=\"${USE} build\"" >> ${clst_make_conf}
- run_merge --oneshot --nodeps sys-apps/baselayout
+-[ -e ${clst_make_conf} ] && echo "USE=\"${USE} build\"" >> ${clst_make_conf}
+-run_merge --oneshot --nodeps sys-apps/baselayout
 -sed -i "/USE=\"${USE} build\"/d" ${clst_make_conf}
-+[ -e ${clst_make_conf} ] && sed -i "/USE=\"${USE} build\"/d" ${clst_make_conf}
++USE="${USE} build" run_merge --oneshot --nodeps sys-apps/baselayout
  
  echo "$locales" > /etc/locale.gen
  for etc in /etc "$ROOT"/etc; do
-@@ -97,12 +97,14 @@ if [ -x "$(command -v locale-gen)" ]; then
- fi
+@@ -69,18 +60,6 @@ for etc in /etc "$ROOT"/etc; do
+ done
+ update_env_settings
  
- # Why are we removing these? Don't we need them for final make.conf?
+-# Now, we install our packages
+-if [ -e ${clst_make_conf} ]; then
+-	echo "CATALYST_USE=\"-* build ${BINDIST} ${clst_CATALYST_USE}\"" >> ${clst_make_conf}
+-	echo "USE=\"\${CATALYST_USE} ${USE} ${BOOTSTRAP_USE} ${clst_HOSTUSE}\"" >> ${clst_make_conf}
+-
+-	for useexpand in ${clst_HOSTUSEEXPAND}; do
+-		x="clst_${useexpand}"
+-		echo "${useexpand}=\"${!x}\"" \
+-		>> ${clst_make_conf}
+-	done
+-fi
+-
+ run_merge --implicit-system-deps=n --oneshot "${buildpkgs[@]}"
+ 
+ # TODO: Drop this when locale-gen in stable glibc supports ROOT.
+@@ -95,14 +74,3 @@ if [ -x "$(command -v locale-gen)" ]; then
+ 		locale-gen --destdir "$ROOT"/
+ 	fi || die "locale-gen failed"
+ fi
+-
+-# Why are we removing these? Don't we need them for final make.conf?
 -for useexpand in ${clst_HOSTUSEEXPAND}; do
 -	x="clst_${useexpand}"
 -	sed -i "/${useexpand}=\"${!x}\"/d" \
 -	${clst_make_conf}
 -done
-+if [ -e ${clst_make_conf} ]; then
-+	for useexpand in ${clst_HOSTUSEEXPAND}; do
-+		x="clst_${useexpand}"
-+		sed -i "/${useexpand}=\"${!x}\"/d" \
-+		${clst_make_conf}
-+	done
- 
+-
 -# Clear USE
 -[ -e ${clst_make_conf} ] && sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
 -[ -e ${clst_make_conf} ] && sed -i -e "/^USE=\"/s/\${CATALYST_USE} ${USE} ${BOOTSTRAP_USE}//" ${clst_make_conf}
-+	# Clear USE
-+	sed -i -e "/^CATALYST_USE/d" ${clst_make_conf}
-+	sed -i -e "/^USE=\"/s/\${CATALYST_USE} ${USE} ${BOOTSTRAP_USE}//" ${clst_make_conf}
-+fi
 diff --git a/targets/stage1/controller.sh b/targets/stage1/controller.sh
 index 0db1614d..974ff0fa 100755
 --- a/targets/stage1/controller.sh
@@ -134,26 +166,39 @@ index 0db1614d..974ff0fa 100755
  		# Enter chroot, execute our build script
  		exec_in_chroot \
 diff --git a/targets/support/chroot-functions.sh b/targets/support/chroot-functions.sh
-index 08738d0a..662a4b56 100755
+index 08738d0a..f1af451e 100755
 --- a/targets/support/chroot-functions.sh
 +++ b/targets/support/chroot-functions.sh
-@@ -76,7 +76,7 @@ setup_features() {
+@@ -64,19 +64,12 @@ setup_features() {
+ 	then
+ 		features+=(distcc)
+ 		export DISTCC_HOSTS="${clst_distcc_hosts}"
+-		[ -e ${clst_make_conf} ] && \
+-			echo 'USE="${USE} -avahi -gtk -gnome"' >> ${clst_make_conf}
+-		# We install distcc to / on stage1, then use --noreplace, so we need to
+-		# have some way to check if we need to reinstall distcc without being
+-		# able to rely on USE, so we check for the distcc user and force a
+-		# reinstall if it isn't found.
+ 		if [ "$(getent passwd distcc | cut -d: -f1)" != "distcc" ]
+ 		then
+-			ROOT=/ run_merge --oneshot sys-devel/distcc
++			USE="${USE} -avahi -gtk -gnome" ROOT=/ run_merge --oneshot sys-devel/distcc
  		else
- 			ROOT=/ run_merge --oneshot --noreplace sys-devel/distcc
+-			ROOT=/ run_merge --oneshot --noreplace sys-devel/distcc
++			USE="${USE} -avahi -gtk -gnome" ROOT=/ run_merge --oneshot --noreplace sys-devel/distcc
  		fi
 -		sed -i '/USE="${USE} -avahi -gtk -gnome"/d' ${clst_make_conf}
-+		[ -e ${clst_make_conf} ] && sed -i '/USE="${USE} -avahi -gtk -gnome"/d' ${clst_make_conf}
  		mkdir -p /etc/distcc
  		echo "${clst_distcc_hosts}" > /etc/distcc/hosts
  
-@@ -215,8 +215,8 @@ cleanup_stages() {
+@@ -214,10 +207,6 @@ cleanup_stages() {
+ 			;;
  	esac
  
- 	# Remove bindist from use
+-	# Remove bindist from use
 -	sed -i "/USE=\"\${USE} bindist\"/d" "${clst_make_conf}"
 -	sed -i "/USE=\"bindist\"/d" "${clst_make_conf}"
-+	[ -e "${clst_make_conf}" ] && sed -i "/USE=\"\${USE} bindist\"/d" "${clst_make_conf}"
-+	[ -e "${clst_make_conf}" ] && sed -i "/USE=\"bindist\"/d" "${clst_make_conf}"
- 
+-
  	rm -f /var/log/emerge.log /var/log/portage/elog/*
  }
+ 
