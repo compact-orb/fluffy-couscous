@@ -186,8 +186,7 @@ gpg --homedir /var/lib/portage/gnupg-sign --batch --check-trustdb
 
 env -i HOME=/root TERM=$TERM PATH=$PATH \
 chroot $WORKDIR/stage1 /bin/bash --login -c "
-emerge --jobs=$(nproc) --emptytree @system
-etc-update --automode -5
+CONFIG_PROTECT=\"-*\" emerge --jobs=$(nproc) --emptytree @system
 "
 
 umount -l $WORKDIR/stage1/dev{/shm,/pts,} $WORKDIR/stage1/sys $WORKDIR/stage1/proc $WORKDIR/stage1/run
