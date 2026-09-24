@@ -122,7 +122,6 @@ emerge --jobs=$(nproc) --root=/tmp/stage1 --implicit-system-deps=n --oneshot $bu
 
 chroot $WORKDIR/seed /bin/bash --login -c "
 echo 'C.UTF-8 UTF-8' > /etc/locale.gen
-echo 'LANG=C.UTF-8' > /etc/locale.conf
 
 locale-gen --prefix /tmp/stage1
 "
