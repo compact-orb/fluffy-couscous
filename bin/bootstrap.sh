@@ -159,9 +159,9 @@ eselect profile set $PROFILE
 # gpg --batch --passphrase '' --quick-generate-key "fluffy-couscous binpkg" ed25519 sign 0
 # Temporary for testing. Create new and protect for prod
 private_key="lFgEarKdRBYJKwYBBAHaRw8BAQdAASNi9QUTRl5irOA1FdH68+Ru3r1dHrMwrsovIGohuE4AAP91qBgCDnFSvhPmQTusA11MMaKDhjvMJq/UCvL1yupPLg9AtBZmbHVmZnktY291c2NvdXMgYmlucGtniK8EExYKAFcWIQSv9t+ujOw35gdpZiK0x3iYaEJjCwUCarKdRBsUgAAAAAAEAA5tYW51MiwyLjUrMS4xMiwyLDICGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4AACgkQtMd4mGhCYwvJLQD/eKXPTPgrYfB43YSIrqI5Eu3Fnee1iwbhB7/smJzx8/8BAIotPe678eSr+LeT9g14XoPXY/xjp2GnZRqasHq/3WMH"
-chroot /mnt/stage1 /bin/bash --login -c "getuto"
-echo $private_key | base64 --decode | gpg --homedir "/mnt/stage1/etc/portage/gnupg" --batch --import
-chroot /mnt/stage1 /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir "/etc/portage/gnupg" --batch --import-ownertrust"
+chroot $WORKDIR/stage1 /bin/bash --login -c "getuto"
+echo $private_key | base64 --decode | gpg --homedir "$WORKDIR/stage1/etc/portage/gnupg" --batch --import
+chroot $WORKDIR/stage1 /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir "/etc/portage/gnupg" --batch --import-ownertrust"
 
 chroot $WORKDIR/stage1 /bin/bash --login -c "
 emerge --jobs=$(nproc) --emptytree @system
