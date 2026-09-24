@@ -174,21 +174,23 @@ echo $private_key | base64 --decode | chroot $WORKDIR/stage1 /bin/bash --login -
 gpg --homedir /etc/portage/gnupg --batch --import
 "
 chroot $WORKDIR/stage1 /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir /etc/portage/gnupg --batch --import-ownertrust"
-chroot $WORKDIR/stage1 /bin/bash --login -c "gpg --homedir /var/lib/portage/gnupg-sign --batch --check-trustdb"
+chroot $WORKDIR/stage1 /bin/bash --login -c "gpg --homedir /etc/portage/gnupg --batch --check-trustdb"
 
-# 2. Setup SIGNING keyring (used by portage user)
+# 2. Setup SIGNING keyring (used by root during binpkg creation)
 chroot $WORKDIR/stage1 /bin/bash --login -c "
 mkdir -p /var/lib/portage/gnupg-sign
-chown portage:portage /var/lib/portage/gnupg-sign
 chmod 0700 /var/lib/portage/gnupg-sign
-"
-chroot $WORKDIR/stage1 su -s /bin/bash -c "
 echo '$private_key' | base64 --decode | gpg --homedir /var/lib/portage/gnupg-sign --batch --import
 echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir /var/lib/portage/gnupg-sign --batch --import-ownertrust
 gpg --homedir /var/lib/portage/gnupg-sign --batch --check-trustdb
-" portage
+"
 
 env -i HOME=/root TERM=$TERM PATH=$PATH \
 chroot $WORKDIR/stage1 /bin/bash --login -c "
 emerge --jobs=$(nproc) --emptytree @system
+etc-update --automode -5
 "
+
+umount -l $WORKDIR/stage1/dev{/shm,/pts,} $WORKDIR/stage1/sys $WORKDIR/stage1/proc $WORKDIR/stage1/run
+umount -l $WORKDIR/stage1/var/db/repos/gentoo $WORKDIR/stage1/var/db/repos/$OVERLAY_NAME
+umount -l $WORKDIR/stage1/var/tmp/portage
