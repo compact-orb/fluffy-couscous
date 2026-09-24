@@ -167,15 +167,7 @@ eselect profile set $PROFILE
 # Create key
 # gpg --batch --passphrase '' --quick-generate-key "fluffy-couscous binpkg" ed25519 sign 0
 # Temporary for testing. Create new and protect for prod
-private_key="lFgEarKdRBYJKwYBBAHaRw8BAQdAASNi9QUTRl5irOA1FdH68+Ru3r1dHrMwrsovIGohuE4AAP91qBgCDnFSvhPmQTusA11MMaKDhjvMJq/UCvL1yupPLg9AtBZmbHVmZnktY291c2NvdXMgYmlucGtniK8EExYKAFcWIQSv9t+ujOw35gdpZiK0x3iYaEJjCwUCarKdRBsUgAAAAAAEAA5tYW51MiwyLjUrMS4xMiwyLDICGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4AACgkQtMd4mGhCYwvJLQD/eKXPTPgrYfB43YSIrqI5Eu3Fnee1iwbhB7/smJzx8/8BAIotPe678eSr+LeT9g14XoPXY/xjp2GnZRqasHq/3WMH"
-chroot $WORKDIR/stage1 /bin/bash --login -c "getuto"
-echo $private_key | base64 --decode | chroot $WORKDIR/stage1 /bin/bash --login -c "
-gpg --homedir /etc/portage/gnupg --batch --import
-"
-chroot $WORKDIR/stage1 /bin/bash --login -c "echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir /etc/portage/gnupg --batch --import-ownertrust"
-chroot $WORKDIR/stage1 /bin/bash --login -c "gpg --homedir /etc/portage/gnupg --batch --check-trustdb"
-
-# 2. Setup SIGNING keyring (used by root during binpkg creation)
+# 1. Setup SIGNING keyring (used by root during binpkg creation - needs PRIVATE key)
 chroot $WORKDIR/stage1 /bin/bash --login -c "
 mkdir -p /var/lib/portage/gnupg-sign
 chmod 0700 /var/lib/portage/gnupg-sign
@@ -183,12 +175,38 @@ echo '$private_key' | base64 --decode | gpg --homedir /var/lib/portage/gnupg-sig
 echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir /var/lib/portage/gnupg-sign --batch --import-ownertrust
 gpg --homedir /var/lib/portage/gnupg-sign --batch --check-trustdb
 "
+# 2. Setup VERIFICATION keyring (used for installing binpkgs - only needs PUBLIC key)
+chroot $WORKDIR/stage1 /bin/bash --login -c "
+getuto
+# Export only the PUBLIC key from the sign dir, and import it to the verify dir
+gpg --homedir /var/lib/portage/gnupg-sign --export | gpg --homedir /etc/portage/gnupg --batch --import
+echo 'AFF6DFAE8CEC37E607696622B4C778986842630B:6:' | gpg --homedir /etc/portage/gnupg --batch --import-ownertrust
+gpg --homedir /etc/portage/gnupg --batch --check-trustdb
+"
 
 env -i HOME=/root TERM=$TERM PATH=$PATH \
 chroot $WORKDIR/stage1 /bin/bash --login -c "
 CONFIG_PROTECT=\"-*\" emerge --jobs=$(nproc) --emptytree @system
+emerge --depclean
 "
 
 umount -l $WORKDIR/stage1/dev{/shm,/pts,} $WORKDIR/stage1/sys $WORKDIR/stage1/proc $WORKDIR/stage1/run
 umount -l $WORKDIR/stage1/var/db/repos/gentoo $WORKDIR/stage1/var/db/repos/$OVERLAY_NAME
 umount -l $WORKDIR/stage1/var/tmp/portage
+
+rm --force --recursive $WORKDIR/stage1/etc/portage/!(make.profile)
+
+tar --create --file=$WORKDIR/stage1.tar.zst --directory=$WORKDIR/stage1 \
+    --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+    --use-compress-program="zstd -9 -T0 --long=31" \
+    --exclude="./tmp/*" \
+    --exclude="./var/tmp/*" \
+    --exclude="./var/log/*" \
+    --exclude="./etc/machine-id" \
+    --exclude="./etc/resolv.conf" \
+    --exclude="./root/*" \
+    --exclude="./var/lib/portage/gnupg-sign" \
+    --exclude="./var/cache/*" \
+    --exclude="./var/lib/systemd/catalog/database" \
+    --exclude="./var/lib/portage/gnupg-sign" \
+    .
