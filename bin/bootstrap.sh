@@ -22,9 +22,6 @@ mount_ebuild_repositories "${seed_dir}"
 
 mount_chroot_filesystems "${seed_dir}"
 
-chroot "${seed_dir}" /usr/bin/bash --login -c \
-    'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
-
 if [[ "${4}" -eq "workaround" ]]; then
     # Workarounds for preparing a non-LLVM seed for building a LLVM stage
     # without taking the time to update the seed's portage configuration
@@ -62,11 +59,21 @@ if [[ "${4}" -eq "workaround" ]]; then
     # Author's profile needs extra packages to be merged.
     chroot "${seed_dir}" /usr/bin/bash --login -c \
         'emerge --getbinpkg --jobs="$(nproc)" "net-misc/aria2"'
+
+    chroot "${seed_dir}" /usr/bin/bash --login -c \
+        'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
+
+    remove_portage_configuration "${seed_dir}"
+
+    apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+else
+    remove_portage_configuration "${seed_dir}"
+
+    apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+
+    chroot "${seed_dir}" /usr/bin/bash --login -c \
+        'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
 fi
-
-remove_portage_configuration "${seed_dir}"
-
-apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
 
 create_directory "${stage_dir}"
 
@@ -74,16 +81,19 @@ create_directory "${seed_stage_bind_dir}"
 
 mount --bind "${seed_dir}" "${seed_stage_bind_dir}"
 
-chroot "${seed_dir}" /usr/bin/bash --login -c \
-    'USE="build" emerge --nodeps --oneshot --root="/tmp/stage" "sys-apps/baselayout"'
+chroot "${seed_dir}" /usr/bin/bash --login -c '
+    USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
+    "sys-apps/baselayout"
+    '
 
 copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
 
 chroot "${seed_dir}" /usr/bin/bash --login -c '
     buildpkgs=$(/tmp/build.py)
-    emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot --root="/tmp/stage" "${buildpkgs}"
+    emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
+    --root="/tmp/stage" "${buildpkgs}"
     locale-gen --prefix "/tmp/stage"
-'
+    '
 
 umount "${seed_stage_bind_dir}"
 
