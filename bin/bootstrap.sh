@@ -22,7 +22,7 @@ mount_ebuild_repositories "${seed_dir}"
 mount_chroot_filesystems "${seed_dir}"
 
 chroot "${seed_dir}" /usr/bin/bash --login -c \
-    'emerge --jobs="$(nproc)" --deep --getbinpkg --newuse --update "@world"'
+    'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
 
 if [[ "${4}" -eq "workaround" ]]; then
     # Workarounds for preparing a non-LLVM seed for building a LLVM stage
@@ -37,7 +37,7 @@ if [[ "${4}" -eq "workaround" ]]; then
         "llvm-runtimes/clang-runtime default-lld polly"
     
     chroot "${seed_dir}" /usr/bin/bash --login -c '
-        emerge --jobs="$(nproc)" --getbinpkg "llvm-core/clang" \
+        emerge --getbinpkg --jobs="$(nproc)" "llvm-core/clang" \
         "llvm-core/clang-common" "llvm-core/clang-linker-config" \
         "llvm-core/lld" "llvm-runtimes/clang-runtime"
         '
@@ -60,7 +60,7 @@ if [[ "${4}" -eq "workaround" ]]; then
 
     # Author's profile needs extra packages to be merged.
     chroot "${seed_dir}" /usr/bin/bash --login -c \
-        'emerge --jobs="$(nproc)" --getbinpkg "net-misc/aria2"'
+        'emerge --getbinpkg --jobs="$(nproc)" "net-misc/aria2"'
 fi
 
 remove_portage_configuration "${seed_dir}"
