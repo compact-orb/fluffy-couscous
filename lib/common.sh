@@ -25,6 +25,16 @@ remove_file() {
     rm "${1}"
 }
 
+force_remove() {
+    echo "Force removing ${1}"
+    rm --force --recursive "${1}"
+}
+
+recursive_copy() {
+    echo "Recursively copying ${1} to ${2}"
+    cp --dereference --recursive "${1}" "${2}"
+}
+
 load_ebuild_repositories() {
     if [[ -v repo_entries ]]; then
         return
@@ -35,6 +45,21 @@ load_ebuild_repositories() {
 
         repo_entries+=("${repo_entry}")
     done <<< "${REPOS}"
+}
+
+create_symbolic_link() {
+    echo "Creating symbolic link from ${1} to ${2}"
+    ln --symbolic "${1}" "${2}"
+}
+
+create_empty_file() {
+    echo "Creating empty file ${1}"
+    > "${1}"
+}
+
+create_file() {
+    echo "Creating file ${1}"
+    printf "%s" "${2}" > "${1}"
 }
 
 download_ebuild_repositories() {
@@ -143,9 +168,9 @@ import_gentoo_release_keys() {
 }
 
 download_extract_latest_gentoo_autobuild() {
-    architecture="${1}"
-    name="${2}"
-    output_dir="${3}"
+    local output_dir="${1}"
+    local architecture="${2}"
+    local name="${3}"
 
     echo "Downloading and extracting latest ${name} to ${output_dir}"
 
@@ -181,4 +206,67 @@ download_extract_latest_gentoo_autobuild() {
         --preserve-permissions --xattrs-include='*.*'
 
     remove_file "${downloaded_latest_autobuild_file}"
+}
+
+remove_portage_configuration() {
+    local target_root="${1}"
+    echo "Removing Portage configuration for ${target_root}"
+
+    force_remove "${target_root}/etc/portage/*"
+}
+
+apply_portage_configuration() {
+    local target_root="${1}"
+    local profile="${2}"
+    local portage_conf_name="${3}"
+    echo "Applying Portage configuration for ${target_root}"
+
+    local portage_conf_dir="${target_root}/etc/portage"
+    create_directory "${portage_conf_dir}"
+
+    local repo
+    local repo_profile
+    IFS=":" read -r repo repo_profile <<< "${profile}"
+
+    local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
+    local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
+    create_symbolic_link "${relative_repo_profile_dir}" "${portage_conf_profile_dir}"
+
+    recursive_copy "${work_dir}/portage/${portage_conf_name}/*" "${portage_conf_dir}"
+}
+
+mount_chroot_filesystems() {
+    local target_root="${1}"
+    echo "Mounting chroot filesystems for ${target_root}"
+
+    create_empty_file "${target_root}/etc/resolv.conf"
+    mount --bind "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
+
+    mount --types "proc" "/proc" "${target_root}/proc"
+    mount --rbind "/sys" "${target_root}/sys"
+    mount --make-rslave "${target_root}/sys"
+    mount --rbind "/dev" "${target_root}/dev"
+    mount --make-rslave "${target_root}/dev"
+    mount --bind "/run" "${target_root}/run"
+    mount --make-slave "${target_root}/run"
+
+    create_directory "${target_root}/var/tmp/portage"
+    chown --recursive 250:250 "${target_root}/var/tmp/portage"
+    chmod --recursive 775 "${target_root}/var/tmp/portage"
+    mount --options "size=50%,uid=250,gid=250,mode=775" --types "tmpfs" \
+        "tmpfs" "${target_root}/var/tmp/portage"
+}
+
+unmount_chroot_filesystems() {
+    local target_root="${1}"
+    echo "Unmounting chroot filesystems for ${target_root}"
+
+    umount "${target_root}/var/tmp/portage"
+
+    umount "${target_root}/run"
+    umount "${target_root}/dev"
+    umount "${target_root}/sys"
+    umount "${target_root}/proc"
+
+    umount "${target_root}/etc/resolv.conf"
 }
