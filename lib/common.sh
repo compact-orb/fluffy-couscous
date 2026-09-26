@@ -30,17 +30,11 @@ load_ebuild_repositories() {
         return
     fi
 
-    repo_urls=("https://github.com/gentoo-mirror/gentoo.git")
-
-    mapfile -t unsanitized_extra_repo_urls <<< "${EXTRA_REPOS}"
-
-    for repo_url in "${unsanitized_extra_repo_urls[@]}"; do
+    while IFS= read -r repo_url; do
         if [[ -z "${repo_url}" ]]; then continue; fi
 
         repo_urls+=("${repo_url}")
-    done
-
-    unset unsanitized_extra_repo_urls
+    done <<< "${REPOS}"
 }
 
 download_ebuild_repositories() {
