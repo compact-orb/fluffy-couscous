@@ -63,6 +63,10 @@ if [[ "${4}" -eq "workaround" ]]; then
         'emerge --jobs="$(nproc)" --getbinpkg "net-misc/aria2"'
 fi
 
+remove_portage_configuration "${seed_dir}"
+
+apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+
 
 
 unmount_chroot_filesystems "${seed_dir}"

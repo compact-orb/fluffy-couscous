@@ -59,7 +59,7 @@ create_empty_file() {
 
 create_file() {
     echo "Creating file ${1}"
-    printf "%s" "${2}" > "${1}"
+    echo "${2}" > "${1}"
 }
 
 download_ebuild_repositories() {
@@ -251,8 +251,8 @@ mount_chroot_filesystems() {
     mount --make-slave "${target_root}/run"
 
     create_directory "${target_root}/var/tmp/portage"
-    chown --recursive 250:250 "${target_root}/var/tmp/portage"
-    chmod --recursive 775 "${target_root}/var/tmp/portage"
+    chown --recursive "250:250" "${target_root}/var/tmp/portage"
+    chmod --recursive "775" "${target_root}/var/tmp/portage"
     mount --options "size=50%,uid=250,gid=250,mode=775" --types "tmpfs" \
         "tmpfs" "${target_root}/var/tmp/portage"
 }
