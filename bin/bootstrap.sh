@@ -9,6 +9,7 @@ seed_name="${2}"
 profile="${3}"
 seed_dir="${work_dir}/seed"
 stage_dir="${work_dir}/stage"
+seed_stage_bind_dir="${seed_dir}/tmp/stage"
 
 download_ebuild_repositories
 
@@ -67,6 +68,37 @@ remove_portage_configuration "${seed_dir}"
 
 apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
 
+create_directory "${stage_dir}"
 
+create_directory "${seed_stage_bind_dir}"
+
+mount --bind "${seed_dir}" "${seed_stage_bind_dir}"
+
+chroot "${seed_dir}" /usr/bin/bash --login -c \
+    'USE="build" emerge --nodeps --oneshot --root="/tmp/stage" "sys-apps/baselayout"'
+
+copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
+
+chroot "${seed_dir}" /usr/bin/bash --login -c '
+    buildpkgs=$(/tmp/build.py)
+    emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot --root="/tmp/stage" "${buildpkgs}"
+    locale-gen --prefix "/tmp/stage"
+'
+
+umount "${seed_stage_bind_dir}"
 
 unmount_chroot_filesystems "${seed_dir}"
+
+unmount_ebuild_repositories "${seed_dir}"
+
+force_remove "${seed_dir}"
+
+create_directory "${stage_dir}/etc/portage"
+
+configure_ebuild_repositories "${stage_dir}"
+
+mount_ebuild_repositories "${stage_dir}"
+
+apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
+
+mount_chroot_filesystems "${stage_dir}"

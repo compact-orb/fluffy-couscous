@@ -35,6 +35,11 @@ recursive_copy() {
     cp --dereference --recursive "${1}" "${2}"
 }
 
+copy_file() {
+    echo "Copying ${1} to ${2}"
+    cp --dereference "${1}" "${2}"
+}
+
 load_ebuild_repositories() {
     if [[ -v repo_entries ]]; then
         return
