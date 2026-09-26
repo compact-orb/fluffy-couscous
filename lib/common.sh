@@ -26,14 +26,14 @@ remove_file() {
 }
 
 load_ebuild_repositories() {
-    if [[ -v repo_urls ]]; then
+    if [[ -v repo_entries ]]; then
         return
     fi
 
-    while IFS= read -r repo_url; do
-        if [[ -z "${repo_url}" ]]; then continue; fi
+    while IFS= read -r repo_entry; do
+        if [[ -z "${repo_entry}" ]]; then continue; fi
 
-        repo_urls+=("${repo_url}")
+        repo_entries+=("${repo_entry}")
     done <<< "${REPOS}"
 }
 
@@ -44,7 +44,11 @@ download_ebuild_repositories() {
 
     create_directory "${project_repos_dir}"
 
-    for repo_url in "${repo_urls[@]}"; do
+    for repo_entry in "${repo_entries[@]}"; do
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+
         local repo_dir="${project_repos_dir}/${repo_name}"
         echo "Cloning ${repo_url} into ${repo_dir}"
         git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
@@ -60,8 +64,10 @@ configure_ebuild_repositories() {
     local repos_conf_dir="${target_root}/etc/portage/repos.conf"
     create_directory "${repos_conf_dir}"
 
-    for repo_url in "${repo_urls[@]}"; do
-        local repo_name="${repo_url##*/}"; repo_name="${repo_name%.git}"
+    for repo_entry in "${repo_entries[@]}"; do
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local repo_conf_file="${repos_conf_dir}/${repo_name}.conf"
         echo "Creating ${repo_conf_file}"
@@ -85,8 +91,10 @@ mount_ebuild_repositories() {
     local repos_dir="${target_root}/var/db/repos"
     create_directory "${repos_dir}"
 
-    for repo_url in "${repo_urls[@]}"; do
-        local repo_name="${repo_url##*/}"; repo_name="${repo_name%.git}"
+    for repo_entry in "${repo_entries[@]}"; do
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local source_repo_dir="${project_repos_dir}/${repo_name}"
         local target_repo_dir="${repos_dir}/${repo_name}"
@@ -104,8 +112,10 @@ unmount_ebuild_repositories() {
 
     load_ebuild_repositories
 
-    for repo_url in "${repo_urls[@]}"; do
-        local repo_name="${repo_url##*/}"; repo_name="${repo_name%.git}"
+    for repo_entry in "${repo_entries[@]}"; do
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local target_repo_dir="${target_root}/var/db/repos/${repo_name}"
 
