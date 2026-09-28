@@ -24,8 +24,8 @@ check_required_commands
 seed_architecture="${1}"
 seed_name="${2}"
 profile="${3}"
-seed_dir="${work_dir}/seed"
-stage_dir="${work_dir}/stage"
+seed_dir="${build_dir}/seed"
+stage_dir="${build_dir}/stage"
 seed_stage_bind_dir="${seed_dir}/tmp/stage"
 
 download_extract_latest_gentoo_autobuild "${seed_dir}" \

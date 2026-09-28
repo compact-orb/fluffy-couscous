@@ -395,7 +395,7 @@ upload_binary_packages() {
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
         --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
         copy "${portage_binpkgs_dir}" \
-        "s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
+        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }
 
 upload_gentoo_root() {
