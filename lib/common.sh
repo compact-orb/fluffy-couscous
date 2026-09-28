@@ -437,14 +437,14 @@ upload_gentoo_root() {
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
         --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
         copyto "${stage_archive_file}" \
-        "s3:${S3_BUCKET_NAME}/${stage_archive_file_name}"
+        ":s3:${S3_BUCKET_NAME}/${stage_archive_file_name}"
 
     echo "Uploading stage archive signature ${stage_archive_file_signature_file}"
     rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
         --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
         copyto "${stage_archive_file_signature_file}" \
-        "s3:${S3_BUCKET_NAME}/${stage_archive_file_signature_file_name}"
+        ":s3:${S3_BUCKET_NAME}/${stage_archive_file_signature_file_name}"
 
     remove_file "${stage_archive_file}"
     remove_file "${stage_archive_file_signature_file}"
