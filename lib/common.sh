@@ -234,7 +234,7 @@ download_extract_latest_gentoo_autobuild() {
     echo "Downloading to ${downloaded_latest_autobuild_file} and ${downloaded_latest_autobuild_file}.asc"
     aria2c --file-allocation="none" --force-sequential \
         --max-concurrent-downloads="4" --max-connection-per-server="4" \
-        --max-tries="3" --output-dir="${download_dir}" --quiet \
+        --max-tries="3" --dir="${download_dir}" --quiet \
         "${latest_autobuild_path}" "${latest_autobuild_path}.asc"
 
     echo "Verifying ${downloaded_latest_autobuild_file}"
