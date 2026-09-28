@@ -2,7 +2,24 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+if (( EUID != 0 )); then
+    echo "You must be root to run this script."
+    exit 1
+fi
+
+if (( $# < 3 )); then
+    echo "Usage: $0 <seed_architecture> <seed_name> <profile> [workaround]"
+    exit 1
+fi
+
+required_commands=(
+    "mount"
+    "umount"
+)
+
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
+
+check_required_commands
 
 seed_architecture="${1}"
 seed_name="${2}"
@@ -42,7 +59,7 @@ copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
 chroot_run "${seed_dir}" '
     buildpkgs=$(/tmp/build.py)
     emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
-    --root="/tmp/stage" "${buildpkgs}"
+    --root="/tmp/stage" ${buildpkgs}
     echo "C.UTF-8 UTF-8" > /etc/locale.gen
     echo "LANG=C.UTF-8" > /tmp/stage/etc/env.d/02locale
     locale-gen --prefix "/tmp/stage"

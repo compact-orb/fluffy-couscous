@@ -1,3 +1,16 @@
+required_commands+=(
+    "aria2c"
+    "awk"
+    "chroot"
+    "curl"
+    "git"
+    "gpg"
+    "mount"
+    "rclone"
+    "tar"
+    "umount"
+    "zstd"
+)
 work_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 build_dir="${work_dir}/build"
 project_repos_dir="${build_dir}/repos"
@@ -8,6 +21,27 @@ env_file="${work_dir}/.env"
 if [[ -f "$env_file" ]]; then
     source "$env_file"
 fi
+
+check_required_commands() {
+    local missing_commands=()
+    local -A seen=()
+    for command in "${required_commands[@]}"; do
+        if [[ -v seen["$command"] ]]; then
+            continue
+        fi
+        seen["$command"]=1
+
+        if ! command -v "${command}" > "/dev/null" 2>&1; then
+            missing_commands+=("${command}")
+        fi
+    done
+
+    if (( ${#missing_commands[@]} > 0)); then
+        echo "Missing required commands: ${missing_commands[*]}"
+
+        exit 1
+    fi
+}
 
 create_directory() {
     if [[ -d "${1}" ]]; then
@@ -105,7 +139,7 @@ configure_ebuild_repositories() {
         local repo_conf_file="${repos_conf_dir}/${repo_name}.conf"
         echo "Creating ${repo_conf_file}"
         local repo_conf_content
-        IFS= read -d "" -r repo_conf_content << "EOF" || true
+        IFS= read -d "" -r repo_conf_content << EOF || true
 [${repo_name}]
 location = /var/db/repos/${repo_name}
 sync-type = git
@@ -186,9 +220,10 @@ download_extract_latest_gentoo_autobuild() {
 
     create_directory "${output_dir}"
 
-    local latest_autobuild_relative_path=$(curl --silent \
+    local latest_autobuild_relative_path
+    latest_autobuild_relative_path=$(curl --silent \
         "${gentoo_mirror_url}/releases/${architecture}/autobuilds/latest-${name}.txt" |
-        gpg --decrypt --quiet | awk '!/^#/ {print $1; exit}')
+        gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}')
 
     local latest_autobuild_path="${gentoo_mirror_url}/releases/${architecture}/autobuilds/${latest_autobuild_relative_path}"
 
@@ -229,6 +264,8 @@ apply_portage_configuration() {
     local portage_conf_name="${3}"
     echo "Applying Portage configuration for ${target_root}"
 
+    import_signing_key
+
     local portage_conf_dir="${target_root}/etc/portage"
     create_directory "${portage_conf_dir}"
 
@@ -246,6 +283,9 @@ apply_portage_configuration() {
 
     gpg --batch --export "${signing_key_fingerprint}" | \
         gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import
+
+    echo "${signing_key_fingerprint}:6:" | \
+        gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import-ownertrust --quiet
 }
 
 mount_chroot_filesystems() {
@@ -298,10 +338,14 @@ chroot_run() {
     echo "Running command in chroot for ${target_root}"
 
     mount_chroot_filesystems "${target_root}"
+
     shift
+
     local exit_code="0"
     chroot "${target_root}" /usr/bin/bash --login -c "${*}" || exit_code="${?}"
+
     unmount_chroot_filesystems "${target_root}"
+
     return "${exit_code}"
 }
 
@@ -317,7 +361,8 @@ import_signing_key() {
 
     gpg --import --quiet <<< "${SIGNING_KEY}"
     
-    echo "${signing_key_fingerprint}:6:" | gpg --import-ownertrust --quiet
+    echo "${signing_key_fingerprint}:6:" | \
+        gpg --batch --import-ownertrust --quiet
 }
 
 apply_portage_signing_key() {
