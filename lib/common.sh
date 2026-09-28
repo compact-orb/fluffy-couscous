@@ -2,6 +2,7 @@ work_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 build_dir="${work_dir}/build"
 project_repos_dir="${build_dir}/repos"
 gentoo_mirror_url="http://gentoo.mirrors.ovh.net/gentoo-distfiles"
+root_relative_portage_gnupg_signing_dir="/var/lib/portage/gnupg-sign"
 
 env_file="$(${work_dir}/.env)"
 if [[ -f "$env_file" ]]; then
@@ -46,6 +47,7 @@ load_ebuild_repositories() {
         return
     fi
 
+    local repo_entry
     while IFS= read -r repo_entry; do
         if [[ -z "${repo_entry}" ]]; then continue; fi
 
@@ -324,7 +326,7 @@ apply_portage_signing_key() {
 
     import_signing_key
 
-    local portage_gnupg_signing_dir="${target_root}/var/lib/portage/gnupg-sign"
+    local portage_gnupg_signing_dir="${target_root}${root_relative_portage_gnupg_signing_dir}"
     create_directory "${portage_gnupg_signing_dir}"
     chmod "0700" "${portage_gnupg_signing_dir}"
 
@@ -333,4 +335,69 @@ apply_portage_signing_key() {
 
     echo "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
         >> "${target_root}/etc/portage/make.conf"
+}
+
+upload_binary_packages() {
+    local target_root="${1}"
+    echo "Uploading binary packages from ${target_root}"
+
+    local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
+    local repo
+    local repo_profile
+    IFS=":" read -r repo repo_profile <<< "${profile}"
+    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
+        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
+        copy "${portage_binpkgs_dir}" \
+        "s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
+}
+
+upload_gentoo_root() {
+    local target_root="${1}"
+    local prefix="${2}"
+    echo "Uploading Gentoo ${prefix} from ${target_root}"
+
+    import_signing_key
+
+    local repo
+    local repo_profile
+    IFS=":" read -r repo repo_profile <<< "${profile}"
+    local stage_archive_profile_name="${repo_profile//\//-}"
+    local stage_archive_file_name="${prefix}-${stage_archive_profile_name}.tar.zst"
+    local stage_archive_file_singature_file_name="${stage_archive_file_name}.asc"
+    local stage_archive_file="/tmp/${stage_archive_file_name}"
+    local stage_archive_file_signature_file="/tmp/${stage_archive_file_singature_file_name}"
+    echo "Creating stage archive ${stage_archive_file}"
+    tar --create --file="${stage_archive_file}" --directory="${target_root}" \
+        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+        --use-compress-program="zstd -9 -T0 --long=31" \
+        --exclude=".${root_relative_portage_gnupg_signing_dir}" \
+        --exclude="./etc/machine-id" \
+        --exclude="./etc/resolv.conf" \
+        --exclude="./root/*" \
+        --exclude="./tmp/*" \
+        --exclude="./var/cache/*" \
+        --exclude="./var/lib/systemd/catalog/database" \
+        --exclude="./var/log/*" \
+        --exclude="./var/tmp/*" \
+    echo "Signing stage archive ${stage_archive_file}"
+    gpg --batch --detach-sign --local-user "${signing_key_fingerprint}" \
+        "${stage_archive_file}"
+
+    echo "Uploading stage archive ${stage_archive_file}"
+    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
+        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
+        copyto "${stage_archive_file}" \
+        "s3:${S3_BUCKET_NAME}/${stage_archive_file_name}${ext}"
+
+    echo "Uploading stage archive signature ${stage_archive_file_signature_file}"
+    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
+        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
+        copyto "${stage_archive_file_signature_file}" \
+        "s3:${S3_BUCKET_NAME}/${stage_archive_file_singature_file_name}"
+
+    remove_file "${stage_archive_file}"
+    remove_file "${stage_archive_file_signature_file}"
 }
