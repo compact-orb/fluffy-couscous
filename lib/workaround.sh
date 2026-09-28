@@ -15,11 +15,6 @@ chroot_run "${seed_dir}" '
     "llvm-core/lld" "llvm-runtimes/clang-runtime"
     '
 
-# The custom profile might disable binutils-plugin for LLVM. Since
-# llvm-core/llvmgold requires binutils-plugin for LLVM, it has to be
-# unmerged.
-chroot_run "${seed_dir}" 'emerge --unmerge "llvm-core/llvmgold"'
-
 # Clang binary package might not have abi_x86_32 forced, which might mean
 # that 32-bit symlinks were not created.
 chroot_run "${seed_dir}" '
@@ -36,6 +31,11 @@ chroot_run "${seed_dir}" \
 
 chroot_run "${seed_dir}" \
     'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
+
+# The custom profile might disable binutils-plugin for LLVM. Since
+# llvm-core/llvmgold requires binutils-plugin for LLVM, it has to be
+# unmerged.
+chroot_run "${seed_dir}" 'emerge --unmerge "llvm-core/llvmgold"'
 
 remove_portage_configuration "${seed_dir}"
 
