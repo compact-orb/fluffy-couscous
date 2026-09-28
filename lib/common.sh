@@ -1,5 +1,3 @@
-shopt -s extglob
-
 work_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 build_dir="${work_dir}/build"
 project_repos_dir="${build_dir}/repos"
@@ -11,6 +9,9 @@ if [[ -f "$env_file" ]]; then
 fi
 
 create_directory() {
+    if [[ -d "${1}" ]]; then
+        return
+    fi
     echo "Creating ${1}"
     mkdir --parents "${1}"
 }
@@ -238,6 +239,11 @@ apply_portage_configuration() {
     create_symbolic_link "${relative_repo_profile_dir}" "${portage_conf_profile_dir}"
 
     recursive_copy "${work_dir}/portage/${portage_conf_name}/*" "${portage_conf_dir}"
+
+    chroot_run "${target_root}" "getuto"
+
+    gpg --batch --export "${signing_key_fingerprint}" | \
+        gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import
 }
 
 mount_chroot_filesystems() {
@@ -247,19 +253,28 @@ mount_chroot_filesystems() {
     create_empty_file "${target_root}/etc/resolv.conf"
     mount --bind "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
 
+    local target_proc_dir="${target_root}/proc"
+    create_directory "${target_proc_dir}"
     mount --types "proc" "/proc" "${target_root}/proc"
+    local target_sys_dir="${target_root}/sys"
+    create_directory "${target_sys_dir}"
     mount --rbind "/sys" "${target_root}/sys"
     mount --make-rslave "${target_root}/sys"
+    local target_dev_dir="${target_root}/dev"
+    create_directory "${target_dev_dir}"
     mount --rbind "/dev" "${target_root}/dev"
     mount --make-rslave "${target_root}/dev"
+    local target_run_dir="${target_root}/run"
+    create_directory "${target_run_dir}"
     mount --bind "/run" "${target_root}/run"
     mount --make-slave "${target_root}/run"
 
-    create_directory "${target_root}/var/tmp/portage"
-    chown --recursive "250:250" "${target_root}/var/tmp/portage"
-    chmod --recursive "775" "${target_root}/var/tmp/portage"
+    local target_portage_tmp_dir="${target_root}/var/tmp/portage"
+    create_directory "${target_portage_tmp_dir}"
+    chown --recursive "250:250" "${target_portage_tmp_dir}"
+    chmod --recursive "775" "${target_portage_tmp_dir}"
     mount --options "size=50%,uid=250,gid=250,mode=775" --types "tmpfs" \
-        "tmpfs" "${target_root}/var/tmp/portage"
+        "tmpfs" "${target_portage_tmp_dir}"
 }
 
 unmount_chroot_filesystems() {
@@ -274,4 +289,48 @@ unmount_chroot_filesystems() {
     umount "${target_root}/proc"
 
     umount "${target_root}/etc/resolv.conf"
+}
+
+chroot_run() {
+    local target_root="${1}"
+    echo "Running command in chroot for ${target_root}"
+
+    mount_chroot_filesystems
+    shift
+    local exit_code="0"
+    chroot "${target_root}" /usr/bin/bash --login -c "${*}" || exit_code="${?}"
+    unmount_chroot_filesystems
+    return "${exit_code}"
+}
+
+import_signing_key() {
+    if [[ -v $signing_key_fingerprint ]]; then
+        return
+    fi
+
+    echo "Importing PGP signing key"
+
+    signing_key_fingerprint=$(gpg --show-keys --with-colons \
+        <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
+
+    gpg --import --quiet <<< "${SIGNING_KEY}"
+    
+    echo "${signing_key_fingerprint}:6:" | gpg --import-ownertrust --quiet
+}
+
+apply_portage_signing_key() {
+    local target_root="${1}"
+    echo "Applying Portage signing key for ${target_root}"
+
+    import_signing_key
+
+    local portage_gnupg_signing_dir="${target_root}/var/lib/portage/gnupg-sign"
+    create_directory "${portage_gnupg_signing_dir}"
+    chmod "0700" "${portage_gnupg_signing_dir}"
+
+    gpg --batch --export-secret-keys "${signing_key_fingerprint}" | \
+        gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
+
+    echo "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
+        >> "${target_root}/etc/portage/make.conf"
 }
