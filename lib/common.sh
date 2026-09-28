@@ -1,7 +1,7 @@
 work_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 build_dir="${work_dir}/build"
 project_repos_dir="${build_dir}/repos"
-gentoo_mirror_url="http://gentoo.mirrors.ovh.net/gentoo-distfiles"
+gentoo_mirror_url="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
 root_relative_portage_gnupg_signing_dir="/var/lib/portage/gnupg-sign"
 
 env_file="$(${work_dir}/.env)"
@@ -32,14 +32,29 @@ force_remove() {
     rm --force --recursive "${1}"
 }
 
+copy_file() {
+    echo "Copying ${1} to ${2}"
+    cp --dereference "${1}" "${2}"
+}
+
 recursive_copy() {
     echo "Recursively copying ${1} to ${2}"
     cp --dereference --recursive "${1}" "${2}"
 }
 
-copy_file() {
-    echo "Copying ${1} to ${2}"
-    cp --dereference "${1}" "${2}"
+create_empty_file() {
+    echo "Creating empty file ${1}"
+    > "${1}"
+}
+
+create_file() {
+    echo "Creating file ${1}"
+    echo "${2}" > "${1}"
+}
+
+create_symbolic_link() {
+    echo "Creating symbolic link from ${1} to ${2}"
+    ln --symbolic "${1}" "${2}"
 }
 
 load_ebuild_repositories() {
@@ -53,21 +68,6 @@ load_ebuild_repositories() {
 
         repo_entries+=("${repo_entry}")
     done <<< "${REPOS}"
-}
-
-create_symbolic_link() {
-    echo "Creating symbolic link from ${1} to ${2}"
-    ln --symbolic "${1}" "${2}"
-}
-
-create_empty_file() {
-    echo "Creating empty file ${1}"
-    > "${1}"
-}
-
-create_file() {
-    echo "Creating file ${1}"
-    echo "${2}" > "${1}"
 }
 
 download_ebuild_repositories() {

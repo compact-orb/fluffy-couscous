@@ -11,20 +11,18 @@ seed_dir="${work_dir}/seed"
 stage_dir="${work_dir}/stage"
 seed_stage_bind_dir="${seed_dir}/tmp/stage"
 
-download_ebuild_repositories
-
 download_extract_latest_gentoo_autobuild "${seed_dir}" \
     "${seed_architecture}" "${seed_name}"
 
-configure_ebuild_repositories "${seed_dir}"
+download_ebuild_repositories
 
+configure_ebuild_repositories "${seed_dir}"
 mount_ebuild_repositories "${seed_dir}"
 
 if [[ "${4}" -eq "workaround" ]]; then
     source "${work_dir}/lib/workaround.sh"
 else
     remove_portage_configuration "${seed_dir}"
-
     apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
 
     chroot_run "${seed_dir}" \
@@ -32,9 +30,7 @@ else
 fi
 
 create_directory "${stage_dir}"
-
 create_directory "${seed_stage_bind_dir}"
-
 mount --bind "${seed_dir}" "${seed_stage_bind_dir}"
 
 chroot_run "${seed_dir}" '
@@ -43,7 +39,6 @@ chroot_run "${seed_dir}" '
     '
 
 copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
-
 chroot_run "${seed_dir}" '
     buildpkgs=$(/tmp/build.py)
     emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
@@ -58,7 +53,6 @@ unmount_ebuild_repositories "${seed_dir}"
 force_remove "${seed_dir}"
 
 create_directory "${stage_dir}/etc/portage"
-
 configure_ebuild_repositories "${stage_dir}"
 
 mount_ebuild_repositories "${stage_dir}"
@@ -75,5 +69,4 @@ chroot_run "${seed_dir}" '
 unmount_ebuild_repositories "${stage_dir}"
 
 upload_binary_packages "${stage_dir}"
-
 upload_gentoo_root "${stage_dir}" "stage3"
