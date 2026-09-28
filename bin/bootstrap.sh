@@ -19,7 +19,7 @@ download_ebuild_repositories
 configure_ebuild_repositories "${seed_dir}"
 mount_ebuild_repositories "${seed_dir}"
 
-if [[ "${4}" -eq "workaround" ]]; then
+if [[ "${4:-}" == "workaround" ]]; then
     source "${work_dir}/lib/workaround.sh"
 else
     remove_portage_configuration "${seed_dir}"
@@ -31,7 +31,7 @@ fi
 
 create_directory "${stage_dir}"
 create_directory "${seed_stage_bind_dir}"
-mount --bind "${seed_dir}" "${seed_stage_bind_dir}"
+mount --bind "${stage_dir}" "${seed_stage_bind_dir}"
 
 chroot_run "${seed_dir}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
@@ -43,6 +43,8 @@ chroot_run "${seed_dir}" '
     buildpkgs=$(/tmp/build.py)
     emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
     --root="/tmp/stage" "${buildpkgs}"
+    echo "C.UTF-8 UTF-8" > /etc/locale.gen
+    echo "LANG=C.UTF-8" > /tmp/stage/etc/env.d/02locale
     locale-gen --prefix "/tmp/stage"
     '
 
@@ -61,12 +63,12 @@ apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
 
 apply_portage_signing_key "${stage_dir}"
 
-chroot_run "${seed_dir}" '
+chroot_run "${stage_dir}" '
     emerge --emptytree --jobs=$(nproc) @system
     emerge --depclean
     '
 
 unmount_ebuild_repositories "${stage_dir}"
 
-upload_binary_packages "${stage_dir}"
-upload_gentoo_root "${stage_dir}" "stage3"
+upload_binary_packages "${stage_dir}" "${profile}"
+upload_gentoo_root "${stage_dir}" "${profile}" "stage3"

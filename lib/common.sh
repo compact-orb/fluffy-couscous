@@ -4,7 +4,7 @@ project_repos_dir="${build_dir}/repos"
 gentoo_mirror_url="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
 root_relative_portage_gnupg_signing_dir="/var/lib/portage/gnupg-sign"
 
-env_file="$(${work_dir}/.env)"
+env_file="${work_dir}/.env"
 if [[ -f "$env_file" ]]; then
     source "$env_file"
 fi
@@ -220,7 +220,7 @@ remove_portage_configuration() {
     local target_root="${1}"
     echo "Removing Portage configuration for ${target_root}"
 
-    force_remove "${target_root}/etc/portage/*"
+    find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force --recursive {} +
 }
 
 apply_portage_configuration() {
@@ -240,7 +240,7 @@ apply_portage_configuration() {
     local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
     create_symbolic_link "${relative_repo_profile_dir}" "${portage_conf_profile_dir}"
 
-    recursive_copy "${work_dir}/portage/${portage_conf_name}/*" "${portage_conf_dir}"
+    recursive_copy "${work_dir}/portage/${portage_conf_name}/." "${portage_conf_dir}"
 
     chroot_run "${target_root}" "getuto"
 
@@ -283,30 +283,30 @@ unmount_chroot_filesystems() {
     local target_root="${1}"
     echo "Unmounting chroot filesystems for ${target_root}"
 
-    umount "${target_root}/var/tmp/portage"
+    umount --lazy "${target_root}/var/tmp/portage"
 
-    umount "${target_root}/run"
-    umount "${target_root}/dev"
-    umount "${target_root}/sys"
-    umount "${target_root}/proc"
+    umount --lazy "${target_root}/run"
+    umount --lazy --recursive "${target_root}/dev"
+    umount --lazy --recursive "${target_root}/sys"
+    umount --lazy "${target_root}/proc"
 
-    umount "${target_root}/etc/resolv.conf"
+    umount --lazy "${target_root}/etc/resolv.conf"
 }
 
 chroot_run() {
     local target_root="${1}"
     echo "Running command in chroot for ${target_root}"
 
-    mount_chroot_filesystems
+    mount_chroot_filesystems "${target_root}"
     shift
     local exit_code="0"
     chroot "${target_root}" /usr/bin/bash --login -c "${*}" || exit_code="${?}"
-    unmount_chroot_filesystems
+    unmount_chroot_filesystems "${target_root}"
     return "${exit_code}"
 }
 
 import_signing_key() {
-    if [[ -v $signing_key_fingerprint ]]; then
+    if [[ -v signing_key_fingerprint ]]; then
         return
     fi
 
@@ -339,6 +339,7 @@ apply_portage_signing_key() {
 
 upload_binary_packages() {
     local target_root="${1}"
+    local profile="${2}"
     echo "Uploading binary packages from ${target_root}"
 
     local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
@@ -354,7 +355,8 @@ upload_binary_packages() {
 
 upload_gentoo_root() {
     local target_root="${1}"
-    local prefix="${2}"
+    local profile="${2}"
+    local prefix="${3}"
     echo "Uploading Gentoo ${prefix} from ${target_root}"
 
     import_signing_key
@@ -364,9 +366,9 @@ upload_gentoo_root() {
     IFS=":" read -r repo repo_profile <<< "${profile}"
     local stage_archive_profile_name="${repo_profile//\//-}"
     local stage_archive_file_name="${prefix}-${stage_archive_profile_name}.tar.zst"
-    local stage_archive_file_singature_file_name="${stage_archive_file_name}.asc"
+    local stage_archive_file_signature_file_name="${stage_archive_file_name}.asc"
     local stage_archive_file="/tmp/${stage_archive_file_name}"
-    local stage_archive_file_signature_file="/tmp/${stage_archive_file_singature_file_name}"
+    local stage_archive_file_signature_file="/tmp/${stage_archive_file_signature_file_name}"
     echo "Creating stage archive ${stage_archive_file}"
     tar --create --file="${stage_archive_file}" --directory="${target_root}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
@@ -380,6 +382,7 @@ upload_gentoo_root() {
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
+        .
     echo "Signing stage archive ${stage_archive_file}"
     gpg --batch --detach-sign --local-user "${signing_key_fingerprint}" \
         "${stage_archive_file}"
@@ -389,14 +392,14 @@ upload_gentoo_root() {
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
         --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
         copyto "${stage_archive_file}" \
-        "s3:${S3_BUCKET_NAME}/${stage_archive_file_name}${ext}"
+        "s3:${S3_BUCKET_NAME}/${stage_archive_file_name}"
 
     echo "Uploading stage archive signature ${stage_archive_file_signature_file}"
     rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
         --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
         copyto "${stage_archive_file_signature_file}" \
-        "s3:${S3_BUCKET_NAME}/${stage_archive_file_singature_file_name}"
+        "s3:${S3_BUCKET_NAME}/${stage_archive_file_signature_file_name}"
 
     remove_file "${stage_archive_file}"
     remove_file "${stage_archive_file_signature_file}"
