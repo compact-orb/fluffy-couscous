@@ -29,7 +29,7 @@ chroot_run "${seed_dir}" '
 # Perl deps within a package will use GCC even though the rest of the package
 # is using Clang. This will result in LLVM flags being passed to GCC, resulting
 # in a build failure. To avoid this, Perl is rebuilt.
-chroot_run "${seed_dir}" 'emerge --jobs="$(nproc)" "dev-lang/perl"`
+chroot_run "${seed_dir}" 'emerge --jobs="$(nproc)" "dev-lang/perl"'
 
 
 # Author's profile needs extra packages to be merged.
