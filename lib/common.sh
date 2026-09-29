@@ -286,6 +286,8 @@ apply_portage_configuration() {
 
     echo "${signing_key_fingerprint}:6:" | \
         gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import-ownertrust --quiet
+
+    gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
 }
 
 mount_chroot_filesystems() {
