@@ -310,20 +310,11 @@ mount_chroot_filesystems() {
     create_directory "${target_run_dir}"
     mount --bind "/run" "${target_root}/run"
     mount --make-slave "${target_root}/run"
-
-    local target_portage_tmp_dir="${target_root}/var/tmp/portage"
-    create_directory "${target_portage_tmp_dir}"
-    chown --recursive "250:250" "${target_portage_tmp_dir}"
-    chmod --recursive "775" "${target_portage_tmp_dir}"
-    mount --options "size=50%,uid=250,gid=250,mode=775" --types "tmpfs" \
-        "tmpfs" "${target_portage_tmp_dir}"
 }
 
 unmount_chroot_filesystems() {
     local target_root="${1}"
     echo "Unmounting chroot filesystems for ${target_root}"
-
-    umount --lazy "${target_root}/var/tmp/portage"
 
     umount --lazy "${target_root}/run"
     umount --lazy --recursive "${target_root}/dev"
