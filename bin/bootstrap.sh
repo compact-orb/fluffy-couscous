@@ -59,7 +59,7 @@ copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
 chroot_run "${seed_dir}" '
     buildpkgs=$(/tmp/build.py)
     emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
-    --root="/tmp/stage" app-portage/getuto ${buildpkgs}
+    --root="/tmp/stage" ${buildpkgs}
     locale-gen --prefix "/tmp/stage"
     '
 

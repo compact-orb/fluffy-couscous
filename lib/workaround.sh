@@ -46,3 +46,7 @@ apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
 # is using Clang. This will result in LLVM flags being passed to GCC, resulting
 # in a build failure. To avoid this, Perl is rebuilt.
 chroot_run "${seed_dir}" 'emerge --jobs="$(nproc)" "dev-lang/perl"'
+
+# Update everything with the new profile to reduce the chance of issues.
+chroot_run "${seed_dir}" \
+    'emerge --deep --jobs="$(nproc)" --newuse --update "@world"'

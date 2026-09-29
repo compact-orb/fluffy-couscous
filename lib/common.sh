@@ -342,7 +342,7 @@ chroot_run() {
     shift
 
     local exit_code="0"
-    chroot "${target_root}" /usr/bin/bash --login -c "${*}" || exit_code="${?}"
+    chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || exit_code="${?}"
 
     unmount_chroot_filesystems "${target_root}"
 
