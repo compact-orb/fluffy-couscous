@@ -25,13 +25,6 @@ chroot_run "${seed_dir}" '
         "/usr/lib/llvm/${LLVM_MAJOR}/bin/i686-pc-linux-gnu-clang++-${LLVM_MAJOR}"
     '
 
-# Perl might hardcode the compiler, and since the seed was built with GCC,
-# Perl deps within a package will use GCC even though the rest of the package
-# is using Clang. This will result in LLVM flags being passed to GCC, resulting
-# in a build failure. To avoid this, Perl is rebuilt.
-chroot_run "${seed_dir}" 'emerge --jobs="$(nproc)" "dev-lang/perl"'
-
-
 # Author's profile needs extra packages to be merged.
 chroot_run "${seed_dir}" \
     'emerge --getbinpkg --jobs="$(nproc)" "net-misc/aria2"'
@@ -47,3 +40,9 @@ chroot_run "${seed_dir}" 'emerge --unmerge "llvm-core/llvmgold"'
 remove_portage_configuration "${seed_dir}"
 
 apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+
+# Perl might hardcode the compiler, and since the seed was built with GCC,
+# Perl deps within a package will use GCC even though the rest of the package
+# is using Clang. This will result in LLVM flags being passed to GCC, resulting
+# in a build failure. To avoid this, Perl is rebuilt.
+chroot_run "${seed_dir}" 'emerge --jobs="$(nproc)" "dev-lang/perl"'
