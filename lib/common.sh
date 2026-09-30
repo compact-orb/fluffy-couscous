@@ -318,12 +318,12 @@ unmount_chroot_filesystems() {
     local target_root="${1}"
     echo "Unmounting chroot filesystems for ${target_root}"
 
-    umount --lazy "${target_root}/run"
-    umount --lazy --recursive "${target_root}/dev"
-    umount --lazy --recursive "${target_root}/sys"
-    umount --lazy "${target_root}/proc"
+    umount "${target_root}/run"
+    umount --recursive "${target_root}/dev"
+    umount --recursive "${target_root}/sys"
+    umount "${target_root}/proc"
 
-    umount --lazy "${target_root}/etc/resolv.conf"
+    umount "${target_root}/etc/resolv.conf"
 }
 
 chroot_run() {
