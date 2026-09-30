@@ -255,7 +255,8 @@ remove_portage_configuration() {
     local target_root="${1}"
     echo "Removing Portage configuration for ${target_root}"
 
-    find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force --recursive {} +
+    find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force \
+        --recursive {} +
 }
 
 apply_portage_configuration() {
