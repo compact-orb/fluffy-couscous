@@ -279,6 +279,8 @@ apply_portage_configuration() {
 
     recursive_copy "${work_dir}/portage/${portage_conf_name}/." "${portage_conf_dir}"
 
+    configure_ebuild_repositories "${target_root}"
+
     chroot_run "${target_root}" "getuto"
 
     gpg --batch --export "${signing_key_fingerprint}" | \
