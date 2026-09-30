@@ -404,7 +404,7 @@ upload_gentoo_root() {
     IFS=":" read -r repo repo_profile <<< "${profile}"
     local stage_archive_profile_name="${repo_profile//\//-}"
     local stage_archive_file_name="${prefix}-${stage_archive_profile_name}.tar.zst"
-    local stage_archive_file_signature_file_name="${stage_archive_file_name}.asc"
+    local stage_archive_file_signature_file_name="${stage_archive_file_name}.sig"
     local stage_archive_file="/tmp/${stage_archive_file_name}"
     local stage_archive_file_signature_file="/tmp/${stage_archive_file_signature_file_name}"
     echo "Creating stage archive ${stage_archive_file}"
