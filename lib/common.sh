@@ -124,6 +124,9 @@ download_ebuild_repositories() {
 
     load_ebuild_repositories
 
+    import_gentoo_release_keys
+    # TODO: import git pubic keys
+
     create_directory "${project_repos_dir}"
 
     for repo_entry in "${repo_entries[@]}"; do
@@ -140,6 +143,8 @@ download_ebuild_repositories() {
             echo "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
+        # echo "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
+        # git -C "${repo_dir}" verify-commit HEAD
     done
 }
 
