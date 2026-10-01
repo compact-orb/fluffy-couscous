@@ -3,6 +3,7 @@ required_commands+=(
     "awk"
     "chroot"
     "curl"
+    "fusermount3"
     "git"
     "gpg"
     "mount"
