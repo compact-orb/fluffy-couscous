@@ -524,7 +524,7 @@ mount_binary_packages() {
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
     create_directory "${binpkgs_dir}"
     mount --options \
-        "lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir},metacopy=off" \
+        "lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir},metacopy=off,userxattr,redirect_dir=off" \
         --types "overlay" "overlay" "${binpkgs_dir}"
 }
 
