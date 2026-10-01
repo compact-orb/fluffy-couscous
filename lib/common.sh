@@ -37,7 +37,7 @@ check_required_commands() {
     done
 
     if (( ${#missing_commands[@]} > 0)); then
-        echo "Missing required commands: \n${missing_commands[*]}"
+        echo -e "Missing required commands: \n${missing_commands[*]}"
 
         exit 1
     fi
