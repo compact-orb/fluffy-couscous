@@ -91,6 +91,21 @@ create_symbolic_link() {
     ln --symbolic "${1}" "${2}"
 }
 
+rclone_with_params() {
+    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
+        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
+        "${@}"
+}
+
+parse_profile() {
+    IFS=":" read -r repo repo_profile <<< "${profile}"
+    if [[ -z "${repo_profile}" ]]; then
+        repo_profile="${repo}"
+        repo="gentoo"
+    fi
+}
+
 load_ebuild_repositories() {
     if [[ -v repo_entries ]]; then
         return
@@ -117,8 +132,14 @@ download_ebuild_repositories() {
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local repo_dir="${project_repos_dir}/${repo_name}"
-        echo "Cloning ${repo_url} into ${repo_dir}"
-        git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
+        if [[ -d "${repo_dir}" ]]; then
+            echo "Updating ${repo_name} in ${repo_dir}"
+            git -C "${repo_dir}" fetch --depth 1 origin
+            git -C "${repo_dir}" reset --hard FETCH_HEAD
+        else
+            echo "Cloning ${repo_url} into ${repo_dir}"
+            git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
+        fi
     done
 }
 
@@ -272,7 +293,7 @@ apply_portage_configuration() {
 
     local repo
     local repo_profile
-    IFS=":" read -r repo repo_profile <<< "${profile}"
+    parse_profile
 
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
     local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
@@ -298,7 +319,7 @@ mount_chroot_filesystems() {
     echo "Mounting chroot filesystems for ${target_root}"
 
     create_empty_file "${target_root}/etc/resolv.conf"
-    mount --bind "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
+    mount --bind --options "ro" "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
 
     local target_proc_dir="${target_root}/proc"
     create_directory "${target_proc_dir}"
@@ -386,11 +407,8 @@ upload_binary_packages() {
     local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
     local repo
     local repo_profile
-    IFS=":" read -r repo repo_profile <<< "${profile}"
-    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
-        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
-        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
-        copy "${portage_binpkgs_dir}" \
+    parse_profile
+    rclone_with_params copy "${portage_binpkgs_dir}" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }
 
@@ -404,7 +422,7 @@ upload_gentoo_root() {
 
     local repo
     local repo_profile
-    IFS=":" read -r repo repo_profile <<< "${profile}"
+    parse_profile
     local stage_archive_profile_name="${repo_profile//\//-}"
     local stage_archive_file_name="${prefix}-${stage_archive_profile_name}.tar.zst"
     local stage_archive_file_signature_file_name="${stage_archive_file_name}.sig"
@@ -429,19 +447,109 @@ upload_gentoo_root() {
         "${stage_archive_file}"
 
     echo "Uploading stage archive ${stage_archive_file}"
-    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
-        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
-        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
-        copy "${stage_archive_file}" \
+    rclone_with_params copy "${stage_archive_file}" \
         ":s3:${S3_BUCKET_NAME}"
 
     echo "Uploading stage archive signature ${stage_archive_file_signature_file}"
-    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
-        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
-        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
-        copy "${stage_archive_file_signature_file}" \
+    rclone_with_params copy "${stage_archive_file_signature_file}" \
         ":s3:${S3_BUCKET_NAME}"
 
     force_remove "${stage_archive_file}"
     force_remove "${stage_archive_file_signature_file}"
+}
+
+download_extract_project_stage() {
+    local target_root="${1}"
+    local profile="${2}"
+    local prefix="${3}"
+    echo "Downloading and extracting Gentoo ${prefix} to ${target_root}"
+
+    import_signing_key
+
+    create_directory "${target_root}"
+
+    local repo
+    local repo_profile
+    parse_profile
+    local stage_archive_profile_name="${repo_profile//\//-}"
+    local stage_archive_file_name="${prefix}-${stage_archive_profile_name}.tar.zst"
+    local stage_archive_file_signature_file_name="${stage_archive_file_name}.sig"
+    local stage_archive_download_dir="/tmp"
+    local stage_archive_file="${stage_archive_download_dir}/${stage_archive_file_name}"
+    local stage_archive_file_signature_file="${stage_archive_download_dir}/${stage_archive_file_signature_file_name}"
+    echo "Downloading stage archive ${stage_archive_file}"
+    rclone_with_params copy ":s3:${S3_BUCKET_NAME}/${stage_archive_file_name}" \
+        "${stage_archive_download_dir}"
+
+    echo "Downloading stage archive signature ${stage_archive_file_signature_file}"
+    rclone_with_params copy ":s3:${S3_BUCKET_NAME}/${stage_archive_file_signature_file_name}" \
+        "${stage_archive_download_dir}"
+
+    echo "Verifying stage archive ${stage_archive_file}"
+    gpg --verify "${stage_archive_file_signature_file}" "${stage_archive_file}"
+
+    echo "Extracting stage archive ${stage_archive_file} to ${target_root}"
+    tar --directory="${target_root}" --extract --file="${stage_archive_file}" \
+        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+        --use-compress-program="zstd --long=31"
+
+    force_remove "${stage_archive_file}"
+    force_remove "${stage_archive_file_signature_file}"
+}
+
+mount_binary_packages() {
+    local target_root="${1}"
+    local profile="${2}"
+    echo "Mounting binary packages for ${target_root}"
+
+    local repo
+    local repo_profile
+    parse_profile
+
+    local lowerdir="${build_dir}/binpkgs-lower"
+    create_directory "${lowerdir}"
+    local upperdir="${build_dir}/binpkgs-upper"
+    create_directory "${upperdir}"
+    local workdir="${build_dir}/binpkgs-work"
+    create_directory "${workdir}"
+
+    rclone_with_params mount --daemon --read-only --vfs-cache-mode minimal \
+        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
+
+    local binpkgs_dir="${target_root}/var/cache/binpkgs"
+    create_directory "${binpkgs_dir}"
+    mount --options \
+        "lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir}" \
+        --types "overlay" "overlay" "${binpkgs_dir}"
+}
+
+unmount_binary_packages() {
+    local target_root="${1}"
+    echo "Unmounting binary packages for ${target_root}"
+
+    local binpkgs_dir="${target_root}/var/cache/binpkgs"
+    umount "${binpkgs_dir}"
+
+    local workdir="${build_dir}/binpkgs-work"
+    force_remove "${workdir}"
+    local upperdir="${build_dir}/binpkgs-upper"
+    force_remove "${upperdir}"
+    local lowerdir="${build_dir}/binpkgs-lower"
+    umount "${lowerdir}"
+    force_remove "${lowerdir}"
+}
+
+upload_mounted_binary_packages() {
+    local target_root="${1}"
+    local profile="${2}"
+    echo "Uploading mounted binary packages from ${target_root}"
+
+    local repo
+    local repo_profile
+    parse_profile
+
+    local binpkgs_dir="${target_root}/var/cache/binpkgs"
+
+    rclone_with_params sync "${binpkgs_dir}" \
+        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }

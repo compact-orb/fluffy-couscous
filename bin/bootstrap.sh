@@ -70,11 +70,10 @@ unmount_ebuild_repositories "${seed_dir}"
 force_remove "${seed_dir}"
 
 create_directory "${stage_dir}/etc/portage"
-configure_ebuild_repositories "${stage_dir}"
-
-mount_ebuild_repositories "${stage_dir}"
 
 apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
+
+mount_ebuild_repositories "${stage_dir}"
 
 apply_portage_signing_key "${stage_dir}"
 
@@ -85,5 +84,9 @@ chroot_run "${stage_dir}" '
 
 unmount_ebuild_repositories "${stage_dir}"
 
+remove_portage_configuration "${stage_dir}"
+
 upload_binary_packages "${stage_dir}" "${profile}"
 upload_gentoo_root "${stage_dir}" "${profile}" "stage3"
+
+force_remove "${stage_dir}"
