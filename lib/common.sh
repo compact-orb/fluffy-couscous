@@ -512,17 +512,18 @@ mount_binary_packages() {
     local repo_profile
     parse_profile
 
-    local lowerdir="${build_dir}/binpkgs-lower"
+    local binpkgs_dir="${target_root}/var/cache/binpkgs"
+
+    local lowerdir="${binpkgs_dir}-lower"
     create_directory "${lowerdir}"
-    local upperdir="${build_dir}/binpkgs-upper"
+    local upperdir="${binpkgs_dir}-upper"
     create_directory "${upperdir}"
-    local workdir="${build_dir}/binpkgs-work"
+    local workdir="${binpkgs_dir}-work"
     create_directory "${workdir}"
 
     rclone_with_params mount --daemon --read-only --vfs-cache-mode minimal \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
 
-    local binpkgs_dir="${target_root}/var/cache/binpkgs"
     create_directory "${binpkgs_dir}"
     mount --options \
         "lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir}" \
@@ -535,14 +536,8 @@ unmount_binary_packages() {
 
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
     umount "${binpkgs_dir}"
-
-    local workdir="${build_dir}/binpkgs-work"
-    force_remove "${workdir}"
-    local upperdir="${build_dir}/binpkgs-upper"
-    force_remove "${upperdir}"
-    local lowerdir="${build_dir}/binpkgs-lower"
+    local lowerdir="${binpkgs_dir}-lower"
     umount "${lowerdir}"
-    force_remove "${lowerdir}"
 }
 
 upload_mounted_binary_packages() {
