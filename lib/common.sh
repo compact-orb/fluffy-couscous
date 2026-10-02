@@ -400,6 +400,25 @@ unmount_chroot_filesystems() {
     managed_unmount_all "mount_chroot_filesystems_mounts"
 }
 
+kill_chroot_processes() {
+    local target_root
+    target_root="$(realpath "${1}")"
+    if [[ -z "${target_root}" || "${target_root}" == "/" ]]; then
+        return
+    fi
+
+    local p
+    local root_link
+    for p in /proc/[0-9]*; do
+        if [[ -d "$p" ]] && root_link=$(readlink "$p/root" 2>/dev/null); then
+            if [[ "$root_link" == "$target_root" ]]; then
+                echo "Killing lingering chroot process ${p##*/}"
+                kill -9 "${p##*/}" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
 chroot_run() {
     local target_root="${1}"
     echo "Running command in chroot for ${target_root}"
@@ -411,6 +430,7 @@ chroot_run() {
     local exit_code="0"
     chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || exit_code="${?}"
 
+    kill_chroot_processes "${target_root}"
     unmount_chroot_filesystems
 
     return "${exit_code}"
