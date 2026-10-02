@@ -13,8 +13,6 @@ if (( $# < 3 )); then
 fi
 
 required_commands=(
-    "mount"
-    "umount"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
