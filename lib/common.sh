@@ -256,7 +256,8 @@ mount_ebuild_repositories() {
         create_directory "${target_repo_dir}"
 
         echo "Mounting ${source_repo_dir} to ${target_repo_dir}"
-        managed_mount "mount_ebuild_repositories_mounts" --bind "${source_repo_dir}" "${target_repo_dir}"
+        managed_mount "mount_ebuild_repositories_mounts" --bind \
+            "${source_repo_dir}" "${target_repo_dir}"
     done
 }
 
@@ -348,9 +349,11 @@ apply_portage_configuration() {
 
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
     local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
-    create_symbolic_link "${relative_repo_profile_dir}" "${portage_conf_profile_dir}"
+    create_symbolic_link "${relative_repo_profile_dir}" \
+        "${portage_conf_profile_dir}"
 
-    recursive_copy "${work_dir}/portage/${portage_conf_name}/." "${portage_conf_dir}"
+    recursive_copy "${work_dir}/portage/${portage_conf_name}/." \
+        "${portage_conf_dir}"
 
     configure_ebuild_repositories "${target_root}"
 
@@ -360,7 +363,8 @@ apply_portage_configuration() {
         gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import
 
     echo "${signing_key_fingerprint}:6:" | \
-        gpg --batch --homedir "${target_root}/etc/portage/gnupg" --import-ownertrust --quiet
+        gpg --batch --homedir "${target_root}/etc/portage/gnupg" \
+        --import-ownertrust --quiet
 
     gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
 }
@@ -428,7 +432,8 @@ chroot_run() {
     shift
 
     local exit_code="0"
-    chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || exit_code="${?}"
+    chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || \
+        exit_code="${?}"
 
     kill_chroot_processes "${target_root}"
     unmount_chroot_filesystems
