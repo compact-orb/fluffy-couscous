@@ -110,6 +110,7 @@ parse_profile() {
 }
 
 REGISTERED_MOUNT_ARRAYS=()
+declare -A REGISTERED_MOUNT_ARRAYS_SEEN=()
 
 managed_mount() {
     local array_name="${1}"
@@ -122,16 +123,8 @@ managed_mount() {
     mount "${@}"
 
     mounts_array_name+=("${target}")
-    
-    local found="0"
-    local a
-    for a in "${REGISTERED_MOUNT_ARRAYS[@]}"; do
-        if [[ "${a}" == "${array_name}" ]]; then
-            found=1
-            break
-        fi
-    done
-    if (( found == 0 )); then
+    if [[ ! -v REGISTERED_MOUNT_ARRAYS_SEEN["${array_name}"] ]]; then
+        REGISTERED_MOUNT_ARRAYS_SEEN["${array_name}"]=1
         REGISTERED_MOUNT_ARRAYS+=("${array_name}")
     fi
 }
