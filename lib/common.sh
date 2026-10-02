@@ -117,7 +117,7 @@ managed_mount() {
     shift
 
     # The mount target is always the last argument in standard mount syntax
-    local target="${@: -1}"
+    local target="${*: -1}"
 
     mount "${@}"
 
