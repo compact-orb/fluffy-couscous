@@ -256,7 +256,7 @@ mount_ebuild_repositories() {
         create_directory "${target_repo_dir}"
 
         echo "Mounting ${source_repo_dir} to ${target_repo_dir}"
-        managed_mount "mount_ebuild_repositories_mounts" --bind \
+        managed_mount "mount_ebuild_repositories_mounts" --bind --options "ro" \
             "${source_repo_dir}" "${target_repo_dir}"
     done
 }
