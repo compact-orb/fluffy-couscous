@@ -41,12 +41,12 @@ chroot_run "${stage_dir}" '
     emerge --depclean
     '
 
-unmount_ebuild_repositories "${stage_dir}"
+unmount_ebuild_repositories
 
 remove_portage_configuration "${stage_dir}"
 
 upload_mounted_binary_packages "${stage_dir}" "${profile}"
-unmount_binary_packages "${stage_dir}"
+unmount_binary_packages
 
 upload_gentoo_root "${stage_dir}" "${profile}" "stage3"
 

@@ -7,6 +7,7 @@ required_commands+=(
     "git"
     "gpg"
     "mount"
+    "mountpoint"
     "rclone"
     "tar"
     "umount"
@@ -108,6 +109,63 @@ parse_profile() {
     fi
 }
 
+REGISTERED_MOUNT_ARRAYS=()
+
+managed_mount() {
+    local array_name="${1}"
+    declare -n mounts_array_name="${array_name}"
+    shift
+
+    # The mount target is always the last argument in standard mount syntax
+    local target="${@: -1}"
+
+    mount "${@}"
+
+    mounts_array_name+=("${target}")
+    
+    local found="0"
+    local a
+    for a in "${REGISTERED_MOUNT_ARRAYS[@]}"; do
+        if [[ "${a}" == "${array_name}" ]]; then
+            found=1
+            break
+        fi
+    done
+    if (( found == 0 )); then
+        REGISTERED_MOUNT_ARRAYS+=("${array_name}")
+    fi
+}
+
+managed_unmount_all() {
+    declare -n mounts_array_name="${1}"
+
+    local exit_code="0"
+    local i
+    for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
+        local m="${mounts_array_name[$i]}"
+        if mountpoint --quiet "${m}"; then
+            echo "Unmounting ${m}"
+            umount --recursive "${m}" || exit_code="${?}"
+        fi
+    done
+
+    mounts_array_name=()
+    if (( exit_code != 0 )); then
+        echo "Error unmounting one or more filesystems"
+        return "${exit_code}"
+    fi
+}
+
+managed_cleanup_all() {
+    local exit_code="${?}"
+    local i
+    for (( i=${#REGISTERED_MOUNT_ARRAYS[@]}-1; i>=0; i-- )); do
+        managed_unmount_all "${REGISTERED_MOUNT_ARRAYS[$i]}" || true
+    done
+    exit "${exit_code}"
+}
+trap managed_cleanup_all "EXIT"
+
 load_ebuild_repositories() {
     if [[ -v repo_entries ]]; then
         return
@@ -177,6 +235,7 @@ EOF
     done
 }
 
+mount_ebuild_repositories_mounts=()
 mount_ebuild_repositories() {
     local target_root="${1}"
     echo "Mounting ebuild repositories for ${target_root}"
@@ -197,28 +256,13 @@ mount_ebuild_repositories() {
         create_directory "${target_repo_dir}"
 
         echo "Mounting ${source_repo_dir} to ${target_repo_dir}"
-        mount --bind "${source_repo_dir}" "${target_repo_dir}"
+        managed_mount "mount_ebuild_repositories_mounts" --bind "${source_repo_dir}" "${target_repo_dir}"
     done
 }
 
 unmount_ebuild_repositories() {
-    local target_root="${1}"
-    echo "Unmounting ebuild repositories for ${target_root}"
-
-    load_ebuild_repositories
-
-    for repo_entry in "${repo_entries[@]}"; do
-        local repo_name
-        local repo_url
-        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
-
-        local target_repo_dir="${target_root}/var/db/repos/${repo_name}"
-
-        echo "Unmounting ${target_repo_dir}"
-        umount "${target_repo_dir}"
-
-        remove_directory "${target_repo_dir}"
-    done
+    echo "Unmounting ebuild repositories"
+    managed_unmount_all "mount_ebuild_repositories_mounts"
 }
 
 import_gentoo_release_keys() {
@@ -321,40 +365,39 @@ apply_portage_configuration() {
     gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
 }
 
+mount_chroot_filesystems_mounts=()
 mount_chroot_filesystems() {
     local target_root="${1}"
     echo "Mounting chroot filesystems for ${target_root}"
 
     create_empty_file "${target_root}/etc/resolv.conf"
-    mount --bind --options "ro" "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
+    managed_mount "mount_chroot_filesystems_mounts" --bind --options "ro" \
+        "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
 
     local target_proc_dir="${target_root}/proc"
     create_directory "${target_proc_dir}"
-    mount --types "proc" "/proc" "${target_root}/proc"
+    managed_mount "mount_chroot_filesystems_mounts" --types "proc" "/proc" \
+        "${target_root}/proc"
     local target_sys_dir="${target_root}/sys"
     create_directory "${target_sys_dir}"
-    mount --rbind "/sys" "${target_root}/sys"
+    managed_mount "mount_chroot_filesystems_mounts" --rbind "/sys" \
+        "${target_root}/sys"
     mount --make-rslave "${target_root}/sys"
     local target_dev_dir="${target_root}/dev"
     create_directory "${target_dev_dir}"
-    mount --rbind "/dev" "${target_root}/dev"
+    managed_mount "mount_chroot_filesystems_mounts" --rbind "/dev" \
+        "${target_root}/dev"
     mount --make-rslave "${target_root}/dev"
     local target_run_dir="${target_root}/run"
     create_directory "${target_run_dir}"
-    mount --bind "/run" "${target_root}/run"
+    managed_mount "mount_chroot_filesystems_mounts" --bind "/run" \
+        "${target_root}/run"
     mount --make-slave "${target_root}/run"
 }
 
 unmount_chroot_filesystems() {
-    local target_root="${1}"
-    echo "Unmounting chroot filesystems for ${target_root}"
-
-    umount "${target_root}/run"
-    umount --recursive "${target_root}/dev"
-    umount --recursive "${target_root}/sys"
-    umount "${target_root}/proc"
-
-    umount "${target_root}/etc/resolv.conf"
+    echo "Unmounting chroot filesystems"
+    managed_unmount_all "mount_chroot_filesystems_mounts"
 }
 
 chroot_run() {
@@ -368,7 +411,7 @@ chroot_run() {
     local exit_code="0"
     chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || exit_code="${?}"
 
-    unmount_chroot_filesystems "${target_root}"
+    unmount_chroot_filesystems
 
     return "${exit_code}"
 }
@@ -504,6 +547,7 @@ download_extract_project_stage() {
     force_remove "${stage_archive_file_signature_file}"
 }
 
+mount_binary_packages_mounts=()
 mount_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
@@ -524,21 +568,18 @@ mount_binary_packages() {
 
     rclone_with_params mount --daemon --read-only --vfs-cache-mode minimal \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
+    # Manually add rclone mount to the list of mounts to be unmounted later
+    mount_binary_packages_mounts+=("${lowerdir}")
 
     create_directory "${binpkgs_dir}"
-    mount --options \
+    managed_mount "mount_binary_packages_mounts" --options \
         "lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir}" \
         --types "overlay" "overlay" "${binpkgs_dir}"
 }
 
 unmount_binary_packages() {
-    local target_root="${1}"
-    echo "Unmounting binary packages for ${target_root}"
-
-    local binpkgs_dir="${target_root}/var/cache/binpkgs"
-    umount "${binpkgs_dir}"
-    local lowerdir="${binpkgs_dir}-lower"
-    umount "${lowerdir}"
+    echo "Unmounting binary packages"
+    managed_unmount_all "mount_binary_packages_mounts"
 }
 
 upload_mounted_binary_packages() {

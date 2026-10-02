@@ -21,6 +21,7 @@ check_required_commands
 
 profile="${1}"
 packages="${2}"
+stage_dir="${build_dir}/stage"
 
 download_extract_project_stage "${stage_dir}" "${profile}" "stage3"
 
@@ -41,11 +42,11 @@ chroot_run "${stage_dir}" "
     emerge --depclean
     "
 
-unmount_ebuild_repositories "${stage_dir}"
+unmount_ebuild_repositories
 
 remove_portage_configuration "${stage_dir}"
 
 upload_mounted_binary_packages "${stage_dir}" "${profile}"
-unmount_binary_packages "${stage_dir}"
+unmount_binary_packages
 
 force_remove "${stage_dir}"

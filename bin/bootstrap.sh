@@ -48,7 +48,8 @@ fi
 
 create_directory "${stage_dir}"
 create_directory "${seed_stage_bind_dir}"
-mount --bind "${stage_dir}" "${seed_stage_bind_dir}"
+bootstrap_mounts=()
+managed_mount "bootstrap_mounts" --bind "${stage_dir}" "${seed_stage_bind_dir}"
 
 chroot_run "${seed_dir}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
@@ -63,9 +64,9 @@ chroot_run "${seed_dir}" '
     locale-gen --prefix "/tmp/stage"
     '
 
-umount "${seed_stage_bind_dir}"
+managed_unmount_all "bootstrap_mounts"
 
-unmount_ebuild_repositories "${seed_dir}"
+unmount_ebuild_repositories
 
 force_remove "${seed_dir}"
 
@@ -82,7 +83,7 @@ chroot_run "${stage_dir}" '
     emerge --depclean
     '
 
-unmount_ebuild_repositories "${stage_dir}"
+unmount_ebuild_repositories
 
 remove_portage_configuration "${stage_dir}"
 
