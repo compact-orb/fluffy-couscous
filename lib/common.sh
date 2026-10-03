@@ -121,6 +121,7 @@ managed_mount() {
     # The mount target is always the last argument in standard mount syntax
     local target="${*: -1}"
 
+    echo "Mounting ${*}"
     mount "${@}"
 
     mounts_array_name+=("${target}")
