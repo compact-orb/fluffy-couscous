@@ -121,7 +121,7 @@ managed_mount() {
     # The mount target is always the last argument in standard mount syntax
     local target="${*: -1}"
 
-    echo "Mounting ${*}"
+    echo "Mounting ${target}"
     mount "${@}"
 
     mounts_array_name+=("${target}")
@@ -607,6 +607,7 @@ mount_binary_packages() {
     local workdir="${binpkgs_dir}-work"
     create_directory "${workdir}"
 
+    echo "Mounting ${lowerdir}"
     rclone_with_params mount --daemon --read-only --vfs-cache-mode minimal \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
     # Manually add rclone mount to the list of mounts to be unmounted later
