@@ -16,7 +16,7 @@ create_file "${SEED_DIR}/etc/portage/package.use/clang-runtime" \
     "llvm-runtimes/clang-runtime default-lld polly"
 
 chroot_run "${SEED_DIR}" '
-    emerge --getbinpkg --jobs="$(nproc)" "llvm-core/clang" \
+    emerge --getbinpkg --jobs="$(nproc)" --quiet-build "llvm-core/clang" \
     "llvm-core/clang-common" "llvm-core/clang-linker-config" \
     "llvm-core/lld" "llvm-runtimes/clang-runtime"
     '
@@ -33,15 +33,19 @@ chroot_run "${SEED_DIR}" '
 
 # Author's profile needs extra packages to be merged.
 chroot_run "${SEED_DIR}" \
-    'emerge --getbinpkg --jobs="$(nproc)" "net-misc/aria2"'
+    'emerge --getbinpkg --jobs="$(nproc)" --quiet-build "net-misc/aria2"'
 
-chroot_run "${SEED_DIR}" \
-    'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
+chroot_run "${SEED_DIR}" '
+    emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --quiet-build \
+        --update "@world"
+    '
 
 # The custom profile might disable binutils-plugin for LLVM. Since
 # llvm-core/llvmgold requires binutils-plugin for LLVM, it has to be
 # unmerged.
-chroot_run "${SEED_DIR}" 'emerge --unmerge "llvm-core/llvmgold"'
+chroot_run "${SEED_DIR}" '
+    CLEAN_DELAY=0 EMERGE_WARNING_DELAY=0 emerge --unmerge "llvm-core/llvmgold"
+    '
 
 remove_portage_configuration "${SEED_DIR}"
 
