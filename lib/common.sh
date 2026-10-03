@@ -608,7 +608,9 @@ mount_binary_packages() {
     create_directory "${workdir}"
 
     echo "Mounting ${lowerdir}"
-    rclone_with_params mount --daemon --read-only --vfs-cache-mode minimal \
+    rclone_with_params mount --attr-timeout "24h" --daemon \
+        --dir-cache-time "24h" --poll-interval "0" --read-only \
+        --vfs-cache-mode minimal \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
     # Manually add rclone mount to the list of mounts to be unmounted later
     mount_binary_packages_mounts+=("${lowerdir}")
