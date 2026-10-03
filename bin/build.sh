@@ -8,9 +8,11 @@ if (( EUID != 0 )); then
 fi
 
 if (( $# < 2 )); then
-    echo "Usage: $0 <profile> <packages>"
+    echo "Usage: $0 <PROFILE> <PACKAGES>"
     exit 1
 fi
+
+# === CLI Arguments & Setup ===
 
 required_commands=(
 )
@@ -19,35 +21,41 @@ source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 
 check_required_commands
 
-profile="${1}"
-packages="${2}"
-stage_dir="${BUILD_DIR}/stage"
+readonly PROFILE="${1}"
+readonly PACKAGES="${2}"
+readonly STAGE_DIR="${BUILD_DIR}/stage"
 
-fetch_project_stage "${stage_dir}" "${profile}" "stage3"
+# === Environment Preparation ===
+
+fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
 download_ebuild_repositories
 
-configure_portage "${stage_dir}" "${profile}" "stage3"
+configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
-mount_repos_in_chroot "${stage_dir}"
+mount_repos_in_chroot "${STAGE_DIR}"
 
-install_portage_gpg_key "${stage_dir}"
-install_secureboot_keys "${stage_dir}"
+install_portage_gpg_key "${STAGE_DIR}"
+install_secureboot_keys "${STAGE_DIR}"
 
-mount_binary_packages "${stage_dir}" "${profile}"
+mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
-chroot_run "${stage_dir}" '
+# === Build Packages ===
+
+chroot_run "${STAGE_DIR}" '
     emerge --jobs="$(nproc)" app-portage/gentoolkit
-    emerge --jobs="$(nproc)" '"${packages}"'
+    emerge --jobs="$(nproc)" '"${PACKAGES}"'
     revdep-rebuild -- --jobs="$(nproc)"
     emerge --depclean
     '
 
+# === Cleanup & Upload ===
+
 unmount_repos_in_chroot
 
-remove_portage_configuration "${stage_dir}"
+remove_portage_configuration "${STAGE_DIR}"
 
-upload_mounted_binary_packages "${stage_dir}" "${profile}"
+upload_mounted_binary_packages "${STAGE_DIR}" "${PROFILE}"
 unmount_binary_packages
 
-force_remove "${stage_dir}"
+force_remove "${STAGE_DIR}"
