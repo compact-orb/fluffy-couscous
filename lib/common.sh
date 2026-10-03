@@ -612,13 +612,14 @@ mount_binary_packages() {
     rclone_with_params mount --attr-timeout "24h" --daemon \
         --dir-cache-time "24h" --poll-interval "0" --read-only \
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
-        --vfs-cache-mode minimal \
+        --vfs-cache-mode "minimal" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
     # Manually add rclone mount to the list of mounts to be unmounted later
     mount_binary_packages_mounts+=("${lowerdir}")
 
     echo "Pre-loading metadata for ${lowerdir}"
-    rclone rc --no-output --unix-socket "${rc_sock}" vfs/refresh recursive=true
+    rclone rc --no-output --unix-socket "${rc_sock}" "vfs/refresh" \
+        "recursive=true"
 
     create_directory "${binpkgs_dir}"
     managed_mount "mount_binary_packages_mounts" --options \
