@@ -22,23 +22,23 @@ check_required_commands
 seed_architecture="${1}"
 seed_name="${2}"
 profile="${3}"
-seed_dir="${build_dir}/seed"
-stage_dir="${build_dir}/stage"
+seed_dir="${BUILD_DIR}/seed"
+stage_dir="${BUILD_DIR}/stage"
 seed_stage_bind_dir="${seed_dir}/tmp/stage"
 
-download_extract_latest_gentoo_autobuild "${seed_dir}" \
+fetch_seed_stage "${seed_dir}" \
     "${seed_architecture}" "${seed_name}"
 
 download_ebuild_repositories
 
 configure_ebuild_repositories "${seed_dir}"
-mount_ebuild_repositories "${seed_dir}"
+mount_repos_in_chroot "${seed_dir}"
 
 if [[ "${4:-}" == "workaround" ]]; then
-    source "${work_dir}/lib/workaround.sh"
+    source "${WORK_DIR}/lib/workaround.sh"
 else
     remove_portage_configuration "${seed_dir}"
-    apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+    configure_portage "${seed_dir}" "${profile}" "stage1"
 
     chroot_run "${seed_dir}" \
         'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
@@ -54,7 +54,7 @@ chroot_run "${seed_dir}" '
     "sys-apps/baselayout"
     '
 
-copy_file "${work_dir}/bin/build.py" "${seed_dir}/tmp/build.py"
+copy_file "${WORK_DIR}/bin/build.py" "${seed_dir}/tmp/build.py"
 chroot_run "${seed_dir}" '
     buildpkgs=$(/tmp/build.py)
     emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
@@ -64,29 +64,29 @@ chroot_run "${seed_dir}" '
 
 managed_unmount_all "bootstrap_mounts"
 
-unmount_ebuild_repositories
+unmount_repos_in_chroot
 
 force_remove "${seed_dir}"
 
 create_directory "${stage_dir}/etc/portage"
 
-apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
+configure_portage "${stage_dir}" "${profile}" "stage3"
 
-mount_ebuild_repositories "${stage_dir}"
+mount_repos_in_chroot "${stage_dir}"
 
-apply_portage_signing_key "${stage_dir}"
-apply_secureboot_keys "${stage_dir}"
+install_portage_gpg_key "${stage_dir}"
+install_secureboot_keys "${stage_dir}"
 
 chroot_run "${stage_dir}" '
-    emerge --emptytree --jobs=$(nproc) @system
+    emerge --emptytree --jobs="$(nproc)" @system
     emerge --depclean
     '
 
-unmount_ebuild_repositories
+unmount_repos_in_chroot
 
 remove_portage_configuration "${stage_dir}"
 
 upload_binary_packages "${stage_dir}" "${profile}"
-upload_gentoo_root "${stage_dir}" "${profile}" "stage3"
+publish_stage_archive "${stage_dir}" "${profile}" "stage3"
 
 force_remove "${stage_dir}"

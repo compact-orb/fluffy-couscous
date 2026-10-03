@@ -20,35 +20,35 @@ source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 check_required_commands
 
 profile="${1}"
-stage_dir="${build_dir}/stage"
+stage_dir="${BUILD_DIR}/stage"
 
-download_extract_project_stage "${stage_dir}" "${profile}" "stage3"
+fetch_project_stage "${stage_dir}" "${profile}" "stage3"
 
 download_ebuild_repositories
 
-apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
+configure_portage "${stage_dir}" "${profile}" "stage3"
 
-mount_ebuild_repositories "${stage_dir}"
+mount_repos_in_chroot "${stage_dir}"
 
-apply_portage_signing_key "${stage_dir}"
-apply_secureboot_keys "${stage_dir}"
+install_portage_gpg_key "${stage_dir}"
+install_secureboot_keys "${stage_dir}"
 
 mount_binary_packages "${stage_dir}" "${profile}"
 
 chroot_run "${stage_dir}" '
-    emerge --deep --jobs=$(nproc) --newuse --update @system
+    emerge --deep --jobs="$(nproc)" --newuse --update @system
     emerge --depclean
-    emerge --jobs=$(nproc) @preserved-rebuild
+    emerge --jobs="$(nproc)" @preserved-rebuild
     emerge --depclean
     '
 
-unmount_ebuild_repositories
+unmount_repos_in_chroot
 
 remove_portage_configuration "${stage_dir}"
 
 upload_mounted_binary_packages "${stage_dir}" "${profile}"
 unmount_binary_packages
 
-upload_gentoo_root "${stage_dir}" "${profile}" "stage3"
+publish_stage_archive "${stage_dir}" "${profile}" "stage3"
 
 force_remove "${stage_dir}"

@@ -1,3 +1,9 @@
+# This file is sourced by bootstrap.sh — do not execute directly.
+if [[ -z "${seed_dir:-}" ]] || [[ -z "${profile:-}" ]]; then
+    echo "Error: workaround.sh must be sourced, and requires seed_dir and profile to be set." >&2
+    return 1 2>/dev/null || exit 1
+fi
+
 # Workarounds for preparing a non-LLVM seed for building a LLVM stage
 # without taking the time to update the seed's portage configuration
 # and re-merging the necessary packages.
@@ -39,7 +45,7 @@ chroot_run "${seed_dir}" 'emerge --unmerge "llvm-core/llvmgold"'
 
 remove_portage_configuration "${seed_dir}"
 
-apply_portage_configuration "${seed_dir}" "${profile}" "stage1"
+configure_portage "${seed_dir}" "${profile}" "stage1"
 
 # Perl might hardcode the compiler, and since the seed was built with GCC,
 # Perl deps within a package will use GCC even though the rest of the package

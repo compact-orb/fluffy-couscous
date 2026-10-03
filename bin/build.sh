@@ -21,29 +21,29 @@ check_required_commands
 
 profile="${1}"
 packages="${2}"
-stage_dir="${build_dir}/stage"
+stage_dir="${BUILD_DIR}/stage"
 
-download_extract_project_stage "${stage_dir}" "${profile}" "stage3"
+fetch_project_stage "${stage_dir}" "${profile}" "stage3"
 
 download_ebuild_repositories
 
-apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
+configure_portage "${stage_dir}" "${profile}" "stage3"
 
-mount_ebuild_repositories "${stage_dir}"
+mount_repos_in_chroot "${stage_dir}"
 
-apply_portage_signing_key "${stage_dir}"
-apply_secureboot_keys "${stage_dir}"
+install_portage_gpg_key "${stage_dir}"
+install_secureboot_keys "${stage_dir}"
 
 mount_binary_packages "${stage_dir}" "${profile}"
 
-chroot_run "${stage_dir}" "
-    emerge --jobs=\$(nproc) app-portage/gentoolkit
-    emerge --jobs=\$(nproc) ${packages}
-    revdep-rebuild -- --jobs=\$(nproc)
+chroot_run "${stage_dir}" '
+    emerge --jobs="$(nproc)" app-portage/gentoolkit
+    emerge --jobs="$(nproc)" '"${packages}"'
+    revdep-rebuild -- --jobs="$(nproc)"
     emerge --depclean
-    "
+    '
 
-unmount_ebuild_repositories
+unmount_repos_in_chroot
 
 remove_portage_configuration "${stage_dir}"
 
