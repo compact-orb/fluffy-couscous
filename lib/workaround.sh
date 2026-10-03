@@ -1,6 +1,6 @@
 # This file is sourced by bootstrap.sh — do not execute directly.
 if [[ -z "${seed_dir:-}" ]] || [[ -z "${profile:-}" ]]; then
-    echo "Error: workaround.sh must be sourced, and requires seed_dir and profile to be set." >&2
+    log_error "workaround.sh must be sourced, and requires seed_dir and profile to be set." 
     return 1 2>/dev/null || exit 1
 fi
 

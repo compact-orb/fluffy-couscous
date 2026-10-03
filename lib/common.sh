@@ -28,6 +28,27 @@ if [[ -f "$env_file" ]]; then
     source "$env_file"
 fi
 
+# === Logging Helpers ===
+
+if [[ -t 1 ]]; then
+    _C_RESET='\033[0m'
+    _C_GREEN='\033[1;32m'
+    _C_YELLOW='\033[1;33m'
+    _C_RED='\033[1;31m'
+    _C_GRAY='\033[1;30m'
+else
+    _C_RESET='' _C_GREEN='' _C_YELLOW='' _C_RED='' _C_GRAY=''
+fi
+
+log_info() { printf " ${_C_GREEN}*${_C_RESET} %s\n" "${*}"; }
+log_warn() { printf " ${_C_YELLOW}*${_C_RESET} %s\n" "${*}" >&2; }
+log_error() { printf " ${_C_RED}*${_C_RESET} %s\n" "${*}" >&2; }
+log_debug() {
+    if (( ${FLUFFY_DEBUG:-0} )); then
+        printf " ${_C_GRAY}*${_C_RESET} %s\n" "${*}"
+    fi
+}
+
 # === Command Requirements ===
 
 check_required_commands() {
@@ -45,7 +66,7 @@ check_required_commands() {
     done
 
     if (( ${#missing_commands[@]} > 0)); then
-        printf "Missing required commands:"
+        log_error "Missing required commands:"
         printf " %s" "${missing_commands[@]}"
         printf "\n"
         exit 1
@@ -58,43 +79,43 @@ create_directory() {
     if [[ -d "${1}" ]]; then
         return
     fi
-    echo "Creating ${1}"
+    log_debug "Creating ${1}"
     mkdir --parents "${1}"
 }
 
 
 remove_file() {
-    echo "Removing ${1}"
+    log_debug "Removing ${1}"
     rm "${1}"
 }
 
 force_remove() {
-    echo "Force removing ${1}"
+    log_debug "Force removing ${1}"
     rm --force --recursive "${1}"
 }
 
 copy_file() {
-    echo "Copying ${1} to ${2}"
+    log_debug "Copying ${1} to ${2}"
     cp --dereference "${1}" "${2}"
 }
 
 recursive_copy() {
-    echo "Recursively copying ${1} to ${2}"
+    log_debug "Recursively copying ${1} to ${2}"
     cp --dereference --recursive "${1}" "${2}"
 }
 
 create_empty_file() {
-    echo "Creating empty file ${1}"
+    log_debug "Creating empty file ${1}"
     > "${1}"
 }
 
 create_file() {
-    echo "Creating file ${1}"
+    log_debug "Creating file ${1}"
     printf "%s\n" "${2}" > "${1}"
 }
 
 create_symbolic_link() {
-    echo "Creating symbolic link from ${1} to ${2}"
+    log_debug "Creating symbolic link from ${1} to ${2}"
     ln --symbolic "${1}" "${2}"
 }
 
@@ -131,7 +152,7 @@ managed_mount() {
     # The mount target is always the last argument in standard mount syntax
     local target="${*: -1}"
 
-    echo "Mounting ${target}"
+    log_debug "Mounting ${target}"
     mount "${@}"
 
     mounts_array_name+=("${target}")
@@ -149,14 +170,14 @@ managed_unmount_all() {
     for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
         local m="${mounts_array_name[$i]}"
         if mountpoint --quiet "${m}"; then
-            echo "Unmounting ${m}"
+            log_debug "Unmounting ${m}"
             umount --recursive "${m}" || exit_code="${?}"
         fi
     done
 
     mounts_array_name=()
     if (( exit_code != 0 )); then
-        echo "Error unmounting one or more filesystems"
+        log_error "Error unmounting one or more filesystems"
         return "${exit_code}"
     fi
 }
@@ -187,7 +208,7 @@ load_ebuild_repositories() {
 }
 
 download_ebuild_repositories() {
-    echo "Downloading ebuild repositories"
+    log_info "Downloading ebuild repositories"
 
     load_ebuild_repositories
 
@@ -203,21 +224,21 @@ download_ebuild_repositories() {
 
         local repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
         if [[ -d "${repo_dir}" ]]; then
-            echo "Updating ${repo_name} in ${repo_dir}"
+            log_info "Updating ${repo_name} in ${repo_dir}"
             git -C "${repo_dir}" fetch --depth 1 origin
             git -C "${repo_dir}" reset --hard FETCH_HEAD
         else
-            echo "Cloning ${repo_url} into ${repo_dir}"
+            log_info "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
-        # echo "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
+        # log_info "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
         # git -C "${repo_dir}" verify-commit HEAD
     done
 }
 
 configure_ebuild_repositories() {
     local target_root="${1}"
-    echo "Configuring ebuild repositories for ${target_root}"
+    log_info "Configuring ebuild repositories for ${target_root}"
 
     load_ebuild_repositories
 
@@ -230,7 +251,7 @@ configure_ebuild_repositories() {
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local repo_conf_file="${repos_conf_dir}/${repo_name}.conf"
-        echo "Creating ${repo_conf_file}"
+        log_debug "Creating ${repo_conf_file}"
         local repo_conf_content
         IFS= read -d "" -r repo_conf_content << EOF || true
 [${repo_name}]
@@ -245,7 +266,7 @@ EOF
 _active_repo_mounts=()
 mount_repos_in_chroot() {
     local target_root="${1}"
-    echo "Mounting ebuild repositories for ${target_root}"
+    log_info "Mounting ebuild repositories for ${target_root}"
 
     load_ebuild_repositories
 
@@ -262,14 +283,14 @@ mount_repos_in_chroot() {
 
         create_directory "${target_repo_dir}"
 
-        echo "Mounting ${source_repo_dir} to ${target_repo_dir}"
+        log_debug "Mounting ${source_repo_dir} to ${target_repo_dir}"
         managed_mount "_active_repo_mounts" --bind --options "ro" \
             "${source_repo_dir}" "${target_repo_dir}"
     done
 }
 
 unmount_repos_in_chroot() {
-    echo "Unmounting ebuild repositories"
+    log_info "Unmounting ebuild repositories"
     managed_unmount_all "_active_repo_mounts"
 }
 
@@ -281,7 +302,7 @@ import_gentoo_release_keys() {
     fi
 
     local gentoo_release_keys_file="${WORK_DIR}/keys/gentoo-release.asc"
-    echo "Importing Gentoo release keys"
+    log_info "Importing Gentoo release keys"
     gpg --quiet --import "$gentoo_release_keys_file"
 
     gpg --with-colons --show-keys "$gentoo_release_keys_file" | \
@@ -298,7 +319,7 @@ fetch_seed_stage() {
     local architecture="${2}"
     local name="${3}"
 
-    echo "Downloading and extracting latest ${name} to ${output_dir}"
+    log_info "Downloading and extracting latest ${name} to ${output_dir}"
 
     import_gentoo_release_keys
 
@@ -316,19 +337,19 @@ fetch_seed_stage() {
 
     local seed_tarball="${download_dir}/$(basename "${seed_path}")"
 
-    echo "Downloading to ${seed_tarball} and ${seed_tarball}.asc"
+    log_info "Downloading to ${seed_tarball} and ${seed_tarball}.asc"
     aria2c --file-allocation="none" --force-sequential \
         --max-concurrent-downloads="4" --max-connection-per-server="4" \
         --max-tries="3" --dir="${download_dir}" --quiet \
         "${latest_autobuild_path}" "${latest_autobuild_path}.asc"
 
-    echo "Verifying ${seed_tarball}"
+    log_info "Verifying ${seed_tarball}"
     gpg --verify "${seed_tarball}.asc" \
         "${seed_tarball}"
 
     remove_file "${seed_tarball}.asc"
 
-    echo "Extracting ${seed_tarball} to ${output_dir}"
+    log_info "Extracting ${seed_tarball} to ${output_dir}"
     tar --directory="${output_dir}" --extract \
         --file="${seed_tarball}" --numeric-owner \
         --preserve-permissions --xattrs-include='*.*'
@@ -341,7 +362,7 @@ fetch_seed_stage() {
 
 remove_portage_configuration() {
     local target_root="${1}"
-    echo "Removing Portage configuration for ${target_root}"
+    log_info "Removing Portage configuration for ${target_root}"
 
     find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force \
         --recursive {} +
@@ -351,7 +372,7 @@ configure_portage() {
     local target_root="${1}"
     local profile="${2}"
     local portage_conf_name="${3}"
-    echo "Applying Portage configuration for ${target_root}"
+    log_info "Applying Portage configuration for ${target_root}"
 
     import_signing_key
 
@@ -388,7 +409,7 @@ configure_portage() {
 _active_chroot_mounts=()
 mount_chroot_filesystems() {
     local target_root="${1}"
-    echo "Mounting chroot filesystems for ${target_root}"
+    log_info "Mounting chroot filesystems for ${target_root}"
 
     create_empty_file "${target_root}/etc/resolv.conf"
     managed_mount "_active_chroot_mounts" --bind --options "ro" \
@@ -416,7 +437,7 @@ mount_chroot_filesystems() {
 }
 
 unmount_chroot_filesystems() {
-    echo "Unmounting chroot filesystems"
+    log_info "Unmounting chroot filesystems"
     managed_unmount_all "_active_chroot_mounts"
 }
 
@@ -432,7 +453,7 @@ kill_chroot_processes() {
     for p in /proc/[0-9]*; do
         if [[ -d "$p" ]] && root_link=$(readlink "$p/root" 2>/dev/null); then
             if [[ "$root_link" == "$target_root" ]]; then
-                echo "Killing lingering chroot process ${p##*/}"
+                log_warn "Killing lingering chroot process ${p##*/}"
                 kill -9 "${p##*/}" 2>/dev/null || true
             fi
         fi
@@ -441,7 +462,7 @@ kill_chroot_processes() {
 
 chroot_run() {
     local target_root="${1}"
-    echo "Running command in chroot for ${target_root}"
+    log_info "Running command in chroot for ${target_root}"
 
     mount_chroot_filesystems "${target_root}"
 
@@ -462,7 +483,7 @@ import_signing_key() {
         return
     fi
 
-    echo "Importing PGP signing key"
+    log_info "Importing PGP signing key"
 
     signing_key_fingerprint=$(gpg --show-keys --with-colons \
         <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
@@ -475,7 +496,7 @@ import_signing_key() {
 
 install_portage_gpg_key() {
     local target_root="${1}"
-    echo "Applying Portage signing key for ${target_root}"
+    log_info "Applying Portage signing key for ${target_root}"
 
     import_signing_key
 
@@ -497,7 +518,7 @@ install_secureboot_keys() {
         return
     fi
     
-    echo "Applying Secure Boot keys for ${target_root}"
+    log_info "Applying Secure Boot keys for ${target_root}"
     
     local secureboot_dir="${target_root}${PORTAGE_SECUREBOOT_DIR}"
     create_directory "${secureboot_dir}"
@@ -515,7 +536,7 @@ install_secureboot_keys() {
 upload_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
-    echo "Uploading binary packages from ${target_root}"
+    log_info "Uploading binary packages from ${target_root}"
 
     local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
     local repo repo_profile
@@ -528,7 +549,7 @@ publish_stage_archive() {
     local target_root="${1}"
     local profile="${2}"
     local stage_type="${3}"
-    echo "Uploading Gentoo ${stage_type} from ${target_root}"
+    log_info "Uploading Gentoo ${stage_type} from ${target_root}"
 
     import_signing_key
 
@@ -541,7 +562,7 @@ publish_stage_archive() {
     archive_dir="$(mktemp --directory)"
     local stage_file="${archive_dir}/${stage_filename}"
     local sig_file="${archive_dir}/${sig_filename}"
-    echo "Creating stage archive ${stage_file}"
+    log_info "Creating stage archive ${stage_file}"
     tar --create --file="${stage_file}" --directory="${target_root}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
         --use-compress-program="zstd -9 -T0 --long=31" \
@@ -556,15 +577,15 @@ publish_stage_archive() {
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
         .
-    echo "Signing stage archive ${stage_file}"
+    log_info "Signing stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${signing_key_fingerprint}" \
         "${stage_file}"
 
-    echo "Uploading stage archive ${stage_file}"
+    log_info "Uploading stage archive ${stage_file}"
     s3_rclone copy "${stage_file}" \
         ":s3:${S3_BUCKET_NAME}"
 
-    echo "Uploading stage archive signature ${sig_file}"
+    log_info "Uploading stage archive signature ${sig_file}"
     s3_rclone copy "${sig_file}" \
         ":s3:${S3_BUCKET_NAME}"
 
@@ -577,7 +598,7 @@ fetch_project_stage() {
     local target_root="${1}"
     local profile="${2}"
     local stage_type="${3}"
-    echo "Downloading and extracting Gentoo ${stage_type} to ${target_root}"
+    log_info "Downloading and extracting Gentoo ${stage_type} to ${target_root}"
 
     import_signing_key
 
@@ -592,18 +613,18 @@ fetch_project_stage() {
     download_dir="$(mktemp --directory)"
     local stage_file="${download_dir}/${stage_filename}"
     local sig_file="${download_dir}/${sig_filename}"
-    echo "Downloading stage archive ${stage_file}"
+    log_info "Downloading stage archive ${stage_file}"
     s3_rclone copy ":s3:${S3_BUCKET_NAME}/${stage_filename}" \
         "${download_dir}"
 
-    echo "Downloading stage archive signature ${sig_file}"
+    log_info "Downloading stage archive signature ${sig_file}"
     s3_rclone copy ":s3:${S3_BUCKET_NAME}/${sig_filename}" \
         "${download_dir}"
 
-    echo "Verifying stage archive ${stage_file}"
+    log_info "Verifying stage archive ${stage_file}"
     gpg --verify "${sig_file}" "${stage_file}"
 
-    echo "Extracting stage archive ${stage_file} to ${target_root}"
+    log_info "Extracting stage archive ${stage_file} to ${target_root}"
     tar --directory="${target_root}" --extract --file="${stage_file}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
         --use-compress-program="zstd --long=31"
@@ -617,7 +638,7 @@ _active_binpkg_mounts=()
 mount_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
-    echo "Mounting binary packages for ${target_root}"
+    log_info "Mounting binary packages for ${target_root}"
 
     local repo repo_profile
     read -r repo repo_profile < <(parse_profile "${profile}")
@@ -632,7 +653,7 @@ mount_binary_packages() {
     create_directory "${workdir}"
 
     local rc_sock="${binpkgs_dir}-rc.sock"
-    echo "Mounting ${lowerdir}"
+    log_info "Mounting ${lowerdir}"
     s3_rclone mount --attr-timeout "24h" --daemon \
         --dir-cache-time "24h" --poll-interval "0" --read-only \
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
@@ -641,7 +662,7 @@ mount_binary_packages() {
     # Manually add rclone mount to the list of mounts to be unmounted later
     _active_binpkg_mounts+=("${lowerdir}")
 
-    echo "Pre-loading metadata for ${lowerdir}"
+    log_info "Pre-loading metadata for ${lowerdir}"
     rclone rc --no-output --unix-socket "${rc_sock}" "vfs/refresh" \
         "recursive=true"
 
@@ -652,14 +673,14 @@ mount_binary_packages() {
 }
 
 unmount_binary_packages() {
-    echo "Unmounting binary packages"
+    log_info "Unmounting binary packages"
     managed_unmount_all "_active_binpkg_mounts"
 }
 
 upload_mounted_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
-    echo "Uploading mounted binary packages from ${target_root}"
+    log_info "Uploading mounted binary packages from ${target_root}"
 
     local repo repo_profile
     read -r repo repo_profile < <(parse_profile "${profile}")
