@@ -75,6 +75,7 @@ apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
 mount_ebuild_repositories "${stage_dir}"
 
 apply_portage_signing_key "${stage_dir}"
+apply_secureboot_keys "${stage_dir}"
 
 chroot_run "${stage_dir}" '
     emerge --emptytree --jobs=$(nproc) @system

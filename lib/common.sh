@@ -18,6 +18,7 @@ build_dir="${work_dir}/build"
 project_repos_dir="${build_dir}/repos"
 gentoo_mirror_url="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
 root_relative_portage_gnupg_signing_dir="/var/lib/portage/gnupg-sign"
+root_relative_portage_secureboot_dir="/var/lib/portage/secureboot"
 
 env_file="${work_dir}/.env"
 if [[ -f "$env_file" ]]; then
@@ -86,7 +87,7 @@ create_empty_file() {
 
 create_file() {
     echo "Creating file ${1}"
-    echo "${2}" > "${1}"
+    printf "%s\n" "${2}" > "${1}"
 }
 
 create_symbolic_link() {
@@ -467,6 +468,26 @@ apply_portage_signing_key() {
         >> "${target_root}/etc/portage/make.conf"
 }
 
+apply_secureboot_keys() {
+    local target_root="${1}"
+    
+    if [[ ! -v SECUREBOOT_KEY ]] || [[ ! -v SECUREBOOT_CERT ]]; then
+        return
+    fi
+    
+    echo "Applying Secure Boot keys for ${target_root}"
+    
+    local secureboot_dir="${target_root}${root_relative_portage_secureboot_dir}"
+    create_directory "${secureboot_dir}"
+    chmod "0700" "${secureboot_dir}"
+    
+    create_file "${secureboot_dir}/db.key" "${SECUREBOOT_KEY}"
+    chmod "0600" "${secureboot_dir}/db.key"
+    
+    create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
+    chmod "0644" "${secureboot_dir}/db.pem"
+}
+
 upload_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
@@ -501,6 +522,7 @@ upload_gentoo_root() {
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
         --use-compress-program="zstd -9 -T0 --long=31" \
         --exclude=".${root_relative_portage_gnupg_signing_dir}" \
+        --exclude=".${root_relative_portage_secureboot_dir}" \
         --exclude="./etc/machine-id" \
         --exclude="./etc/resolv.conf" \
         --exclude="./root/*" \

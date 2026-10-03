@@ -31,6 +31,7 @@ apply_portage_configuration "${stage_dir}" "${profile}" "stage3"
 mount_ebuild_repositories "${stage_dir}"
 
 apply_portage_signing_key "${stage_dir}"
+apply_secureboot_keys "${stage_dir}"
 
 mount_binary_packages "${stage_dir}" "${profile}"
 
