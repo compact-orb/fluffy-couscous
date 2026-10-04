@@ -659,11 +659,12 @@ mount_binary_packages() {
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" &
 
     local timeout=100
-    while [[ ! -S "${rc_sock}" && timeout -gt 0 ]]; do
+    while [[ $(</proc/mounts) != *" ${lowerdir} "* ]]; do
+        if [[ timeout -le 0 ]]; then break; fi
         sleep 0.1
         ((timeout--))
     done
-    if [[ ! -S "${rc_sock}" ]]; then
+    if [[ $(</proc/mounts) != *" ${lowerdir} "* ]]; then
         log_error "Timed out waiting for rclone mount to become ready"
         return 1
     fi
