@@ -113,7 +113,7 @@ create_file() {
 
 create_symbolic_link() {
     log_debug "Creating symbolic link from ${1} to ${2}"
-    ln --symbolic "${1}" "${2}"
+    ln --force --symbolic "${1}" "${2}"
 }
 
 s3_rclone() {
@@ -652,11 +652,22 @@ mount_binary_packages() {
     local rc_sock="${binpkgs_dir}-rc.sock"
     force_remove "${rc_sock}"
     log_info "Mounting ${lowerdir}"
-    s3_rclone mount --attr-timeout "24h" --daemon \
+    s3_rclone mount --attr-timeout "24h" \
         --dir-cache-time "24h" --poll-interval "0" --read-only \
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
         --vfs-cache-mode "minimal" \
-        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}"
+        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" &
+
+    local timeout=100
+    while [[ ! -S "${rc_sock}" && timeout -gt 0 ]]; do
+        sleep 0.1
+        ((timeout--))
+    done
+    if [[ ! -S "${rc_sock}" ]]; then
+        log_error "Timed out waiting for rclone mount to become ready"
+        return 1
+    fi
+
     # Manually add rclone mount to the list of mounts to be unmounted later
     _active_binpkg_mounts+=("${lowerdir}")
 
