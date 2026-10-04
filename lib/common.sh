@@ -660,12 +660,12 @@ mount_binary_packages() {
         > "/dev/null" 2>&1 &
 
     local timeout=100
-    while [[ $(</proc/mounts) != *" ${lowerdir} "* ]]; do
+    while ! [[ $(</proc/mounts) == *" ${lowerdir} "* ]]; do
         if [[ timeout -le 0 ]]; then break; fi
         sleep 0.1
         ((timeout--))
     done
-    if [[ $(</proc/mounts) != *" ${lowerdir} "* ]]; then
+    if ! [[ $(</proc/mounts) == *" ${lowerdir} "* ]]; then
         log_error "Timed out waiting for rclone mount to become ready"
         return 1
     fi
