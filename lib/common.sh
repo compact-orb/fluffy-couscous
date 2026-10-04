@@ -10,7 +10,6 @@ required_commands+=(
     "git"
     "gpg"
     "mount"
-    "mountpoint"
     "rclone"
     "tar"
     "umount"
@@ -167,7 +166,7 @@ managed_unmount_all() {
     local i
     for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
         local m="${mounts_array_name[$i]}"
-        if mountpoint --quiet "${m}"; then
+        if [[ $(</proc/mounts) == *" ${m} "* ]]; then
             log_debug "Unmounting ${m}"
             umount --recursive "${m}" || exit_code="${?}"
         fi
@@ -651,6 +650,7 @@ mount_binary_packages() {
     create_directory "${workdir}"
 
     local rc_sock="${binpkgs_dir}-rc.sock"
+    force_remove "${rc_sock}"
     log_info "Mounting ${lowerdir}"
     s3_rclone mount --attr-timeout "24h" --daemon \
         --dir-cache-time "24h" --poll-interval "0" --read-only \
