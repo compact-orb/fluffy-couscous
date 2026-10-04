@@ -378,7 +378,7 @@ configure_portage() {
     create_directory "${portage_conf_dir}"
 
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
     local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
@@ -538,7 +538,7 @@ upload_binary_packages() {
 
     local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     s3_rclone copy "${portage_binpkgs_dir}" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }
@@ -552,7 +552,7 @@ publish_stage_archive() {
     import_signing_key
 
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local profile_name="${repo_profile//\//-}"
     local stage_filename="${stage_type}-${profile_name}.tar.zst"
     local sig_filename="${stage_filename}.sig"
@@ -603,7 +603,7 @@ fetch_project_stage() {
     create_directory "${target_root}"
 
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local profile_name="${repo_profile//\//-}"
     local stage_filename="${stage_type}-${profile_name}.tar.zst"
     local sig_filename="${stage_filename}.sig"
@@ -639,7 +639,7 @@ mount_binary_packages() {
     log_info "Mounting binary packages for ${target_root}"
 
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
 
@@ -681,7 +681,7 @@ upload_mounted_binary_packages() {
     log_info "Uploading mounted binary packages from ${target_root}"
 
     local repo repo_profile
-    read -r repo repo_profile < <(parse_profile "${profile}")
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
 
