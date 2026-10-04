@@ -19,7 +19,7 @@ required_commands+=(
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 readonly BUILD_DIR="${WORK_DIR}/build"
 readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
-readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
+readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
 readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
 readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
 
