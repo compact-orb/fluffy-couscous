@@ -66,9 +66,7 @@ check_required_commands() {
     done
 
     if (( ${#missing_commands[@]} > 0)); then
-        log_error "Missing required commands:"
-        printf " %s" "${missing_commands[@]}"
-        printf "\n"
+        log_error "Missing required commands: ${missing_commands[*]}"
         exit 1
     fi
 }
