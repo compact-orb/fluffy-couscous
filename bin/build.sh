@@ -3,7 +3,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    log_error "You must be root to run this script."
+    echo "You must be root to run this script." >&2
     exit 1
 fi
 

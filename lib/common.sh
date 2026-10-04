@@ -17,16 +17,16 @@ required_commands+=(
     "zstd"
 )
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
-readonly BUILD_DIR="${WORK_DIR}/build"
-readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
-readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
-readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
-readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
-
 env_file="${WORK_DIR}/.env"
 if [[ -f "$env_file" ]]; then
     source "$env_file"
 fi
+readonly BUILD_DIR="${WORK_DIR}/build"
+readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
+readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
+readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
+readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
+
 
 # === Logging Helpers ===
 
