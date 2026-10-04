@@ -656,7 +656,8 @@ mount_binary_packages() {
         --dir-cache-time "24h" --poll-interval "0" --read-only \
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
         --vfs-cache-mode "minimal" \
-        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" &
+        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" \
+        > "/dev/null" 2>&1 &
 
     local timeout=100
     while [[ $(</proc/mounts) != *" ${lowerdir} "* ]]; do
