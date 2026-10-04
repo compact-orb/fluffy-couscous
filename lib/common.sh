@@ -59,7 +59,7 @@ check_required_commands() {
         fi
         seen["$command"]=1
 
-        if ! command -v "${command}" > "/dev/null" 2>&1; then
+        if ! command -v "${command}" > /dev/null 2>&1; then
             missing_commands+=("${command}")
         fi
     done
@@ -166,7 +166,7 @@ managed_unmount_all() {
     local i
     for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
         local m="${mounts_array_name[$i]}"
-        if [[ $(</proc/mounts) == *" ${m} "* ]]; then
+        if [[ "$(</proc/mounts)" == *" ${m} "* ]]; then
             log_debug "Unmounting ${m}"
             umount --recursive "${m}" || exit_code="${?}"
         fi
@@ -448,7 +448,7 @@ kill_chroot_processes() {
     local p
     local root_link
     for p in /proc/[0-9]*; do
-        if [[ -d "$p" ]] && root_link=$(readlink "$p/root" 2>/dev/null); then
+        if [[ -d "$p" ]] && root_link="$(readlink "$p/root" 2>/dev/null)"; then
             if [[ "$root_link" == "$target_root" ]]; then
                 log_warn "Killing lingering chroot process ${p##*/}"
                 kill -9 "${p##*/}" 2>/dev/null || true
@@ -657,15 +657,15 @@ mount_binary_packages() {
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
         --vfs-cache-mode "minimal" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" \
-        > "/dev/null" 2>&1 &
+        > /dev/null 2>&1 &
 
     local timeout=100
-    while ! [[ $(</proc/mounts) == *" ${lowerdir} "* ]]; do
-        if [[ timeout -le 0 ]]; then break; fi
+    while [[ "$(</proc/mounts)" != *" ${lowerdir} "* ]]; do
+        if [[ "${timeout}" -le 0 ]]; then break; fi
         sleep 0.1
         ((timeout--))
     done
-    if ! [[ $(</proc/mounts) == *" ${lowerdir} "* ]]; then
+    if [[ "$(</proc/mounts)" != *" ${lowerdir} "* ]]; then
         log_error "Timed out waiting for rclone mount to become ready"
         return 1
     fi
