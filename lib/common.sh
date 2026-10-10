@@ -399,6 +399,10 @@ configure_portage() {
         --import-ownertrust --quiet
 
     gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
+
+    # Provide a blank cmdline to satisfy kernel-install in chroot
+    create_directory "${target_root}/etc/kernel"
+    create_file "${target_root}/etc/kernel/cmdline" ""
 }
 
 # === Chroot Environment ===
