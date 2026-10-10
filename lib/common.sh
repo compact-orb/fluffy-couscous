@@ -400,9 +400,9 @@ configure_portage() {
 
     gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
 
-    # Provide a blank cmdline to satisfy kernel-install in chroot
-    create_directory "${target_root}/etc/kernel"
-    create_file "${target_root}/etc/kernel/cmdline" ""
+    # Workaround for kernel-install refusing to run inside a chroot
+    create_directory "${target_root}/etc/kernel/install.d"
+    create_file "${target_root}/etc/kernel/install.d/05-check-chroot.install" ""
 }
 
 # === Chroot Environment ===
