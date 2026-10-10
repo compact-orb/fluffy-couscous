@@ -569,6 +569,7 @@ publish_stage_archive() {
         --use-compress-program="zstd -9 -T0 --long=31" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
+        --exclude="./etc/kernel" \
         --exclude="./etc/machine-id" \
         --exclude="./etc/resolv.conf" \
         --exclude="./root/*" \
