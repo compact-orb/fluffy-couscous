@@ -400,9 +400,10 @@ configure_portage() {
 
     gpg --batch --check-trustdb --homedir "${target_root}/etc/portage/gnupg" 
 
-    # Workaround for kernel-install refusing to run inside a chroot
+    # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"
-    create_file "${target_root}/etc/kernel/install.d/05-check-chroot.install" ""
+    create_symbolic_link "/dev/null" \
+        "${target_root}/etc/kernel/install.d/05-check-chroot.install"
 }
 
 # === Chroot Environment ===
@@ -569,6 +570,7 @@ publish_stage_archive() {
         --use-compress-program="zstd -9 -T0 --long=31" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
+        --exclude="./boot" \
         --exclude="./etc/kernel" \
         --exclude="./etc/machine-id" \
         --exclude="./etc/resolv.conf" \
