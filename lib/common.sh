@@ -215,7 +215,7 @@ download_ebuild_repositories() {
     load_ebuild_repositories
 
     import_gentoo_release_keys
-    # TODO: import git pubic keys
+    import_public_keys
 
     create_directory "${LOCAL_REPOS_DIR}"
 
@@ -233,8 +233,8 @@ download_ebuild_repositories() {
             log_info "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
-        # log_info "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
-        # git -C "${repo_dir}" verify-commit HEAD
+        log_info "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
+        git -C "${repo_dir}" verify-commit HEAD
     done
 }
 
@@ -309,7 +309,7 @@ import_gentoo_release_keys() {
 
     gpg --with-colons --show-keys "$gentoo_release_keys_file" | \
         awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-        gpg --import-ownertrust --quiet
+        gpg --batch --import-ownertrust --quiet
 
     readonly _GENTOO_KEYS_IMPORTED=1
 }
@@ -328,6 +328,22 @@ import_signing_key() {
     
     echo "${signing_key_fingerprint}:6:" | \
         gpg --batch --import-ownertrust --quiet
+}
+
+import_public_keys() {
+    if [[ -v public_keys_imported ]]; then
+        return
+    fi
+
+    log_info "Importing public keys"
+
+    gpg --import --quiet <<< "${PUBLIC_KEYS}"
+
+    gpg --show-keys --with-colons <<< "${PUBLIC_KEYS}" | \
+        awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+        gpg --batch --import-ownertrust --quiet
+
+    readonly public_keys_imported=1
 }
 
 install_portage_gpg_key() {
