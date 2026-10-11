@@ -117,9 +117,14 @@ create_symbolic_link() {
 }
 
 s3_rclone() {
-    rclone --s3-provider "Other" --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+    rclone \
+        --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-endpoint "${S3_ENDPOINT}" \
+        --s3-provider "Other" \
+        --s3-region "${S3_REGION}" \
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
-        --s3-region "${S3_REGION}" --s3-endpoint "${S3_ENDPOINT}" -v \
+        --transfers "16" \
+        --verbose \
         "${@}"
 }
 
@@ -659,10 +664,12 @@ mount_binary_packages() {
     local rc_sock="${binpkgs_dir}-rc.sock"
     force_remove "${rc_sock}"
     log_info "Mounting ${lowerdir}"
-    s3_rclone mount --attr-timeout "24h" \
+    s3_rclone mount --attr-timeout "24h" --buffer-size "64M" \
         --dir-cache-time "24h" --poll-interval "0" --read-only \
         --rc --rc-addr "unix://${rc_sock}" --rc-no-auth \
-        --vfs-cache-mode "minimal" \
+        --vfs-cache-max-age "24h" \
+        --vfs-cache-mode "full" \
+        --vfs-read-ahead "128M" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" \
         > /dev/null 2>&1 &
 
