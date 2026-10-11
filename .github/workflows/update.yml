@@ -36,10 +36,12 @@ jobs:
       - name: Run update.sh
         run: |
           # Workaround for stripping carriage return characters from GitHub
-          # Actions environment variables when set via the web interface.
+          # Actions environment variables set via the web interface.
           for var in ${SUDO_PRESERVE_ENV//,/ }; do
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          # Workaround for missing `/run/user/0`.
+          sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
             "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
