@@ -33,7 +33,13 @@ jobs:
           rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
 
       # TODO: Sepcify profile via env and run each in parallel
-      - name: Run update script
+      - name: Run update.sh
         run: |
+          # Workaround for stripping carriage return characters from GitHub
+          # Actions environment variables when set via the web interface.
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
             "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
