@@ -39,12 +39,12 @@ else
     _C_RESET='' _C_GREEN='' _C_YELLOW='' _C_RED='' _C_GRAY=''
 fi
 
-log_info() { printf " ${_C_GREEN}*${_C_RESET} %s\n" "${*}"; }
-log_warn() { printf " ${_C_YELLOW}*${_C_RESET} %s\n" "${*}" >&2; }
-log_error() { printf " ${_C_RED}*${_C_RESET} %s\n" "${*}" >&2; }
+log_info() { printf "${_C_GREEN}[%s]${_C_RESET} %s\n" "${0##*/}" "${*}"; }
+log_warn() { printf "${_C_YELLOW}[%s] WARNING:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2; }
+log_error() { printf "${_C_RED}[%s] ERROR:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2; }
 log_debug() {
-    if (( ${FLUFFY_DEBUG:-0} )); then
-        printf " ${_C_GRAY}*${_C_RESET} %s\n" "${*}"
+    if (( ${DEBUG:-${FLUFFY_DEBUG:-0}} )); then
+        printf "${_C_GRAY}[%s] DEBUG:${_C_RESET} %s\n" "${0##*/}" "${*}"
     fi
 }
 
