@@ -588,7 +588,7 @@ publish_stage_archive() {
     log_info "Creating stage archive ${stage_file}"
     tar --create --file="${stage_file}" --directory="${target_root}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
-        --use-compress-program="zstd -9 -T0 --long=31" \
+        --use-compress-program="zstd --long=31 -9 -T0" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
         --exclude="./boot/*" \
