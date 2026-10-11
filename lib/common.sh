@@ -314,6 +314,59 @@ import_gentoo_release_keys() {
     readonly _GENTOO_KEYS_IMPORTED=1
 }
 
+import_signing_key() {
+    if [[ -v signing_key_fingerprint ]]; then
+        return
+    fi
+
+    log_info "Importing PGP signing key"
+
+    signing_key_fingerprint=$(gpg --show-keys --with-colons \
+        <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
+
+    gpg --import --quiet <<< "${SIGNING_KEY}"
+    
+    echo "${signing_key_fingerprint}:6:" | \
+        gpg --batch --import-ownertrust --quiet
+}
+
+install_portage_gpg_key() {
+    local target_root="${1}"
+    log_info "Applying Portage signing key for ${target_root}"
+
+    import_signing_key
+
+    local portage_gnupg_signing_dir="${target_root}${PORTAGE_GPG_DIR}"
+    create_directory "${portage_gnupg_signing_dir}"
+    chmod "0700" "${portage_gnupg_signing_dir}"
+
+    gpg --batch --export-secret-keys "${signing_key_fingerprint}" | \
+        gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
+
+    echo "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
+        >> "${target_root}/etc/portage/make.conf"
+}
+
+install_secureboot_keys() {
+    local target_root="${1}"
+    
+    if [[ ! -v SECUREBOOT_KEY ]] || [[ ! -v SECUREBOOT_CERT ]]; then
+        return
+    fi
+    
+    log_info "Applying Secure Boot keys for ${target_root}"
+    
+    local secureboot_dir="${target_root}${PORTAGE_SECUREBOOT_DIR}"
+    create_directory "${secureboot_dir}"
+    chmod "0700" "${secureboot_dir}"
+    
+    create_file "${secureboot_dir}/db.key" "${SECUREBOOT_KEY}"
+    chmod "0600" "${secureboot_dir}/db.key"
+    
+    create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
+    chmod "0644" "${secureboot_dir}/db.pem"
+}
+
 # === Stage Downloading and Extraction ===
 
 fetch_seed_stage() {
@@ -483,59 +536,6 @@ chroot_run() {
     unmount_chroot_filesystems
 
     return "${exit_code}"
-}
-
-import_signing_key() {
-    if [[ -v signing_key_fingerprint ]]; then
-        return
-    fi
-
-    log_info "Importing PGP signing key"
-
-    signing_key_fingerprint=$(gpg --show-keys --with-colons \
-        <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
-
-    gpg --import --quiet <<< "${SIGNING_KEY}"
-    
-    echo "${signing_key_fingerprint}:6:" | \
-        gpg --batch --import-ownertrust --quiet
-}
-
-install_portage_gpg_key() {
-    local target_root="${1}"
-    log_info "Applying Portage signing key for ${target_root}"
-
-    import_signing_key
-
-    local portage_gnupg_signing_dir="${target_root}${PORTAGE_GPG_DIR}"
-    create_directory "${portage_gnupg_signing_dir}"
-    chmod "0700" "${portage_gnupg_signing_dir}"
-
-    gpg --batch --export-secret-keys "${signing_key_fingerprint}" | \
-        gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
-
-    echo "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
-        >> "${target_root}/etc/portage/make.conf"
-}
-
-install_secureboot_keys() {
-    local target_root="${1}"
-    
-    if [[ ! -v SECUREBOOT_KEY ]] || [[ ! -v SECUREBOOT_CERT ]]; then
-        return
-    fi
-    
-    log_info "Applying Secure Boot keys for ${target_root}"
-    
-    local secureboot_dir="${target_root}${PORTAGE_SECUREBOOT_DIR}"
-    create_directory "${secureboot_dir}"
-    chmod "0700" "${secureboot_dir}"
-    
-    create_file "${secureboot_dir}/db.key" "${SECUREBOOT_KEY}"
-    chmod "0600" "${secureboot_dir}/db.key"
-    
-    create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
-    chmod "0644" "${secureboot_dir}/db.pem"
 }
 
 # === Uploading ===
