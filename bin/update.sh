@@ -15,6 +15,8 @@ fi
 # === CLI Arguments & Setup ===
 
 required_commands=(
+    "dirname"
+    "realpath"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"

@@ -4,19 +4,31 @@
 required_commands+=(
     "aria2c"
     "awk"
+    "basename"
+    "chmod"
     "chroot"
+    "cp"
     "curl"
-    "fusermount3"
+    "dirname"
+    "find"
+    "fusermount3" # Required by rclone mount
     "git"
     "gpg"
+    "ln"
     "mkdir"
     "mktemp"
     "mount"
     "rclone"
+    "readlink"
+    "realpath"
+    "rm"
+    "sleep"
     "tar"
     "umount"
+    "xz" # Required by tar for .tar.xz archives
     "zstd"
 )
+
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 env_file="${WORK_DIR}/.env"
 if [[ -f "$env_file" ]]; then
@@ -27,7 +39,6 @@ readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
 readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
 readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
 readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
-
 
 # === Logging Helpers ===
 
