@@ -9,6 +9,8 @@ required_commands+=(
     "fusermount3"
     "git"
     "gpg"
+    "mkdir"
+    "mktemp"
     "mount"
     "rclone"
     "tar"
