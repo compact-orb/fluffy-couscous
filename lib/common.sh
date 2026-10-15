@@ -23,6 +23,7 @@ required_commands+=(
     "realpath"
     "rm"
     "sleep"
+    "storageto"
     "tar"
     "umount"
     "xz" # Required by tar for .tar.xz archives
@@ -630,6 +631,31 @@ publish_stage_archive() {
     force_remove "${stage_file}"
     force_remove "${sig_file}"
     force_remove "${archive_dir}"
+}
+
+upload_to_storageto() {
+    log_info "Uploading ${*} to storage.to"
+
+    local token_args=()
+    local temp_config_dir=""
+    if [[ -n "${STORAGETO_KEY:-}" ]]; then
+        temp_config_dir="$(mktemp --directory)"
+        create_directory "${temp_config_dir}/storageto"
+        printf "%s" "${STORAGETO_KEY}" > "${temp_config_dir}/storageto/token"
+        chmod 0600 "${temp_config_dir}/storageto/token"
+    else
+        log_warn "STORAGETO_KEY is not set. Uploading anonymously."
+        token_args+=("--no-token")
+    fi
+
+    local exit_code=0
+    if [[ -n "${temp_config_dir}" ]]; then
+        XDG_CONFIG_HOME="${temp_config_dir}" storageto upload \
+            "${token_args[@]}" "${@}"
+        force_remove "${temp_config_dir}"
+    else
+        storageto upload "${token_args[@]}" "${@}"
+    fi
 }
 
 fetch_project_stage() {
