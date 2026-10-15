@@ -51,11 +51,6 @@ mount_repos_in_chroot "${STAGE_DIR}"
 
 mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
-create_directory "${STAGE_DIR}/boot"
-_active_boot_mounts=()
-managed_mount "_active_boot_mounts" --bind \
-    "${STAGE_DIR}/boot" "${STAGE_DIR}/boot"
-
 create_directory "${STAGE_DIR}/boot/loader/entries"
 create_empty_file "${STAGE_DIR}/etc/machine-id"
 
@@ -88,8 +83,6 @@ create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
 
 # === Chroot Cleanup ===
 
-managed_unmount_all "_active_boot_mounts"
-
 unmount_repos_in_chroot
 
 remove_portage_configuration "${STAGE_DIR}"
@@ -108,6 +101,8 @@ copy_file "${STAGE_DIR}/usr/share/shim/mmx64.efi" \
     "${STAGE_DIR}/boot/EFI/BOOT/mmx64.efi"
 copy_file "${STAGE_DIR}/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" \
     "${STAGE_DIR}/boot/EFI/BOOT/grubx64.efi"
+
+sed --in-place 's| /boot/| /|g' "${STAGE_DIR}"/boot/loader/entries/*.conf
 
 openssl x509 -inform "PEM" -outform "DER" \
      -out "${STAGE_DIR}/boot/Secure Boot Certificate.der" \
