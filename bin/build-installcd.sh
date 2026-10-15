@@ -51,6 +51,12 @@ mount_repos_in_chroot "${STAGE_DIR}"
 
 mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
+create_directory "${STAGE_DIR}/boot"
+_active_boot_mounts=()
+managed_mount "_active_boot_mounts" --bind \
+    "${STAGE_DIR}/boot" "${STAGE_DIR}/boot"
+
+create_directory "${STAGE_DIR}/boot/loader/entries"
 create_empty_file "${STAGE_DIR}/etc/machine-id"
 
 create_directory "${STAGE_DIR}/etc/dracut.conf.d"
@@ -65,22 +71,24 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" \
 # === Build Install CD ===
 
 chroot_run "${STAGE_DIR}" '
-    BOOT_MNT="/boot" emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
+    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-editors/nano net-misc/networkmanager \
         sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
         sys-kernel/gentoo-kernel sys-kernel/installkernel \
         sys-kernel/linux-firmware
-        
     passwd --delete "root"
     systemctl enable NetworkManager.service systemd-resolved.service
     /usr/lib/systemd/systemd-update-done
     '
 
 force_remove "${STAGE_DIR}/etc/resolv.conf"
-create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" "${STAGE_DIR}/etc/resolv.conf"
+create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
+    "${STAGE_DIR}/etc/resolv.conf"
 
 # === Chroot Cleanup ===
+
+managed_unmount_all "_active_boot_mounts"
 
 unmount_repos_in_chroot
 
