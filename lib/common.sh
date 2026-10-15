@@ -22,6 +22,7 @@ required_commands+=(
     "readlink"
     "realpath"
     "rm"
+    "sed"
     "sleep"
     "storageto"
     "tar"
@@ -651,10 +652,15 @@ upload_to_storageto() {
     local exit_code=0
     if [[ -n "${temp_config_dir}" ]]; then
         XDG_CONFIG_HOME="${temp_config_dir}" storageto upload \
-            "${token_args[@]}" "${@}"
+            --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
+            sed --expression='s/.*\r//' --expression='/%/d' \
+                --expression='/^[[:space:]]*$/d'
         force_remove "${temp_config_dir}"
     else
-        storageto upload "${token_args[@]}" "${@}"
+        storageto upload \
+            --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
+            sed --expression='s/.*\r//' --expression='/%/d' \
+                --expression='/^[[:space:]]*$/d'
     fi
 }
 
