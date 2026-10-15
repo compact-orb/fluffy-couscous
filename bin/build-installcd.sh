@@ -69,9 +69,9 @@ chroot_run "${STAGE_DIR}" '
         app-admin/sudo app-arch/7zip app-editors/nano net-misc/networkmanager \
         sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
-        sys-kernel/installkernel sys-kernel/linux-firmware
-    BOOT_MNT="/boot" emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
-        sys-kernel/gentoo-kernel
+        sys-kernel/gentoo-kernel sys-kernel/installkernel \
+        sys-kernel/linux-firmware
+        
     passwd --delete "root"
     systemctl enable NetworkManager.service systemd-resolved.service
     /usr/lib/systemd/systemd-update-done
