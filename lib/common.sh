@@ -649,7 +649,6 @@ upload_to_storageto() {
         token_args+=("--no-token")
     fi
 
-    local exit_code=0
     if [[ -n "${temp_config_dir}" ]]; then
         XDG_CONFIG_HOME="${temp_config_dir}" storageto upload \
             --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
