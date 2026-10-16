@@ -47,7 +47,7 @@ mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 chroot_run "${STAGE_DIR}" '
     emerge --jobs="$(nproc)" app-portage/gentoolkit
     emerge --jobs="$(nproc)" '"${PACKAGES}"'
-    revdep-rebuild -- --jobs="$(nproc)" --usepkg=n
+    revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
     emerge --depclean
     '
 
