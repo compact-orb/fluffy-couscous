@@ -55,7 +55,7 @@ create_directory "${STAGE_DIR}/boot/loader/entries"
 create_empty_file "${STAGE_DIR}/etc/machine-id"
 
 create_directory "${STAGE_DIR}/etc/dracut.conf.d"
-create_file "${STAGE_DIR}/etc/dracut.conf.d/livecd.conf" \
+create_file "${STAGE_DIR}/etc/dracut.conf.d/install.conf" \
     'hostonly="no"
 add_dracutmodules+=" dmsquash-live "'
 
@@ -63,7 +63,7 @@ create_directory "${STAGE_DIR}/etc/kernel"
 create_file "${STAGE_DIR}/etc/kernel/cmdline" \
     "root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1"
 
-# === Build Install CD ===
+# === Build Install ===
 
 chroot_run "${STAGE_DIR}" '
     emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
