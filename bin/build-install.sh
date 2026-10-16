@@ -66,12 +66,13 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" \
 # === Build Install ===
 
 chroot_run "${STAGE_DIR}" '
-    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
+    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly --with-bdeps="n" \
         app-admin/sudo app-arch/7zip app-editors/nano net-misc/networkmanager \
         sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
         sys-kernel/gentoo-kernel sys-kernel/installkernel \
         sys-kernel/linux-firmware
+    emerge --depclean --with-bdeps="n"
     passwd --delete "root"
     systemctl enable NetworkManager.service systemd-resolved.service
     /usr/lib/systemd/systemd-update-done
