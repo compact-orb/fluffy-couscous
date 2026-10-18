@@ -101,6 +101,11 @@ remove_file() {
     rm "${1}"
 }
 
+remove_directory() {
+    log_debug "Removing directory ${1}"
+    rmdir "${1}"
+}
+
 force_remove() {
     log_debug "Force removing ${1}"
     rm --force --recursive "${1}"

@@ -41,11 +41,11 @@ unset repo_profile
 
 # === Environment Preparation ===
 
-fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
+fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "install"
 
 download_ebuild_repositories
 
-configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
+configure_portage "${STAGE_DIR}" "${PROFILE}" "install"
 
 mount_repos_in_chroot "${STAGE_DIR}"
 
@@ -66,13 +66,13 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" \
 # === Build Install ===
 
 chroot_run "${STAGE_DIR}" '
-    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly --with-bdeps="n" \
+    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-editors/nano net-misc/networkmanager \
         sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
         sys-kernel/gentoo-kernel sys-kernel/installkernel \
         sys-kernel/linux-firmware
-    emerge --depclean --with-bdeps="n"
+    emerge --depclean
     passwd --delete "root"
     systemctl enable NetworkManager.service systemd-resolved.service
     /usr/lib/systemd/systemd-update-done

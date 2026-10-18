@@ -55,7 +55,8 @@ fi
 create_directory "${STAGE_DIR}"
 create_directory "${SEED_STAGE_BIND_DIR}"
 _active_bootstrap_mounts=()
-managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" "${SEED_STAGE_BIND_DIR}"
+managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" "\
+    ${SEED_STAGE_BIND_DIR}"
 
 chroot_run "${SEED_DIR}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
