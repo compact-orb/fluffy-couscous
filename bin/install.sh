@@ -194,9 +194,12 @@ configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
 
 mount_repos_in_chroot "${INSTALL_MOUNT_DIR}"
 
-# TODO: Install all the other stuff
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    emerge --emptytree --jobs="$(nproc)" @system
+    emerge --emptytree --jobs="$(nproc)" @system app-admin/sudo \
+        app-editors/nano net-misc/networkmanager sys-boot/shim \
+        sys-firmware/intel-microcode sys-firmware/sof-firmware \
+        sys-fs/btrfs-progs sys-fs/dosfstools sys-kernel/gentoo-kernel \
+        sys-kernel/installkernel sys-kernel/linux-firmware
     emerge --depclean
     '
 
@@ -204,11 +207,83 @@ remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 
 configure_ebuild_repositories "${INSTALL_MOUNT_DIR}"
 
-# TODO: Configure binary package repos
+configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
-# TODO: SystemD stuff
+# NOTE: The following systemd service enablement and bootloader configuration is
+# interim and will be superseded by the Ansible configuration management project.
 
-# TODO: fstab generation
+create_directory "${INSTALL_MOUNT_DIR}/usr/local/sbin"
+create_file "${INSTALL_MOUNT_DIR}/usr/local/sbin/update-bootloader" \
+'#!/usr/bin/env bash
+set -euo pipefail
+
+esp_boot_dir="/boot/EFI/BOOT"
+mkdir --parents "${esp_boot_dir}"
+
+if [[ -f "/usr/share/shim/BOOTX64.EFI" ]]; then
+    cp -f "/usr/share/shim/BOOTX64.EFI" "${esp_boot_dir}/BOOTX64.EFI"
+fi
+
+if [[ -f "/usr/share/shim/mmx64.efi" ]]; then
+    cp -f "/usr/share/shim/mmx64.efi" "${esp_boot_dir}/mmx64.efi"
+fi
+
+if [[ -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" ]]; then
+    cp -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" "${esp_boot_dir}/grubx64.efi"
+elif [[ -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ]]; then
+    cp -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi" "${esp_boot_dir}/grubx64.efi"
+fi
+'
+chmod "0755" "${INSTALL_MOUNT_DIR}/usr/local/sbin/update-bootloader"
+
+create_directory "${INSTALL_MOUNT_DIR}/etc/systemd/system"
+create_file "${INSTALL_MOUNT_DIR}/etc/systemd/system/update-bootloader.path" \
+'[Unit]
+Description=Watch for Shim and systemd-boot upgrades
+
+[Path]
+PathModified=/usr/share/shim/BOOTX64.EFI
+PathModified=/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed
+Unit=update-bootloader.service
+
+[Install]
+WantedBy=multi-user.target
+'
+
+create_file "${INSTALL_MOUNT_DIR}/etc/systemd/system/update-bootloader.service" \
+'[Unit]
+Description=Update ESP bootloader binaries (Shim + systemd-boot)
+ConditionPathExists=/boot/EFI/BOOT
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/update-bootloader
+'
+
+chroot_run "${INSTALL_MOUNT_DIR}" '
+    systemd-firstboot --delete-root-password
+    systemctl preset-all
+    systemctl enable NetworkManager.service
+    bootctl --no-variables install
+    systemctl mask systemd-boot-update.service
+    systemctl enable update-bootloader.path
+    /usr/local/sbin/update-bootloader
+    '
+create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
+    "${INSTALL_MOUNT_DIR}/etc/resolv.conf"
+
+log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
+fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
+log_debug "Creating ${fstab_file}"
+declare fstab_content
+IFS= read -d "" -r fstab_content << EOF || true
+UUID=${ROOT_UUID} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
+UUID=${BOOT_UUID} /boot vfat ${BOOT_MOUNT_OPTIONS} 0 2
+UUID=${ROOT_UUID} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
+/swap/swapfile none swap defaults 0 0
+EOF
+printf "%s" "${fstab_content}" > "${fstab_file}"
+unset fstab_content fstab_file
 
 # === Clean Up ===
 

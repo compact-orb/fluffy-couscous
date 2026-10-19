@@ -500,6 +500,48 @@ configure_portage() {
         "${target_root}/etc/kernel/install.d/05-check-chroot.install"
 }
 
+load_binpkg_repositories() {
+    if [[ -v binpkg_repo_entries ]]; then
+        return
+    fi
+
+    local repo_entry
+    while IFS= read -r repo_entry; do
+        if [[ -z "${repo_entry}" ]]; then continue; fi
+
+        binpkg_repo_entries+=("${repo_entry}")
+    done <<< "${BINPKG_REPOS}"
+}
+
+configure_portage_binary_packages() {
+    local target_root="${1}"
+    local profile="${2}"
+    log_info "Configuring Portage binary packages for ${target_root}"
+
+    load_binpkg_repositories
+
+    local repo_dir="${target_root}/etc/portage/repos.conf"
+    create_directory "${repo_dir}"
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+
+    local repo_entry
+    for repo_entry in "${binpkg_repo_entries[@]}"; do
+        local repo_name repo_url
+        IFS=" " read -r repo_name repo_url < <(echo "${repo_entry}")
+
+        local binpkg_repo_conf_file="${repo_dir}/${repo_name}.conf"
+        log_debug "Creating ${binpkg_repo_conf_file}"
+        local binpkg_repo_conf_content
+        IFS= read -d "" -r binpkg_repo_conf_content << EOF || true
+[${repo_name}]
+sync-uri = ${repo_url}/${repo_profile}
+EOF
+        printf "%s" "${binpkg_repo_conf_content}" > "${binpkg_repo_conf_file}"
+    done
+}
+
 # === Chroot Environment ===
 
 _active_chroot_mounts=()
