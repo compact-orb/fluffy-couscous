@@ -183,12 +183,12 @@ configure_portage_binary_packages "" "${PROFILE}"
 
 # === Install Stage 1 ===
 
-PORTAGE_TRUST_HELPER="" USE="build" emerge --nodeps --oneshot \
-    --root="${INSTALL_MOUNT_DIR}" sys-apps/baselayout
+USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
+    sys-apps/baselayout
 
 buildpkgs=$(${WORK_DIR}/bin/build.py)
-PORTAGE_TRUST_HELPER="" emerge --implicit-system-deps="n" --jobs="$(nproc)" \
-    --oneshot --root="${INSTALL_MOUNT_DIR}" ${buildpkgs}
+emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
+    --root="${INSTALL_MOUNT_DIR}" ${buildpkgs}
 unset buildpkgs
 locale-gen --prefix "${INSTALL_MOUNT_DIR}"
 
@@ -306,7 +306,6 @@ unmount_repos
 
 managed_unmount_all "_active_install_mounts"
 
-# TODO: trap this somehow
 if [[ -b "/dev/mapper/root" ]]; then
     cryptsetup close "root"
 fi
