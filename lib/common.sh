@@ -3,14 +3,11 @@
 # caller's array. The caller can then add its own specifics.
 required_commands+=(
     "awk"
-    "basename"
     "chmod"
     "chroot"
     "cp"
-    "curl"
     "dirname"
     "find"
-    "getuto"
     "git"
     "gpg"
     "ln"
@@ -20,12 +17,8 @@ required_commands+=(
     "readlink"
     "realpath"
     "rm"
-    "sed"
-    "sleep"
-    "tar"
+    "rmdir"
     "umount"
-    "xz" # Required by tar for .tar.xz archives
-    "zstd"
 )
 
 readonly _COMMON_SH_INCLUDED=1
@@ -363,7 +356,11 @@ configure_portage() {
     configure_ebuild_repositories "${target_root}"
 
     if [[ -z "${target_root}" ]]; then
-        getuto
+        if command -v getuto >/dev/null 2>&1; then
+            getuto
+        else
+            log_warn "getuto command not found on host, skipping..."
+        fi
     else
         chroot_run "${target_root}" "getuto"
     fi

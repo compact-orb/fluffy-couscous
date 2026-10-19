@@ -28,8 +28,12 @@ required_commands=(
     "blkid"
     "btrfs"
     "dirname"
+    "emerge"
+    "getuto"
+    "locale-gen"
     "mkfs.btrfs"
     "mkfs.fat"
+    "python3"
     "realpath"
     "sfdisk"
     "shred"
@@ -39,6 +43,7 @@ required_commands=(
 
 if [[ "${ENCRYPT}" == "true" ]]; then
     required_commands+=(
+        "base32"
         "cryptsetup"
         "systemd-cryptenroll"
     )
@@ -208,7 +213,7 @@ create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
 
 chroot_run "${INSTALL_MOUNT_DIR}" '
     emerge --emptytree --jobs="$(nproc)" @system app-admin/sudo \
-        app-editors/nano net-misc/networkmanager sys-boot/shim \
+        app-editors/nano dev-vcs/git net-misc/networkmanager sys-boot/shim \
         sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-kernel/gentoo-kernel \
         sys-kernel/installkernel sys-kernel/linux-firmware

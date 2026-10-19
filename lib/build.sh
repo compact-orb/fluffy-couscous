@@ -7,9 +7,17 @@ fi
 
 required_commands+=(
     "aria2c"
+    "basename"
+    "curl"
     "fusermount3" # Required by rclone mount
+    "mktemp"
     "rclone"
+    "sed"
+    "sleep"
     "storageto"
+    "tar"
+    "xz" # Required by tar for .tar.xz archives
+    "zstd"
 )
 
 # === S3 & Cloud Storage ===
