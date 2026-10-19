@@ -364,8 +364,11 @@ configure_portage() {
         else
             log_warn "getuto command not found on host, skipping..."
         fi
-    else
+    elif [[ -x "${target_root}/usr/bin/getuto" ]] && \
+         [[ -f "${target_root}/usr/share/openpgp-keys/gentoo-release.asc" ]]; then
         chroot_run "${target_root}" "getuto"
+    else
+        log_info "Skipping in-chroot getuto for ${target_root} (getuto or gentoo-release.asc not present)"
     fi
 
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
