@@ -372,17 +372,15 @@ configure_portage() {
     create_directory "${portage_gnupg_dir}"
     chmod "0700" "${portage_gnupg_dir}"
 
-    if [[ -n "${SIGNING_KEY:-}" ]]; then
-        if declare -F import_signing_key >/dev/null; then
-            import_signing_key
-            gpg --batch --export "${signing_key_fingerprint}" | \
-                gpg --batch --homedir "${portage_gnupg_dir}" --import
+    if [[ -n "${SIGNING_KEY:-}" ]] && declare -F import_signing_key >/dev/null; then
+        import_signing_key
+        gpg --batch --export "${signing_key_fingerprint}" | \
+            gpg --batch --homedir "${portage_gnupg_dir}" --import
 
-            echo "${signing_key_fingerprint}:6:" | \
-                gpg --batch --homedir "${portage_gnupg_dir}" \
-                --import-ownertrust --quiet
-        fi
-    elif [[ -n "${PUBLIC_KEYS:-}" ]]; then
+        echo "${signing_key_fingerprint}:6:" | \
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+            --import-ownertrust --quiet
+    else
         import_public_keys
         gpg --batch --export | \
             gpg --batch --homedir "${portage_gnupg_dir}" --import
