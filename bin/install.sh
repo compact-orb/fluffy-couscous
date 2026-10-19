@@ -14,16 +14,6 @@ fi
 
 # === CLI Arguments & Setup ===
 
-readonly PROFILE="${1}"
-readonly INSTALL_DRIVE="${2}"
-readonly SWAP_SIZE_GIB="${3}"
-readonly ENCRYPT="${4:-false}"
-readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
-
-readonly BOOT_MOUNT_OPTIONS="defaults,noatime"
-readonly ROOT_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async"
-readonly SWAP_MOUNT_OPTIONS="defaults,noatime"
-
 required_commands=(
     "blkid"
     "btrfs"
@@ -41,6 +31,9 @@ required_commands=(
     "wipefs"
 )
 
+
+readonly ENCRYPT="${4:-false}"
+
 if [[ "${ENCRYPT}" == "true" ]]; then
     required_commands+=(
         "base32"
@@ -52,6 +45,15 @@ fi
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 
 check_required_commands
+
+readonly PROFILE="${1}"
+readonly INSTALL_DRIVE="${2}"
+readonly SWAP_SIZE_GIB="${3}"
+readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
+
+readonly BOOT_MOUNT_OPTIONS="defaults,noatime"
+readonly ROOT_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async"
+readonly SWAP_MOUNT_OPTIONS="defaults,noatime"
 
 # === Prepare Drive ===
 
