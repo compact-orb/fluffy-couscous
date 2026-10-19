@@ -186,7 +186,7 @@ configure_portage_binary_packages "" "${PROFILE}"
 USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
     sys-apps/baselayout
 
-IFS=" " read -r -a buildpkgs < <("${WORK_DIR}/bin/build.py")
+IFS=" " read -r -a buildpkgs <<< "$("${WORK_DIR}/bin/build.py")"
 emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
     --root="${INSTALL_MOUNT_DIR}" "${buildpkgs[@]}"
 unset buildpkgs
