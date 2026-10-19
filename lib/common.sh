@@ -210,6 +210,9 @@ load_ebuild_repositories() {
 download_ebuild_repositories() {
     log_info "Downloading ebuild repositories"
 
+    import_gentoo_release_keys
+    import_public_keys
+
     load_ebuild_repositories
 
     for repo_entry in "${repo_entries[@]}"; do
