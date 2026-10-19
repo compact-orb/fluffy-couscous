@@ -20,6 +20,7 @@ required_commands=(
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
+source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
 check_required_commands
 
@@ -35,7 +36,7 @@ download_ebuild_repositories
 
 configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
-mount_repos_in_chroot "${STAGE_DIR}"
+mount_repos "${STAGE_DIR}"
 
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
@@ -53,7 +54,7 @@ chroot_run "${STAGE_DIR}" '
 
 # === Cleanup & Upload ===
 
-unmount_repos_in_chroot
+unmount_repos
 
 remove_portage_configuration "${STAGE_DIR}"
 

@@ -84,10 +84,10 @@ if [[ "${ENCRYPT}" == "true" ]]; then
         --type luks2 \
         "${ROOT_PARTITION}"
 
-    log_info ================================================================
+    log_info "================================================================"
     log_info "EMERGENCY RECOVERY KEY: ${RECOVERY_KEY}"
     log_info "Please write this down and store it in a secure location!"
-    log_info ================================================================
+    log_info "================================================================"
 
     log_info "Enrolling TPM2 device with PIN (PCR 7)..."
     systemd-cryptenroll \
@@ -163,11 +163,16 @@ log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
 
 # === Configure Host Environment ===
 
+download_ebuild_repositories
+
 configure_ebuild_repositories ""
-mount_repos_in_chroot "" # Rename since it can be used outside chroot
+
+mount_repos ""
 
 remove_portage_configuration ""
 configure_portage "" "${PROFILE}" "install"
+
+configure_portage_binary_packages "" "${PROFILE}"
 
 # === Install Stage 1 ===
 
@@ -182,17 +187,24 @@ locale-gen --prefix "${INSTALL_MOUNT_DIR}"
 
 # === Clean Up Host Environment ===
 
-unmount_repos_in_chroot
+unmount_repos
 
 remove_portage_configuration ""
 
 # === Install and Configure Gentoo ===
 
-create_directory "${INSTALL_MOUNT_DIR}/etc/portage"
-
+remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
 
-mount_repos_in_chroot "${INSTALL_MOUNT_DIR}"
+mount_repos "${INSTALL_MOUNT_DIR}"
+
+configure_ebuild_repositories "${INSTALL_MOUNT_DIR}"
+
+configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
+
+create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
+create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
+    "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw"
 
 chroot_run "${INSTALL_MOUNT_DIR}" '
     emerge --emptytree --jobs="$(nproc)" @system app-admin/sudo \
@@ -202,12 +214,6 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
         sys-kernel/installkernel sys-kernel/linux-firmware
     emerge --depclean
     '
-
-remove_portage_configuration "${INSTALL_MOUNT_DIR}"
-
-configure_ebuild_repositories "${INSTALL_MOUNT_DIR}"
-
-configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 # NOTE: The following systemd service enablement and bootloader configuration is
 # interim and will be superseded by the Ansible configuration management project.
@@ -243,6 +249,7 @@ Description=Watch for Shim and systemd-boot upgrades
 
 [Path]
 PathModified=/usr/share/shim/BOOTX64.EFI
+PathModified=/usr/lib/systemd/boot/efi/systemd-bootx64.efi
 PathModified=/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed
 Unit=update-bootloader.service
 
@@ -261,7 +268,6 @@ ExecStart=/usr/local/sbin/update-bootloader
 '
 
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    systemd-firstboot --delete-root-password
     systemctl preset-all
     systemctl enable NetworkManager.service
     bootctl --no-variables install
@@ -269,6 +275,8 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     systemctl enable update-bootloader.path
     /usr/local/sbin/update-bootloader
     '
+create_file "${INSTALL_MOUNT_DIR}/etc/machine-id" "uninitialized"
+
 create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
     "${INSTALL_MOUNT_DIR}/etc/resolv.conf"
 
@@ -286,6 +294,8 @@ printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file
 
 # === Clean Up ===
+
+unmount_repos
 
 managed_unmount_all "_active_install_mounts"
 

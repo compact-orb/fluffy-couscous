@@ -26,6 +26,7 @@ required_commands=(
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
+source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
 check_required_commands
 
@@ -47,7 +48,7 @@ download_ebuild_repositories
 
 configure_portage "${STAGE_DIR}" "${PROFILE}" "install"
 
-mount_repos_in_chroot "${STAGE_DIR}"
+mount_repos "${STAGE_DIR}"
 
 mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
@@ -84,7 +85,7 @@ create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
 
 # === Chroot Cleanup ===
 
-unmount_repos_in_chroot
+unmount_repos
 
 remove_portage_configuration "${STAGE_DIR}"
 

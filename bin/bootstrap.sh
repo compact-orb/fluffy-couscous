@@ -20,6 +20,7 @@ required_commands=(
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
+source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
 check_required_commands
 
@@ -38,7 +39,7 @@ fetch_seed_stage "${SEED_DIR}" \
 download_ebuild_repositories
 
 configure_ebuild_repositories "${SEED_DIR}"
-mount_repos_in_chroot "${SEED_DIR}"
+mount_repos "${SEED_DIR}"
 
 if [[ "${4:-}" == "workaround" ]]; then
     source "${WORK_DIR}/lib/workaround.sh"
@@ -75,7 +76,7 @@ chroot_run "${SEED_DIR}" '
 
 managed_unmount_all "_active_bootstrap_mounts"
 
-unmount_repos_in_chroot
+unmount_repos
 
 force_remove "${SEED_DIR}"
 
@@ -83,7 +84,7 @@ create_directory "${STAGE_DIR}/etc/portage"
 
 configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
-mount_repos_in_chroot "${STAGE_DIR}"
+mount_repos "${STAGE_DIR}"
 
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
@@ -93,7 +94,7 @@ chroot_run "${STAGE_DIR}" '
     emerge --depclean
     '
 
-unmount_repos_in_chroot
+unmount_repos
 
 remove_portage_configuration "${STAGE_DIR}"
 
