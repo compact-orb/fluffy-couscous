@@ -370,7 +370,6 @@ configure_portage() {
 
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
     create_directory "${portage_gnupg_dir}"
-    chmod "0700" "${portage_gnupg_dir}"
 
     if [[ -n "${SIGNING_KEY:-}" ]] && declare -F import_signing_key >/dev/null; then
         import_signing_key
