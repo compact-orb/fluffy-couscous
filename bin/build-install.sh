@@ -41,7 +41,7 @@ unset repo_profile
 
 # === Environment Preparation ===
 
-fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "install"
+fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
 download_ebuild_repositories
 
