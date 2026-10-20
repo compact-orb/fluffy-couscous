@@ -210,7 +210,6 @@ remove_portage_configuration ""
 
 # === Install and Configure Gentoo ===
 
-remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
 
 mount_repos "${INSTALL_MOUNT_DIR}"
