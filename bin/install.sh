@@ -198,7 +198,7 @@ USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
 
 IFS=" " read -r -a buildpkgs <<< "$("${WORK_DIR}/bin/build.py")"
 emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
-    --root="${INSTALL_MOUNT_DIR}" "${buildpkgs[@]}"
+    --root="${INSTALL_MOUNT_DIR}" "${buildpkgs[@]}" "app-shells/bash"
 unset buildpkgs
 locale-gen --prefix "${INSTALL_MOUNT_DIR}"
 
