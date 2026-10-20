@@ -504,7 +504,7 @@ chroot_run() {
     shift
 
     local exit_code="0"
-    chroot "${target_root}" /usr/bin/bash --login -e -c "${*}" || \
+    chroot "${target_root}" /bin/bash --login -e -c "${*}" || \
         exit_code="${?}"
 
     kill_chroot_processes "${target_root}"
