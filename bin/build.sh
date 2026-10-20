@@ -7,8 +7,9 @@ if (( EUID != 0 )); then
     exit 1
 fi
 
-if (( $# < 2 )); then
-    echo "Usage: $0 <PROFILE> <PACKAGES>"
+
+if (( $# < 3 )); then
+    echo "Usage: $0 <PROFILE> <PACKAGES> <USEPKG_EXCLUDE>"
     exit 1
 fi
 
@@ -26,6 +27,7 @@ check_required_commands
 
 readonly PROFILE="${1}"
 readonly PACKAGES="${2}"
+readonly USEPKG_EXCLUDE="${3}"
 readonly STAGE_DIR="${BUILD_DIR}/stage"
 
 # === Environment Preparation ===
@@ -47,7 +49,7 @@ mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
 chroot_run "${STAGE_DIR}" '
     emerge --jobs="$(nproc)" app-portage/gentoolkit
-    emerge --jobs="$(nproc)" '"${PACKAGES}"'
+    emerge --jobs="$(nproc)" --usepkg="'"${USEPKG_EXCLUDE}"'" '"${PACKAGES}"'
     revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
     emerge --depclean
     '
