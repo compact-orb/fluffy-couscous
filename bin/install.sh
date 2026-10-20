@@ -168,6 +168,16 @@ btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
 readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset "${INSTALL_MOUNT_DIR}/swap/swapfile")"
 log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
 
+create_directory "${INSTALL_MOUNT_DIR}/var/tmp"
+chmod 1777 "${INSTALL_MOUNT_DIR}/var/tmp"
+managed_mount "_active_install_mounts" --bind \
+    "${INSTALL_MOUNT_DIR}/var/tmp" "/var/tmp"
+
+create_directory "${INSTALL_MOUNT_DIR}/var/cache"
+chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache"
+managed_mount "_active_install_mounts" --bind \
+    "${INSTALL_MOUNT_DIR}/var/cache" "/var/cache"
+
 # === Configure Host Environment ===
 
 download_ebuild_repositories
