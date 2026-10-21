@@ -319,6 +319,10 @@ EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file
 
+remove_portage_configuration "${INSTALL_MOUNT_DIR}"
+
+configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
+
 # === Clean Up ===
 
 unmount_repos
