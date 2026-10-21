@@ -324,6 +324,7 @@ remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 # TODO: Configure final binary packages thing. Probably should be Ansible's job.
 
 # TEMPORARY: while Ansible is not yet ready
+configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
 configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 # === Clean Up ===
