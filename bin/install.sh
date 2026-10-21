@@ -193,6 +193,16 @@ configure_portage_binary_packages "" "${PROFILE}"
 
 # === Install Stage 1 ===
 
+create_directory "${INSTALL_MOUNT_DIR}/usr/bin"
+create_directory "${INSTALL_MOUNT_DIR}/usr/lib"
+create_directory "${INSTALL_MOUNT_DIR}/usr/lib64"
+
+create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/bin"
+create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/sbin"
+create_symbolic_link "bin" "${INSTALL_MOUNT_DIR}/usr/sbin"
+create_symbolic_link "usr/lib" "${INSTALL_MOUNT_DIR}/lib"
+create_symbolic_link "usr/lib64" "${INSTALL_MOUNT_DIR}/lib64"
+
 USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
     sys-apps/baselayout
 
