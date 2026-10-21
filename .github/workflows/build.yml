@@ -54,4 +54,4 @@ jobs:
           sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
             "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3" \
-            "app-admin/sudo app-arch/7zip app-editors/nano app-emulation/cloud-init dev-vcs/git net-misc/networkmanager sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/squashfs-tools sys-fs/xfsprogs sys-kernel/gentoo-kernel sys-kernel/installkernel sys-kernel/linux-firmware"
+            "app-admin/sudo app-arch/7zip app-editors/nano app-emulation/cloud-init app-forensics/lynis dev-vcs/git net-misc/networkmanager sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/squashfs-tools sys-fs/xfsprogs sys-kernel/gentoo-kernel sys-kernel/installkernel sys-kernel/linux-firmware"
