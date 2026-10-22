@@ -253,9 +253,6 @@ extra_packages=(
 )
 
 if [[ "${ENCRYPT}" == "true" ]]; then
-    create_directory "${INSTALL_MOUNT_DIR}/etc/dracut.conf.d"
-    create_file "${INSTALL_MOUNT_DIR}/etc/dracut.conf.d/tpm2.conf" \
-        'add_dracutmodules+=" tpm2-tss "'
     extra_packages+=("app-crypt/tpm2-tools")
 fi
 
