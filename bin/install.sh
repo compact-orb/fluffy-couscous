@@ -266,6 +266,7 @@ create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
 extra_packages=(
     "app-admin/ansible"
     "app-admin/sudo"
+    "app-crypt/tpm2-tools"
     "app-editors/nano"
     "dev-vcs/git"
     "net-misc/networkmanager"
@@ -278,10 +279,6 @@ extra_packages=(
     "sys-kernel/installkernel"
     "sys-kernel/linux-firmware"
 )
-
-if [[ "${ENCRYPT}" == "true" ]]; then
-    extra_packages+=("app-crypt/tpm2-tools")
-fi
 
 chroot_run "${INSTALL_MOUNT_DIR}" "
     emerge --emptytree --jobs=\"\$(nproc)\" @system ${extra_packages[*]}
