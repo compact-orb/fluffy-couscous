@@ -56,9 +56,12 @@ readonly INSTALL_DRIVE="${2}"
 readonly SWAP_SIZE_GIB="${3}"
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
-readonly BOOT_MOUNT_OPTIONS="defaults,noatime"
+readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid"
 readonly ROOT_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async"
-readonly SWAP_MOUNT_OPTIONS="defaults,noatime"
+readonly HOME_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
+readonly VAR_LOG_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid,noexec"
+readonly VAR_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
+readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
 
 # === Prepare Drive ===
 
@@ -134,6 +137,9 @@ readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" "${ROOT_
 btrfs_tmp_dir="$(mktemp --directory)"
 mount --types "btrfs" "${ROOT_TARGET_DEV}" "${btrfs_tmp_dir}"
 btrfs subvolume create "${btrfs_tmp_dir}/@"
+btrfs subvolume create "${btrfs_tmp_dir}/@home"
+btrfs subvolume create "${btrfs_tmp_dir}/@var_log"
+btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp"
 btrfs subvolume create "${btrfs_tmp_dir}/@swap"
 
 root_subvol_id="$(btrfs subvolume list "${btrfs_tmp_dir}" | awk '$NF == "@" {print $2}')"
@@ -160,6 +166,28 @@ managed_mount "_active_install_mounts" \
     "${BOOT_PARTITION}" \
     "${INSTALL_MOUNT_DIR}/boot"
 
+create_directory "${INSTALL_MOUNT_DIR}/home"
+managed_mount "_active_install_mounts" \
+    --options "${HOME_MOUNT_OPTIONS},subvol=@home" \
+    --types "btrfs" \
+    "${ROOT_TARGET_DEV}" \
+    "${INSTALL_MOUNT_DIR}/home"
+
+create_directory "${INSTALL_MOUNT_DIR}/var/log"
+managed_mount "_active_install_mounts" \
+    --options "${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log" \
+    --types "btrfs" \
+    "${ROOT_TARGET_DEV}" \
+    "${INSTALL_MOUNT_DIR}/var/log"
+
+create_directory "${INSTALL_MOUNT_DIR}/var/tmp"
+managed_mount "_active_install_mounts" \
+    --options "${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp" \
+    --types "btrfs" \
+    "${ROOT_TARGET_DEV}" \
+    "${INSTALL_MOUNT_DIR}/var/tmp"
+chmod 1777 "${INSTALL_MOUNT_DIR}/var/tmp"
+
 create_directory "${INSTALL_MOUNT_DIR}/swap"
 managed_mount "_active_install_mounts" \
     --options "${SWAP_MOUNT_OPTIONS},subvol=@swap" \
@@ -173,8 +201,6 @@ btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
 readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset "${INSTALL_MOUNT_DIR}/swap/swapfile")"
 log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
 
-create_directory "${INSTALL_MOUNT_DIR}/var/tmp"
-chmod 1777 "${INSTALL_MOUNT_DIR}/var/tmp"
 managed_mount "_active_install_mounts" --bind \
     "${INSTALL_MOUNT_DIR}/var/tmp" "/var/tmp"
 
@@ -334,8 +360,13 @@ declare fstab_content
 IFS= read -d "" -r fstab_content << EOF || true
 UUID=${ROOT_UUID} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
 UUID=${BOOT_UUID} /boot vfat ${BOOT_MOUNT_OPTIONS} 0 2
+UUID=${ROOT_UUID} /home btrfs ${HOME_MOUNT_OPTIONS},subvol=@home 0 0
+UUID=${ROOT_UUID} /var/log btrfs ${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log 0 0
+UUID=${ROOT_UUID} /var/tmp btrfs ${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp 0 0
 UUID=${ROOT_UUID} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
 /swap/swapfile none swap defaults 0 0
+tmpfs /tmp tmpfs defaults,noatime,nodev,nosuid,noexec,mode=1777 0 0
+tmpfs /dev/shm tmpfs defaults,noatime,nodev,nosuid,noexec 0 0
 EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file
