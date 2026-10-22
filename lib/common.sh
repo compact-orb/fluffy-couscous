@@ -18,6 +18,7 @@ required_commands+=(
     "realpath"
     "rm"
     "rmdir"
+    "udevadm"
     "umount"
 )
 
@@ -182,12 +183,63 @@ managed_unmount_all() {
     fi
 }
 
+# === Cryptsetup Management ===
+
+_active_crypt_devices=()
+
+managed_cryptsetup() {
+    local action="${1}"
+    shift
+
+    case "${action}" in
+        open)
+            local mapper_name="${*: -1}"
+            log_debug "Opening encrypted device ${mapper_name}"
+            cryptsetup open "${@}"
+            _active_crypt_devices+=("${mapper_name}")
+            ;;
+        close)
+            local mapper_name="${1}"
+            if [[ -b "/dev/mapper/${mapper_name}" ]]; then
+                log_debug "Closing encrypted device ${mapper_name}"
+                udevadm settle
+                cryptsetup close "${mapper_name}"
+            fi
+            local remaining_devices=()
+            local dev
+            for dev in "${_active_crypt_devices[@]}"; do
+                if [[ "${dev}" != "${mapper_name}" ]]; then
+                    remaining_devices+=("${dev}")
+                fi
+            done
+            _active_crypt_devices=("${remaining_devices[@]}")
+            ;;
+        *)
+            cryptsetup "${action}" "${@}"
+            ;;
+    esac
+}
+
+managed_cryptsetup_close_all() {
+    local i
+    for (( i=${#_active_crypt_devices[@]}-1; i>=0; i-- )); do
+        local dev="${_active_crypt_devices[$i]}"
+        if [[ -b "/dev/mapper/${dev}" ]]; then
+            log_debug "Closing encrypted device ${dev}"
+            udevadm settle
+            cryptsetup close "${dev}" || true
+        fi
+    done
+    _active_crypt_devices=()
+}
+
 managed_cleanup_all() {
     local exit_code="${?}"
     local i
     for (( i=${#_registered_mount_arrays[@]}-1; i>=0; i-- )); do
         managed_unmount_all "${_registered_mount_arrays[$i]}" || true
     done
+    managed_cryptsetup_close_all
     exit "${exit_code}"
 }
 trap managed_cleanup_all "EXIT"

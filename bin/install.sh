@@ -12,6 +12,10 @@ if (( $# < 3 )); then
     exit 1
 fi
 
+if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
+    exec unshare --mount --propagation private env _INSTALL_UNSHARED=1 "$0" "${@}"
+fi
+
 # === CLI Arguments & Setup ===
 
 required_commands=(
@@ -28,6 +32,7 @@ required_commands=(
     "sfdisk"
     "shred"
     "udevadm"
+    "unshare"
     "wipefs"
 )
 
@@ -104,7 +109,7 @@ if [[ "${ENCRYPT}" == "true" ]]; then
         --unlock-key-file="${luks_key_file}" \
         "${ROOT_PARTITION}"
 
-    cryptsetup open \
+    managed_cryptsetup open \
         --key-file "${luks_key_file}" \
         "${ROOT_PARTITION}" \
         "root"
@@ -333,7 +338,4 @@ unmount_repos
 
 managed_unmount_all "_active_install_mounts"
 
-# TODO: trap this
-if [[ -b "/dev/mapper/root" ]]; then
-    cryptsetup close "root"
-fi
+managed_cryptsetup close "root"
