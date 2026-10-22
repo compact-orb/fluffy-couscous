@@ -6,6 +6,7 @@ required_commands+=(
     "chmod"
     "chroot"
     "cp"
+    "cryptsetup"
     "dirname"
     "find"
     "git"

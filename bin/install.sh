@@ -235,16 +235,34 @@ configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
-    "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw"
+    "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw console=tty0 console=ttyS0,115200"
 
-chroot_run "${INSTALL_MOUNT_DIR}" '
-    emerge --emptytree --jobs="$(nproc)" @system app-admin/sudo \
-        app-editors/nano dev-vcs/git net-misc/networkmanager sys-boot/shim \
-        sys-firmware/intel-microcode sys-firmware/sof-firmware \
-        sys-fs/btrfs-progs sys-fs/dosfstools sys-kernel/gentoo-kernel \
-        sys-kernel/installkernel sys-kernel/linux-firmware
+extra_packages=(
+    "app-admin/sudo"
+    "app-editors/nano"
+    "dev-vcs/git"
+    "net-misc/networkmanager"
+    "sys-boot/shim"
+    "sys-firmware/intel-microcode"
+    "sys-firmware/sof-firmware"
+    "sys-fs/btrfs-progs"
+    "sys-fs/dosfstools"
+    "sys-kernel/gentoo-kernel"
+    "sys-kernel/installkernel"
+    "sys-kernel/linux-firmware"
+)
+
+if [[ "${ENCRYPT}" == "true" ]]; then
+    create_directory "${INSTALL_MOUNT_DIR}/etc/dracut.conf.d"
+    create_file "${INSTALL_MOUNT_DIR}/etc/dracut.conf.d/tpm2.conf" \
+        'add_dracutmodules+=" tpm2-tss "'
+    extra_packages+=("app-crypt/tpm2-tools")
+fi
+
+chroot_run "${INSTALL_MOUNT_DIR}" "
+    emerge --emptytree --jobs=\"\$(nproc)\" @system ${extra_packages[*]}
     emerge --depclean
-    '
+    "
 
 # NOTE: The following systemd service enablement and bootloader configuration is
 # interim and will be superseded by the Ansible configuration management project.
@@ -299,6 +317,7 @@ ExecStart=/usr/local/sbin/update-bootloader
 '
 
 chroot_run "${INSTALL_MOUNT_DIR}" '
+    passwd --delete "root"
     systemctl preset-all
     systemctl enable NetworkManager.service
     bootctl --no-variables install
