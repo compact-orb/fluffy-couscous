@@ -264,6 +264,7 @@ create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
     "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw console=tty0 console=ttyS0,115200"
 
 extra_packages=(
+    "app-admin/ansible"
     "app-admin/sudo"
     "app-editors/nano"
     "dev-vcs/git"
