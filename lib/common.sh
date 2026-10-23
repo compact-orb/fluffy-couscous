@@ -424,9 +424,6 @@ import_public_keys() {
     if [[ -n "${BINPKG_PUBLIC_KEY:-}" ]]; then
         all_keys+="${BINPKG_PUBLIC_KEY}"$'\n'
     fi
-    if [[ -n "${PUBLIC_KEYS:-}" ]]; then
-        all_keys+="${PUBLIC_KEYS}"$'\n'
-    fi
 
     if [[ -n "${all_keys//[[:space:]]/}" ]]; then
         gpg --import --quiet <<< "${all_keys}"
@@ -505,17 +502,8 @@ configure_portage() {
             gpg --batch --homedir "${portage_gnupg_dir}" \
             --import-ownertrust --quiet
     else
-        local binpkg_keys="${BINPKG_PUBLIC_KEY:-${PUBLIC_KEYS:-}}"
-        if [[ -n "${binpkg_keys//[[:space:]]/}" ]]; then
-            gpg --batch --homedir "${portage_gnupg_dir}" --import --quiet <<< "${binpkg_keys}"
-            gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
-                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-                gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
-        else
-            import_public_keys
-            gpg --batch --export | \
-                gpg --batch --homedir "${portage_gnupg_dir}" --import
-
+        if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --homedir "${portage_gnupg_dir}" --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
             gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
                 awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
                 gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
