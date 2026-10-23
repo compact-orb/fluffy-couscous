@@ -133,11 +133,6 @@ for dir in "bin" "lib" "keys" "portage"; do
     fi
 done
 
-chmod -R a+rx "${INSTALLER_TARGET_DIR}/bin"
-chmod -R a+rX "${INSTALLER_TARGET_DIR}/lib" \
-    "${INSTALLER_TARGET_DIR}/keys" \
-    "${INSTALLER_TARGET_DIR}/portage"
-
 # Create symlink so user can run install.sh directly from PATH
 create_directory "${STAGE_DIR}/usr/local/bin"
 create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
