@@ -55,7 +55,7 @@ add_dracutmodules+=" dmsquash-live "'
 
 create_directory "${STAGE_DIR}/etc/kernel"
 create_file "${STAGE_DIR}/etc/kernel/cmdline" \
-    "root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1"
+    "root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1 console=tty0 console=ttyS0,115200"
 
 # === Build Install ===
 
