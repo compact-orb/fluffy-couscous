@@ -33,6 +33,9 @@ cli_define_option "PROFILE" "-p|--profile" \
 cli_define_option "INSTALL_DRIVE" "-d|--drive" "Target disk device" 1
 cli_define_option "SWAP_SIZE_GIB" "-s|--swap" "Swap size in GiB" 1
 cli_define_flag "ENCRYPT" "-e|--encrypt" "Enable LUKS encryption"
+cli_define_option "USERNAME" "-u|--user" "Standard user username" 0
+cli_define_option "PASSWORD" "--password" "Standard user password" 0
+cli_define_option "TPM2_PIN" "--pin" "TPM2 LUKS PIN" 0
 
 cli_parse "${@}"
 readonly PROFILE INSTALL_DRIVE SWAP_SIZE_GIB ENCRYPT
@@ -53,6 +56,47 @@ check_required_commands
 if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
     exec unshare --mount --propagation private \
         env _INSTALL_UNSHARED=1 "$0" "${@}"
+fi
+
+if [[ -z "${USERNAME:-}" ]]; then
+    while true; do
+        read -r -p "Enter username for standard user: " USERNAME
+        if [[ "${USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]] && \
+            [[ "${USERNAME}" != "root" ]]; then
+            break
+        fi
+        log_error "Invalid username. Must be lowercase alphanumeric, not root."
+    done
+fi
+
+if [[ -z "${PASSWORD:-}" ]]; then
+    while true; do
+        read -r -s -p "Enter password for ${USERNAME}: " PASSWORD
+        echo
+        read -r -s -p "Confirm password: " password_confirm
+        echo
+        if [[ -n "${PASSWORD}" ]] && \
+            [[ "${PASSWORD}" == "${password_confirm}" ]]; then
+            unset password_confirm
+            break
+        fi
+        log_error "Passwords do not match or are empty. Try again."
+    done
+fi
+
+if (( ENCRYPT )) && [[ -z "${TPM2_PIN:-}" ]]; then
+    while true; do
+        read -r -s -p "Enter TPM2 PIN for LUKS: " TPM2_PIN
+        echo
+        read -r -s -p "Confirm TPM2 PIN: " tpm2_pin_confirm
+        echo
+        if [[ -n "${TPM2_PIN}" ]] && \
+            [[ "${TPM2_PIN}" == "${tpm2_pin_confirm}" ]]; then
+            unset tpm2_pin_confirm
+            break
+        fi
+        log_error "TPM2 PINs do not match or are empty. Try again."
+    done
 fi
 
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
@@ -109,12 +153,21 @@ if (( ENCRYPT )); then
     log_info "================================================================"
 
     log_info "Enrolling TPM2 device with PIN (PCR 7)..."
-    systemd-cryptenroll \
+    tpm2_creds_dir="$(mktemp --directory)"
+    chmod 0700 "${tpm2_creds_dir}"
+    printf "%s" "${TPM2_PIN}" > \
+        "${tpm2_creds_dir}/cryptenroll.new-tpm2-pin"
+
+    CREDENTIALS_DIRECTORY="${tpm2_creds_dir}" systemd-cryptenroll \
         --tpm2-device="auto" \
         --tpm2-pcrs="7" \
         --tpm2-with-pin="yes" \
         --unlock-key-file="${luks_key_file}" \
         "${ROOT_PARTITION}"
+
+    shred --remove "${tpm2_creds_dir}/cryptenroll.new-tpm2-pin"
+    remove_directory "${tpm2_creds_dir}"
+    unset tpm2_creds_dir TPM2_PIN
 
     managed_cryptsetup open \
         --key-file "${luks_key_file}" \
@@ -332,13 +385,23 @@ configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 unmount_repos
 
+create_directory "${INSTALL_MOUNT_DIR}/etc/sudoers.d"
+create_file "${INSTALL_MOUNT_DIR}/etc/sudoers.d/wheel" \
+    "%wheel ALL=(ALL:ALL) ALL"
+chmod 0440 "${INSTALL_MOUNT_DIR}/etc/sudoers.d/wheel"
+
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    passwd --delete "root"
+    passwd --lock "root"
+    useradd --create-home --user-group --groups wheel \
+        --shell /bin/bash "'"${USERNAME}"'"
+    printf "%s:%s\n" "'"${USERNAME}"'" "'"${PASSWORD}"'" | \
+        chpasswd --crypt-method SHA512 --sha-rounds 50000
     systemd-machine-id-setup
     systemctl preset-all
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     '
+unset USERNAME PASSWORD
 
 # === Clean Up ===
 
