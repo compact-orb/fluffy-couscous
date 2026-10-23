@@ -111,6 +111,7 @@ check_required_commands() {
 # === CLI Argument Parsing ===
 
 declare -a _cli_keys=()
+declare -A _cli_opt_map=()
 declare -A _cli_short_map=()
 declare -A _cli_long_map=()
 declare -A _cli_desc_map=()
@@ -120,6 +121,7 @@ declare -A _cli_flag_map=()
 
 cli_init() {
     _cli_keys=()
+    _cli_opt_map=()
     _cli_short_map=()
     _cli_long_map=()
     _cli_desc_map=()
@@ -145,10 +147,11 @@ cli_define_option() {
     local -a parts=()
     IFS="|" read -ra parts <<< "${switches}"
     for switch in "${parts[@]}"; do
+        _cli_opt_map["${switch}"]="${var_name}"
         if [[ "${switch}" =~ ^-- ]]; then
-            _cli_long_map["${switch}"]="${var_name}"
+            _cli_long_map["${var_name}"]="${switch}"
         elif [[ "${switch}" =~ ^-[a-zA-Z0-9]$ ]]; then
-            _cli_short_map["${switch}"]="${var_name}"
+            _cli_short_map["${var_name}"]="${switch}"
         fi
     done
 }
@@ -159,22 +162,8 @@ cli_define_flag() {
     local desc="${3}"
     local default="${4:-0}"
 
-    _cli_keys+=("${var_name}")
-    _cli_desc_map["${var_name}"]="${desc}"
-    _cli_req_map["${var_name}"]=0
-    _cli_def_map["${var_name}"]="${default}"
+    cli_define_option "${var_name}" "${switches}" "${desc}" 0 "${default}"
     _cli_flag_map["${var_name}"]=1
-
-    local switch
-    local -a parts=()
-    IFS="|" read -ra parts <<< "${switches}"
-    for switch in "${parts[@]}"; do
-        if [[ "${switch}" =~ ^-- ]]; then
-            _cli_long_map["${switch}"]="${var_name}"
-        elif [[ "${switch}" =~ ^-[a-zA-Z0-9]$ ]]; then
-            _cli_short_map["${switch}"]="${var_name}"
-        fi
-    done
 }
 
 cli_show_help() {
@@ -183,39 +172,14 @@ cli_show_help() {
     printf "Usage: %s [options]\n\nOptions:\n" "${script_name}"
     local key
     for key in "${_cli_keys[@]}"; do
-        local sw_short="" sw_long="" sw
-        for sw in "${!_cli_short_map[@]}"; do
-            if [[ "${_cli_short_map[${sw}]}" == "${key}" ]]; then
-                sw_short="${sw}"
-                break
-            fi
-        done
-        for sw in "${!_cli_long_map[@]}"; do
-            if [[ "${_cli_long_map[${sw}]}" == "${key}" ]]; then
-                sw_long="${sw}"
-                break
-            fi
-        done
-
-        local sw_comb=""
+        local sw_short="${_cli_short_map[${key}]:-}"
+        local sw_long="${_cli_long_map[${key}]:-}"
+        local sw_comb="${sw_long:-${sw_short}}"
         if [[ -n "${sw_short}" && -n "${sw_long}" ]]; then
-            if (( _cli_flag_map[${key}] == 1 )); then
-                sw_comb="${sw_short}, ${sw_long}"
-            else
-                sw_comb="${sw_short}, ${sw_long} <val>"
-            fi
-        elif [[ -n "${sw_long}" ]]; then
-            if (( _cli_flag_map[${key}] == 1 )); then
-                sw_comb="${sw_long}"
-            else
-                sw_comb="${sw_long} <val>"
-            fi
-        elif [[ -n "${sw_short}" ]]; then
-            if (( _cli_flag_map[${key}] == 1 )); then
-                sw_comb="${sw_short}"
-            else
-                sw_comb="${sw_short} <val>"
-            fi
+            sw_comb="${sw_short}, ${sw_long}"
+        fi
+        if (( _cli_flag_map[${key}] == 0 )); then
+            sw_comb="${sw_comb} <val>"
         fi
 
         local suffix=""
@@ -257,9 +221,7 @@ cli_parse() {
                 ;;
             --*=* | -[a-zA-Z0-9]=*)
                 local opt_name="${opt%%=*}"
-                local var_name="${_cli_long_map[${opt_name}]:-}"
-                [[ -z "${var_name}" ]] && \
-                    var_name="${_cli_short_map[${opt_name}]:-}"
+                local var_name="${_cli_opt_map[${opt_name}]:-}"
                 if [[ -z "${var_name}" ]]; then
                     printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
                     cli_show_help >&2
@@ -276,9 +238,7 @@ cli_parse() {
                 shift
                 ;;
             --* | -[a-zA-Z0-9])
-                local var_name="${_cli_long_map[${opt}]:-}"
-                [[ -z "${var_name}" ]] && \
-                    var_name="${_cli_short_map[${opt}]:-}"
+                local var_name="${_cli_opt_map[${opt}]:-}"
                 if [[ -z "${var_name}" ]]; then
                     printf "Error: Unknown option '%s'\n" "${opt}" >&2
                     cli_show_help >&2
@@ -311,23 +271,10 @@ cli_parse() {
     for key in "${_cli_keys[@]}"; do
         if (( _cli_req_map[${key}] == 1 )) && \
            [[ -z "${_cli_seen[${key}]:-}" ]]; then
-            local sw_display="" sw
-            for sw in "${!_cli_long_map[@]}"; do
-                if [[ "${_cli_long_map[${sw}]}" == "${key}" ]]; then
-                    sw_display="${sw}"
-                    break
-                fi
-            done
-            if [[ -z "${sw_display}" ]]; then
-                for sw in "${!_cli_short_map[@]}"; do
-                    if [[ "${_cli_short_map[${sw}]}" == "${key}" ]]; then
-                        sw_display="${sw}"
-                        break
-                    fi
-                done
-            fi
+            local sw_display="${_cli_long_map[${key}]:-}"
+            sw_display="${sw_display:-${_cli_short_map[${key}]:-${key}}}"
             printf "Error: Missing required option '%s'\n" \
-                "${sw_display:-${key}}" >&2
+                "${sw_display}" >&2
             cli_show_help >&2
             exit 1
         fi
