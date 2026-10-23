@@ -303,9 +303,6 @@ chroot_run "${INSTALL_MOUNT_DIR}" "
     emerge --depclean
     "
 
-# NOTE: The following systemd service enablement and bootloader configuration is
-# interim and will be superseded by the Ansible configuration management project.
-
 chroot_run "${INSTALL_MOUNT_DIR}" '
     passwd --delete "root"
     systemd-machine-id-setup
