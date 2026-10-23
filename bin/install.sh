@@ -12,6 +12,7 @@ if (( $# < 3 )); then
     exit 1
 fi
 
+# Required to avoid mounting relating issues
 if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
     exec unshare --mount --propagation private env _INSTALL_UNSHARED=1 "$0" "${@}"
 fi
@@ -60,7 +61,8 @@ readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid"
 readonly ROOT_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async"
 readonly HOME_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
 readonly VAR_LOG_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid,noexec"
-readonly VAR_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
+readonly VAR_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid,noexec"
+readonly PORTAGE_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
 readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
 
 # === Prepare Drive ===
@@ -87,7 +89,8 @@ readonly ROOT_PARTITION="${part_prefix}2"
 unset part_prefix
 
 if [[ "${ENCRYPT}" == "true" ]]; then
-    readonly RECOVERY_KEY="$(head -c 20 /dev/urandom | base32 | tr -d '=' | fold -w 5 | paste -sd '-' -)"
+    readonly RECOVERY_KEY="$(head --bytes=20 /dev/urandom | base32 | \
+        fold --width=5 | paste --delimiters='-' --serial -)"
     luks_key_file="$(mktemp)"
     chmod 0600 "${luks_key_file}"
     printf "%s" "${RECOVERY_KEY}" > "${luks_key_file}"
@@ -130,9 +133,12 @@ mkfs.btrfs --force "${ROOT_TARGET_DEV}"
 
 udevadm settle
 
-readonly BOOT_UUID="$(blkid --match-tag "UUID" --output "value" "${BOOT_PARTITION}")"
-readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" "${ROOT_TARGET_DEV}")"
-readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" "${ROOT_PARTITION}")"
+readonly BOOT_UUID="$(blkid --match-tag "UUID" --output "value" \
+    "${BOOT_PARTITION}")"
+readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" \
+    "${ROOT_TARGET_DEV}")"
+readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" \
+    "${ROOT_PARTITION}")"
 
 btrfs_tmp_dir="$(mktemp --directory)"
 mount --types "btrfs" "${ROOT_TARGET_DEV}" "${btrfs_tmp_dir}"
@@ -140,9 +146,11 @@ btrfs subvolume create "${btrfs_tmp_dir}/@"
 btrfs subvolume create "${btrfs_tmp_dir}/@home"
 btrfs subvolume create "${btrfs_tmp_dir}/@var_log"
 btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp"
+btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp_portage"
 btrfs subvolume create "${btrfs_tmp_dir}/@swap"
 
-root_subvol_id="$(btrfs subvolume list "${btrfs_tmp_dir}" | awk '$NF == "@" {print $2}')"
+root_subvol_id="$(btrfs subvolume list "${btrfs_tmp_dir}" | awk \
+    '$NF == "@" {print $2}')"
 btrfs subvolume set-default "${root_subvol_id}" "${btrfs_tmp_dir}"
 unset root_subvol_id
 
@@ -188,6 +196,14 @@ managed_mount "_active_install_mounts" \
     "${INSTALL_MOUNT_DIR}/var/tmp"
 chmod 1777 "${INSTALL_MOUNT_DIR}/var/tmp"
 
+create_directory "${INSTALL_MOUNT_DIR}/var/tmp/portage"
+managed_mount "_active_install_mounts" \
+    --options "${PORTAGE_TMP_MOUNT_OPTIONS},subvol=@var_tmp_portage" \
+    --types "btrfs" \
+    "${ROOT_TARGET_DEV}" \
+    "${INSTALL_MOUNT_DIR}/var/tmp/portage"
+chmod 0775 "${INSTALL_MOUNT_DIR}/var/tmp/portage"
+
 create_directory "${INSTALL_MOUNT_DIR}/swap"
 managed_mount "_active_install_mounts" \
     --options "${SWAP_MOUNT_OPTIONS},subvol=@swap" \
@@ -198,12 +214,14 @@ managed_mount "_active_install_mounts" \
 btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
     "${INSTALL_MOUNT_DIR}/swap/swapfile"
 
-readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset "${INSTALL_MOUNT_DIR}/swap/swapfile")"
+readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset \
+    "${INSTALL_MOUNT_DIR}/swap/swapfile")"
 log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
 
+# Bind mount /var/tmp/portage and /var/cache to install drive to avoid issues with space
+create_directory "/var/tmp/portage"
 managed_mount "_active_install_mounts" --bind \
-    "${INSTALL_MOUNT_DIR}/var/tmp" "/var/tmp"
-
+    "${INSTALL_MOUNT_DIR}/var/tmp/portage" "/var/tmp/portage"
 create_directory "${INSTALL_MOUNT_DIR}/var/cache"
 chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache"
 managed_mount "_active_install_mounts" --bind \
@@ -211,23 +229,23 @@ managed_mount "_active_install_mounts" --bind \
 
 # === Configure Host Environment ===
 
-download_ebuild_repositories
+create_directory "/etc/portage"
+managed_mount "_active_install_mounts" --types "tmpfs" "tmpfs" "/etc/portage"
 
-configure_ebuild_repositories ""
+configure_ebuild_repositories "/"
 
-mount_repos ""
+mount_repos "/"
 
-remove_portage_configuration ""
-configure_portage "" "${PROFILE}" "install"
+configure_portage "/" "${PROFILE}" "install"
 
-configure_portage_binary_packages "" "${PROFILE}"
+configure_portage_binary_packages "/" "${PROFILE}"
 
 # === Install Stage 1 ===
 
+# Needed when installing baselayout binary package with merge-usr
 create_directory "${INSTALL_MOUNT_DIR}/usr/bin"
 create_directory "${INSTALL_MOUNT_DIR}/usr/lib"
 create_directory "${INSTALL_MOUNT_DIR}/usr/lib64"
-
 create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/bin"
 create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/sbin"
 create_symbolic_link "bin" "${INSTALL_MOUNT_DIR}/usr/sbin"
@@ -247,7 +265,7 @@ locale-gen --prefix "${INSTALL_MOUNT_DIR}"
 
 unmount_repos
 
-remove_portage_configuration ""
+remove_portage_configuration "/"
 
 # === Install and Configure Gentoo ===
 
@@ -263,7 +281,7 @@ create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
     "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw console=tty0 console=ttyS0,115200"
 
-extra_packages=(
+install_packages=(
     "app-admin/ansible"
     "app-admin/sudo"
     "app-crypt/tpm2-tools"
@@ -281,75 +299,21 @@ extra_packages=(
 )
 
 chroot_run "${INSTALL_MOUNT_DIR}" "
-    emerge --emptytree --jobs=\"\$(nproc)\" @system ${extra_packages[*]}
+    emerge --emptytree --jobs=\"\$(nproc)\" @system ${install_packages[*]}
     emerge --depclean
     "
 
 # NOTE: The following systemd service enablement and bootloader configuration is
 # interim and will be superseded by the Ansible configuration management project.
 
-create_directory "${INSTALL_MOUNT_DIR}/usr/local/sbin"
-create_file "${INSTALL_MOUNT_DIR}/usr/local/sbin/update-bootloader" \
-'#!/usr/bin/env bash
-set -euo pipefail
-
-esp_boot_dir="/boot/EFI/BOOT"
-mkdir --parents "${esp_boot_dir}"
-
-if [[ -f "/usr/share/shim/BOOTX64.EFI" ]]; then
-    cp -f "/usr/share/shim/BOOTX64.EFI" "${esp_boot_dir}/BOOTX64.EFI"
-fi
-
-if [[ -f "/usr/share/shim/mmx64.efi" ]]; then
-    cp -f "/usr/share/shim/mmx64.efi" "${esp_boot_dir}/mmx64.efi"
-fi
-
-if [[ -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" ]]; then
-    cp -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" "${esp_boot_dir}/grubx64.efi"
-elif [[ -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ]]; then
-    cp -f "/usr/lib/systemd/boot/efi/systemd-bootx64.efi" "${esp_boot_dir}/grubx64.efi"
-fi
-'
-chmod "0755" "${INSTALL_MOUNT_DIR}/usr/local/sbin/update-bootloader"
-
-create_directory "${INSTALL_MOUNT_DIR}/etc/systemd/system"
-create_file "${INSTALL_MOUNT_DIR}/etc/systemd/system/update-bootloader.path" \
-'[Unit]
-Description=Watch for Shim and systemd-boot upgrades
-
-[Path]
-PathModified=/usr/share/shim/BOOTX64.EFI
-PathModified=/usr/lib/systemd/boot/efi/systemd-bootx64.efi
-PathModified=/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed
-Unit=update-bootloader.service
-
-[Install]
-WantedBy=multi-user.target
-'
-
-create_file "${INSTALL_MOUNT_DIR}/etc/systemd/system/update-bootloader.service" \
-'[Unit]
-Description=Update ESP bootloader binaries (Shim + systemd-boot)
-ConditionPathExists=/boot/EFI/BOOT
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/update-bootloader
-'
-
 chroot_run "${INSTALL_MOUNT_DIR}" '
     passwd --delete "root"
+    systemd-machine-id-setup
     systemctl preset-all
-    systemctl enable NetworkManager.service
+    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     bootctl --no-variables install
-    systemctl mask systemd-boot-update.service
-    systemctl enable update-bootloader.path
-    /usr/local/sbin/update-bootloader
+    /usr/local/bin/update-bootloader
     '
-create_file "${INSTALL_MOUNT_DIR}/etc/machine-id" "uninitialized"
-
-create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
-    "${INSTALL_MOUNT_DIR}/etc/resolv.conf"
 
 log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
 fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
@@ -361,6 +325,7 @@ UUID=${BOOT_UUID} /boot vfat ${BOOT_MOUNT_OPTIONS} 0 2
 UUID=${ROOT_UUID} /home btrfs ${HOME_MOUNT_OPTIONS},subvol=@home 0 0
 UUID=${ROOT_UUID} /var/log btrfs ${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log 0 0
 UUID=${ROOT_UUID} /var/tmp btrfs ${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp 0 0
+UUID=${ROOT_UUID} /var/tmp/portage btrfs ${PORTAGE_TMP_MOUNT_OPTIONS},subvol=@var_tmp_portage 0 0
 UUID=${ROOT_UUID} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
 /swap/swapfile none swap defaults 0 0
 tmpfs /tmp tmpfs defaults,noatime,nodev,nosuid,noexec,mode=1777 0 0
@@ -371,10 +336,7 @@ unset fstab_content fstab_file
 
 remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 
-# TODO: Configure final binary packages thing. Probably should be Ansible's job.
-
-# TEMPORARY: while Ansible is not yet ready
-configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
+configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 # === Clean Up ===

@@ -260,7 +260,12 @@ load_ebuild_repositories() {
     done <<< "${REPOS}"
 }
 
+_ebuild_repositories_downloaded=0
 download_ebuild_repositories() {
+    if (( _ebuild_repositories_downloaded == 1 )); then
+        return 0
+    fi
+
     log_info "Downloading ebuild repositories"
 
     import_gentoo_release_keys
@@ -285,11 +290,30 @@ download_ebuild_repositories() {
         log_info "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
         git -C "${repo_dir}" verify-commit HEAD
     done
+
+    _ebuild_repositories_downloaded=1
+}
+
+normalize_target_root() {
+    local raw_root="${1:-/}"
+    local -n out_root="${2}"
+    local -n out_display="${3}"
+
+    if [[ "${raw_root}" == "/" || -z "${raw_root}" ]]; then
+        out_root=""
+        out_display="host system (/)"
+    else
+        out_root="${raw_root%/}"
+        out_display="${out_root}"
+    fi
 }
 
 configure_ebuild_repositories() {
-    local target_root="${1}"
-    log_info "Configuring ebuild repositories for ${target_root}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Configuring ebuild repositories for ${target_display}"
+
+    download_ebuild_repositories
 
     load_ebuild_repositories
 
@@ -316,8 +340,9 @@ EOF
 
 _active_repo_mounts=()
 mount_repos() {
-    local target_root="${1}"
-    log_info "Mounting ebuild repositories for ${target_root}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Mounting ebuild repositories for ${target_display}"
 
     load_ebuild_repositories
 
@@ -382,18 +407,19 @@ import_public_keys() {
 # === Portage Configuration ===
 
 remove_portage_configuration() {
-    local target_root="${1}"
-    log_info "Removing Portage configuration for ${target_root}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Removing Portage configuration for ${target_display}"
 
     find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force \
         --recursive {} +
 }
 
-configure_portage() {
-    local target_root="${1}"
+configure_portage_profile() {
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
     local profile="${2}"
-    local portage_conf_name="${3}"
-    log_info "Applying Portage configuration for ${target_root}"
+    log_info "Configuring Portage profile for ${target_display}"
 
     local portage_conf_dir="${target_root}/etc/portage"
     create_directory "${portage_conf_dir}"
@@ -405,7 +431,18 @@ configure_portage() {
     local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
     create_symbolic_link "${relative_repo_profile_dir}" \
         "${portage_conf_profile_dir}"
+}
 
+configure_portage() {
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    local profile="${2}"
+    local portage_conf_name="${3}"
+    log_info "Applying Portage configuration for ${target_display}"
+
+    configure_portage_profile "${target_root}" "${profile}"
+
+    local portage_conf_dir="${target_root}/etc/portage"
     recursive_copy "${WORK_DIR}/portage/${portage_conf_name}/." \
         "${portage_conf_dir}"
 
@@ -464,9 +501,10 @@ load_binpkg_repositories() {
 }
 
 configure_portage_binary_packages() {
-    local target_root="${1}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
     local profile="${2}"
-    log_info "Configuring Portage binary packages for ${target_root}"
+    log_info "Configuring Portage binary packages for ${target_display}"
 
     load_binpkg_repositories
 

@@ -31,8 +31,6 @@ readonly STAGE_DIR="${BUILD_DIR}/stage"
 
 fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
-download_ebuild_repositories
-
 configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
 mount_repos "${STAGE_DIR}"

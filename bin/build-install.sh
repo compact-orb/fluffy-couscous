@@ -44,8 +44,6 @@ unset repo_profile
 
 fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
-download_ebuild_repositories
-
 configure_portage "${STAGE_DIR}" "${PROFILE}" "install"
 
 mount_repos "${STAGE_DIR}"

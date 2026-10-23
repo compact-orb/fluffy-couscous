@@ -36,8 +36,6 @@ readonly SEED_STAGE_BIND_DIR="${SEED_DIR}/tmp/stage"
 fetch_seed_stage "${SEED_DIR}" \
     "${SEED_ARCH}" "${SEED_NAME}"
 
-download_ebuild_repositories
-
 configure_ebuild_repositories "${SEED_DIR}"
 mount_repos "${SEED_DIR}"
 
