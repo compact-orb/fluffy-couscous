@@ -255,10 +255,11 @@ cli_parse() {
                 shift
                 break
                 ;;
-            --*=*)
+            --*=* | -[a-zA-Z0-9]=*)
                 local opt_name="${opt%%=*}"
-                local opt_val="${opt#*=}"
                 local var_name="${_cli_long_map[${opt_name}]:-}"
+                [[ -z "${var_name}" ]] && \
+                    var_name="${_cli_short_map[${opt_name}]:-}"
                 if [[ -z "${var_name}" ]]; then
                     printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
                     cli_show_help >&2
@@ -270,54 +271,14 @@ cli_parse() {
                     cli_show_help >&2
                     exit 1
                 fi
-                printf -v "${var_name}" "%s" "${opt_val}"
+                printf -v "${var_name}" "%s" "${opt#*=}"
                 _cli_seen["${var_name}"]=1
                 shift
                 ;;
-            --*)
+            --* | -[a-zA-Z0-9])
                 local var_name="${_cli_long_map[${opt}]:-}"
-                if [[ -z "${var_name}" ]]; then
-                    printf "Error: Unknown option '%s'\n" "${opt}" >&2
-                    cli_show_help >&2
-                    exit 1
-                fi
-                if (( _cli_flag_map[${var_name}] == 1 )); then
-                    printf -v "${var_name}" "%s" 1
-                    _cli_seen["${var_name}"]=1
-                    shift
-                else
-                    if (( $# < 2 )); then
-                        printf "Error: Option '%s' requires an argument\n" \
-                            "${opt}" >&2
-                        cli_show_help >&2
-                        exit 1
-                    fi
-                    printf -v "${var_name}" "%s" "${2}"
-                    _cli_seen["${var_name}"]=1
-                    shift 2
-                fi
-                ;;
-            -[a-zA-Z0-9]=*)
-                local opt_name="${opt%%=*}"
-                local opt_val="${opt#*=}"
-                local var_name="${_cli_short_map[${opt_name}]:-}"
-                if [[ -z "${var_name}" ]]; then
-                    printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
-                    cli_show_help >&2
-                    exit 1
-                fi
-                if (( _cli_flag_map[${var_name}] == 1 )); then
-                    printf "Error: Option '%s' is a flag and takes no value\n" \
-                        "${opt_name}" >&2
-                    cli_show_help >&2
-                    exit 1
-                fi
-                printf -v "${var_name}" "%s" "${opt_val}"
-                _cli_seen["${var_name}"]=1
-                shift
-                ;;
-            -[a-zA-Z0-9])
-                local var_name="${_cli_short_map[${opt}]:-}"
+                [[ -z "${var_name}" ]] && \
+                    var_name="${_cli_short_map[${opt}]:-}"
                 if [[ -z "${var_name}" ]]; then
                     printf "Error: Unknown option '%s'\n" "${opt}" >&2
                     cli_show_help >&2
