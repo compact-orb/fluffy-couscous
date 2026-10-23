@@ -307,9 +307,8 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     passwd --delete "root"
     systemd-machine-id-setup
     systemctl preset-all
-    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     bootctl --no-variables install
-    /usr/local/bin/update-bootloader
+    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     '
 
 log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
