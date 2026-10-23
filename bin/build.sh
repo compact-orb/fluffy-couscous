@@ -2,16 +2,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-if (( EUID != 0 )); then
-    printf "%s\n" "You must be root to run this script." >&2
-    exit 1
-fi
-
-if (( $# < 3 )); then
-    printf "%s\n" "Usage: $0 <PROFILE> <PACKAGES> <USEPKG_EXCLUDE>" >&2
-    exit 1
-fi
-
 # === CLI Arguments & Setup ===
 
 required_commands=(
@@ -22,11 +12,19 @@ required_commands=(
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
+cli_define_option "PROFILE" "-p|--profile" \
+    "Profile in repository:profile format" 1
+cli_define_option "PACKAGES" "-P|--packages" \
+    "Space-separated package atoms" 1
+cli_define_option "USEPKG_EXCLUDE" "-e|--exclude" \
+    "Binary packages to exclude" 0 ""
+
+cli_parse "${@}"
+readonly PROFILE PACKAGES USEPKG_EXCLUDE
+
+check_root
 check_required_commands
 
-readonly PROFILE="${1}"
-readonly PACKAGES="${2}"
-readonly USEPKG_EXCLUDE="${3}"
 readonly STAGE_DIR="${BUILD_DIR}/stage"
 
 # === Environment Preparation ===

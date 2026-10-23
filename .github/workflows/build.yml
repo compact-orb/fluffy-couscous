@@ -55,6 +55,5 @@ jobs:
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
-            "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3" \
-            "app-admin/ansible app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano app-emulation/cloud-init app-forensics/lynis dev-vcs/git net-misc/networkmanager sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/squashfs-tools sys-fs/xfsprogs sys-kernel/gentoo-kernel sys-kernel/installkernel sys-kernel/linux-firmware" \
-            ""
+            --profile="automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3" \
+            --packages="app-admin/ansible app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano app-emulation/cloud-init app-forensics/lynis dev-vcs/git net-misc/networkmanager sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/squashfs-tools sys-fs/xfsprogs sys-kernel/gentoo-kernel sys-kernel/installkernel sys-kernel/linux-firmware"

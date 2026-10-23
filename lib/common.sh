@@ -79,6 +79,13 @@ log_debug() {
 
 # === Command Requirements ===
 
+check_root() {
+    if (( EUID != 0 )); then
+        printf "%s\n" "You must be root to run this script." >&2
+        exit 1
+    fi
+}
+
 check_required_commands() {
     local missing_commands=()
     local -A seen=()
@@ -99,6 +106,271 @@ check_required_commands() {
         log_error "Missing required commands:${missing_str}"
         exit 1
     fi
+}
+
+# === CLI Argument Parsing ===
+
+declare -a _cli_keys=()
+declare -A _cli_short_map=()
+declare -A _cli_long_map=()
+declare -A _cli_desc_map=()
+declare -A _cli_req_map=()
+declare -A _cli_def_map=()
+declare -A _cli_flag_map=()
+
+cli_init() {
+    _cli_keys=()
+    _cli_short_map=()
+    _cli_long_map=()
+    _cli_desc_map=()
+    _cli_req_map=()
+    _cli_def_map=()
+    _cli_flag_map=()
+}
+
+cli_define_option() {
+    local var_name="${1}"
+    local switches="${2}"
+    local desc="${3}"
+    local required="${4:-0}"
+    local default="${5:-}"
+
+    _cli_keys+=("${var_name}")
+    _cli_desc_map["${var_name}"]="${desc}"
+    _cli_req_map["${var_name}"]="${required}"
+    _cli_def_map["${var_name}"]="${default}"
+    _cli_flag_map["${var_name}"]=0
+
+    local switch
+    local -a parts=()
+    IFS="|" read -ra parts <<< "${switches}"
+    for switch in "${parts[@]}"; do
+        if [[ "${switch}" =~ ^-- ]]; then
+            _cli_long_map["${switch}"]="${var_name}"
+        elif [[ "${switch}" =~ ^-[a-zA-Z0-9]$ ]]; then
+            _cli_short_map["${switch}"]="${var_name}"
+        fi
+    done
+}
+
+cli_define_flag() {
+    local var_name="${1}"
+    local switches="${2}"
+    local desc="${3}"
+    local default="${4:-0}"
+
+    _cli_keys+=("${var_name}")
+    _cli_desc_map["${var_name}"]="${desc}"
+    _cli_req_map["${var_name}"]=0
+    _cli_def_map["${var_name}"]="${default}"
+    _cli_flag_map["${var_name}"]=1
+
+    local switch
+    local -a parts=()
+    IFS="|" read -ra parts <<< "${switches}"
+    for switch in "${parts[@]}"; do
+        if [[ "${switch}" =~ ^-- ]]; then
+            _cli_long_map["${switch}"]="${var_name}"
+        elif [[ "${switch}" =~ ^-[a-zA-Z0-9]$ ]]; then
+            _cli_short_map["${switch}"]="${var_name}"
+        fi
+    done
+}
+
+cli_show_help() {
+    local script_name
+    script_name="$(basename "${0}")"
+    printf "Usage: %s [options]\n\nOptions:\n" "${script_name}"
+    local key
+    for key in "${_cli_keys[@]}"; do
+        local sw_short="" sw_long="" sw
+        for sw in "${!_cli_short_map[@]}"; do
+            if [[ "${_cli_short_map[${sw}]}" == "${key}" ]]; then
+                sw_short="${sw}"
+                break
+            fi
+        done
+        for sw in "${!_cli_long_map[@]}"; do
+            if [[ "${_cli_long_map[${sw}]}" == "${key}" ]]; then
+                sw_long="${sw}"
+                break
+            fi
+        done
+
+        local sw_comb=""
+        if [[ -n "${sw_short}" && -n "${sw_long}" ]]; then
+            if (( _cli_flag_map[${key}] == 1 )); then
+                sw_comb="${sw_short}, ${sw_long}"
+            else
+                sw_comb="${sw_short}, ${sw_long} <val>"
+            fi
+        elif [[ -n "${sw_long}" ]]; then
+            if (( _cli_flag_map[${key}] == 1 )); then
+                sw_comb="${sw_long}"
+            else
+                sw_comb="${sw_long} <val>"
+            fi
+        elif [[ -n "${sw_short}" ]]; then
+            if (( _cli_flag_map[${key}] == 1 )); then
+                sw_comb="${sw_short}"
+            else
+                sw_comb="${sw_short} <val>"
+            fi
+        fi
+
+        local suffix=""
+        if (( _cli_flag_map[${key}] == 1 )); then
+            if [[ -n "${_cli_def_map[${key}]}" && \
+                  "${_cli_def_map[${key}]}" != "0" ]]; then
+                suffix=" (default: ${_cli_def_map[${key}]})"
+            fi
+        elif (( _cli_req_map[${key}] == 1 )); then
+            suffix=" (required)"
+        elif [[ -n "${_cli_def_map[${key}]}" ]]; then
+            suffix=" (default: ${_cli_def_map[${key}]})"
+        fi
+
+        printf "  %-24s %s%s\n" "${sw_comb}" \
+            "${_cli_desc_map[${key}]}" "${suffix}"
+    done
+    printf "  %-24s %s\n" "-h, --help" "Show this help message and exit"
+}
+
+cli_parse() {
+    local key
+    for key in "${_cli_keys[@]}"; do
+        printf -v "${key}" "%s" "${_cli_def_map[${key}]}"
+    done
+
+    local -A _cli_seen=()
+
+    while (( $# > 0 )); do
+        local opt="${1}"
+        case "${opt}" in
+            -h|--help)
+                cli_show_help
+                exit 0
+                ;;
+            --)
+                shift
+                break
+                ;;
+            --*=*)
+                local opt_name="${opt%%=*}"
+                local opt_val="${opt#*=}"
+                local var_name="${_cli_long_map[${opt_name}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf "Error: Option '%s' is a flag and takes no value\n" \
+                        "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                printf -v "${var_name}" "%s" "${opt_val}"
+                _cli_seen["${var_name}"]=1
+                shift
+                ;;
+            --*)
+                local var_name="${_cli_long_map[${opt}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf -v "${var_name}" "%s" 1
+                    _cli_seen["${var_name}"]=1
+                    shift
+                else
+                    if (( $# < 2 )); then
+                        printf "Error: Option '%s' requires an argument\n" \
+                            "${opt}" >&2
+                        cli_show_help >&2
+                        exit 1
+                    fi
+                    printf -v "${var_name}" "%s" "${2}"
+                    _cli_seen["${var_name}"]=1
+                    shift 2
+                fi
+                ;;
+            -[a-zA-Z0-9]=*)
+                local opt_name="${opt%%=*}"
+                local opt_val="${opt#*=}"
+                local var_name="${_cli_short_map[${opt_name}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf "Error: Option '%s' is a flag and takes no value\n" \
+                        "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                printf -v "${var_name}" "%s" "${opt_val}"
+                _cli_seen["${var_name}"]=1
+                shift
+                ;;
+            -[a-zA-Z0-9])
+                local var_name="${_cli_short_map[${opt}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf -v "${var_name}" "%s" 1
+                    _cli_seen["${var_name}"]=1
+                    shift
+                else
+                    if (( $# < 2 )); then
+                        printf "Error: Option '%s' requires an argument\n" \
+                            "${opt}" >&2
+                        cli_show_help >&2
+                        exit 1
+                    fi
+                    printf -v "${var_name}" "%s" "${2}"
+                    _cli_seen["${var_name}"]=1
+                    shift 2
+                fi
+                ;;
+            *)
+                printf "Error: Unexpected argument '%s'\n" "${opt}" >&2
+                cli_show_help >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    for key in "${_cli_keys[@]}"; do
+        if (( _cli_req_map[${key}] == 1 )) && \
+           [[ -z "${_cli_seen[${key}]:-}" ]]; then
+            local sw_display="" sw
+            for sw in "${!_cli_long_map[@]}"; do
+                if [[ "${_cli_long_map[${sw}]}" == "${key}" ]]; then
+                    sw_display="${sw}"
+                    break
+                fi
+            done
+            if [[ -z "${sw_display}" ]]; then
+                for sw in "${!_cli_short_map[@]}"; do
+                    if [[ "${_cli_short_map[${sw}]}" == "${key}" ]]; then
+                        sw_display="${sw}"
+                        break
+                    fi
+                done
+            fi
+            printf "Error: Missing required option '%s'\n" \
+                "${sw_display:-${key}}" >&2
+            cli_show_help >&2
+            exit 1
+        fi
+    done
 }
 
 # === File and Directory Helpers ===

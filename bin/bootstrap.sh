@@ -2,16 +2,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-if (( EUID != 0 )); then
-    printf "%s\n" "You must be root to run this script." >&2
-    exit 1
-fi
-
-if (( $# < 3 )); then
-    printf "%s\n" "Usage: $0 <SEED_ARCH> <SEED_NAME> <PROFILE> [workaround]" >&2
-    exit 1
-fi
-
 # === CLI Arguments & Setup ===
 
 required_commands=(
@@ -22,11 +12,19 @@ required_commands=(
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
+cli_define_option "SEED_ARCH" "-a|--arch" "Stage seed architecture" 1
+cli_define_option "SEED_NAME" "-n|--name" "Stage seed tarball name" 1
+cli_define_option "PROFILE" "-p|--profile" \
+    "Profile in repository:profile format" 1
+cli_define_flag "WORKAROUND" "-w|--workaround" \
+    "Apply bootstrap workaround instead of full rebuild"
+
+cli_parse "${@}"
+readonly SEED_ARCH SEED_NAME PROFILE WORKAROUND
+
+check_root
 check_required_commands
 
-readonly SEED_ARCH="${1}"
-readonly SEED_NAME="${2}"
-readonly PROFILE="${3}"
 readonly SEED_DIR="${BUILD_DIR}/seed"
 readonly STAGE_DIR="${BUILD_DIR}/stage"
 readonly SEED_STAGE_BIND_DIR="${SEED_DIR}/tmp/stage"
@@ -39,7 +37,7 @@ fetch_seed_stage "${SEED_DIR}" \
 configure_ebuild_repositories "${SEED_DIR}"
 mount_repos "${SEED_DIR}"
 
-if [[ "${4:-}" == "workaround" ]]; then
+if (( WORKAROUND )); then
     source "${WORK_DIR}/lib/workaround.sh"
 else
     remove_portage_configuration "${SEED_DIR}"

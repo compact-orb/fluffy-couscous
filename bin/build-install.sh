@@ -2,16 +2,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-if (( EUID != 0 )); then
-    printf "%s\n" "You must be root to run this script." >&2
-    exit 1
-fi
-
-if (( $# < 1 )); then
-    printf "%s\n" "Usage: $0 <PROFILE>" >&2
-    exit 1
-fi
-
 # === CLI Arguments & Setup ===
 
 required_commands=(
@@ -28,9 +18,14 @@ required_commands=(
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
-check_required_commands
+cli_define_option "PROFILE" "-p|--profile" \
+    "Profile in repository:profile format" 1
 
-readonly PROFILE="${1}"
+cli_parse "${@}"
+readonly PROFILE
+
+check_root
+check_required_commands
 readonly STAGE_DIR="${BUILD_DIR}/stage"
 readonly ESP_MOUNT_DIR="${BUILD_DIR}/esp"
 readonly ESP_IMG="${BUILD_DIR}/esp.img"

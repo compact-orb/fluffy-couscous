@@ -56,4 +56,4 @@ jobs:
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build-install.sh \
-            "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
+            --profile="automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"

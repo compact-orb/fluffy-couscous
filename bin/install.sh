@@ -2,23 +2,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-if (( EUID != 0 )); then
-    printf "%s\n" "You must be root to run this script." >&2
-    exit 1
-fi
-
-if (( $# < 3 )); then
-    printf "%s\n" \
-        "Usage: $0 <PROFILE> <INSTALL_DRIVE> <SWAP_SIZE_GIB> [ENCRYPT]" >&2
-    exit 1
-fi
-
-# Required to avoid mounting relating issues
-if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
-    exec unshare --mount --propagation private \
-        env _INSTALL_UNSHARED=1 "$0" "${@}"
-fi
-
 # === CLI Arguments & Setup ===
 
 required_commands=(
@@ -39,10 +22,24 @@ required_commands=(
     "wipefs"
 )
 
+# Inner realpath resolves the symlink (/usr/local/bin/install.sh ->
+# /opt/fluffy-couscous/bin/install.sh) before dirname, so ../lib/ resolves
+# relative to the real script location.
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
 
-readonly ENCRYPT="${4:-false}"
+cli_define_option "PROFILE" "-p|--profile" \
+    "Profile in repository:profile format" 1
+cli_define_option "INSTALL_DRIVE" "-d|--drive" "Target disk device" 1
+cli_define_option "SWAP_SIZE_GIB" "-s|--swap" "Swap size in GiB" 1
+cli_define_flag "ENCRYPT" "-e|--encrypt" "Enable LUKS encryption"
 
-if [[ "${ENCRYPT}" == "true" ]]; then
+cli_parse "${@}"
+readonly PROFILE INSTALL_DRIVE SWAP_SIZE_GIB ENCRYPT
+
+check_root
+
+if (( ENCRYPT )); then
     required_commands+=(
         "base32"
         "cryptsetup"
@@ -50,17 +47,14 @@ if [[ "${ENCRYPT}" == "true" ]]; then
     )
 fi
 
-# Inner realpath resolves the symlink (/usr/local/bin/install.sh ->
-# /opt/fluffy-couscous/bin/install.sh) before dirname, so ../lib/ resolves
-# relative to the real script location.
-source "$(realpath \
-    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
-
 check_required_commands
 
-readonly PROFILE="${1}"
-readonly INSTALL_DRIVE="${2}"
-readonly SWAP_SIZE_GIB="${3}"
+# Required to avoid mounting relating issues
+if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
+    exec unshare --mount --propagation private \
+        env _INSTALL_UNSHARED=1 "$0" "${@}"
+fi
+
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
 readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid"
@@ -95,7 +89,7 @@ readonly BOOT_PARTITION="${part_prefix}1"
 readonly ROOT_PARTITION="${part_prefix}2"
 unset part_prefix
 
-if [[ "${ENCRYPT}" == "true" ]]; then
+if (( ENCRYPT )); then
     readonly RECOVERY_KEY="$(head --bytes=20 /dev/urandom | base32 | \
         fold --width=5 | paste --delimiters='-' --serial -)"
     luks_key_file="$(mktemp)"
