@@ -303,14 +303,6 @@ chroot_run "${INSTALL_MOUNT_DIR}" "
     emerge --depclean
     "
 
-chroot_run "${INSTALL_MOUNT_DIR}" '
-    passwd --delete "root"
-    systemd-machine-id-setup
-    systemctl preset-all
-    bootctl --no-variables install
-    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
-    '
-
 log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
 fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
 log_debug "Creating ${fstab_file}"
@@ -330,14 +322,21 @@ EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file
 
+# Clean up installer-specific Portage configuration and establish profile symlink
 remove_portage_configuration "${INSTALL_MOUNT_DIR}"
-
 configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
-configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
-
-# === Clean Up ===
 
 unmount_repos
+
+chroot_run "${INSTALL_MOUNT_DIR}" '
+    passwd --delete "root"
+    systemd-machine-id-setup
+    systemctl preset-all
+    bootctl --no-variables install
+    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
+    '
+
+# === Clean Up ===
 
 managed_unmount_all "_active_install_mounts"
 
