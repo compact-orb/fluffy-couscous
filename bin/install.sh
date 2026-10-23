@@ -48,7 +48,7 @@ if [[ "${ENCRYPT}" == "true" ]]; then
     )
 fi
 
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
+source "$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
 
 check_required_commands
 

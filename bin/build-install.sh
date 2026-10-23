@@ -125,6 +125,37 @@ recursive_copy "${STAGE_DIR}/boot/." "${ESP_MOUNT_DIR}"
 managed_unmount_all "_active_esp_mounts"
 force_remove "${ESP_MOUNT_DIR}"
 
+# === Bundle Installer into Image ===
+
+log_info "Bundling installer into image"
+readonly INSTALLER_TARGET_DIR="${STAGE_DIR}/opt/fluffy-couscous"
+create_directory "${INSTALLER_TARGET_DIR}"
+for dir in "bin" "lib" "keys" "portage"; do
+    if [[ -d "${WORK_DIR}/${dir}" ]]; then
+        create_directory "${INSTALLER_TARGET_DIR}/${dir}"
+        recursive_copy "${WORK_DIR}/${dir}/." "${INSTALLER_TARGET_DIR}/${dir}"
+    fi
+done
+
+chmod -R a+rx "${INSTALLER_TARGET_DIR}/bin"
+chmod -R a+rX "${INSTALLER_TARGET_DIR}/lib" "${INSTALLER_TARGET_DIR}/keys" "${INSTALLER_TARGET_DIR}/portage"
+
+# Create symlink so user can run install.sh directly from PATH
+create_directory "${STAGE_DIR}/usr/local/bin"
+create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
+    "${STAGE_DIR}/usr/local/bin/install.sh"
+
+# Write sanitized, public configuration for the installer
+cat << EOF > "${INSTALLER_TARGET_DIR}/.env"
+GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
+REPOS="${REPOS}"
+BINPKG_REPOS="${BINPKG_REPOS}"
+ANSIBLE_PULL_URL="${ANSIBLE_PULL_URL}"
+BINPKG_PUBLIC_KEY="${BINPKG_PUBLIC_KEY:-${PUBLIC_KEYS:-}}"
+REPO_PUBLIC_KEYS="${REPO_PUBLIC_KEYS:-}"
+EOF
+chmod 0644 "${INSTALLER_TARGET_DIR}/.env"
+
 # === Build SquashFS Image ===
 
 log_info "Creating SquashFS image"

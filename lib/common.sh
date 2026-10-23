@@ -27,7 +27,21 @@ readonly _COMMON_SH_INCLUDED=1
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 env_file="${WORK_DIR}/.env"
 if [[ -f "$env_file" ]]; then
+    # Preserve environment variables already set before sourcing .env
+    declare -A _preserved_env=()
+    while IFS= read -r _var_name; do
+        if [[ -n "${_var_name}" && -n "${!_var_name}" ]]; then
+            _preserved_env["${_var_name}"]="${!_var_name}"
+        fi
+    done < <(compgen -e)
+
     source "$env_file"
+
+    for _var_name in "${!_preserved_env[@]}"; do
+        printf -v "${_var_name}" '%s' "${_preserved_env[${_var_name}]}"
+        export "${_var_name}"
+    done
+    unset _preserved_env _var_name
 fi
 readonly BUILD_DIR="${WORK_DIR}/build"
 readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
@@ -372,20 +386,28 @@ unmount_repos() {
 
 # === GPG and Security ===
 
-import_gentoo_release_keys() {
-    if (( ${_GENTOO_KEYS_IMPORTED:-0} )); then
+import_bundled_keys() {
+    if (( ${_BUNDLED_KEYS_IMPORTED:-0} )); then
         return
     fi
 
-    local gentoo_release_keys_file="${WORK_DIR}/keys/gentoo-release.asc"
-    log_info "Importing Gentoo release keys"
-    gpg --quiet --import "$gentoo_release_keys_file"
+    local key_file
+    for key_file in "${WORK_DIR}"/keys/*.asc; do
+        if [[ -f "${key_file}" ]]; then
+            log_info "Importing bundled key $(basename "${key_file}")"
+            gpg --quiet --import "${key_file}"
 
-    gpg --with-colons --show-keys "$gentoo_release_keys_file" | \
-        awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-        gpg --batch --import-ownertrust --quiet
+            gpg --with-colons --show-keys "${key_file}" | \
+                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+                gpg --batch --import-ownertrust --quiet
+        fi
+    done
 
-    readonly _GENTOO_KEYS_IMPORTED=1
+    readonly _BUNDLED_KEYS_IMPORTED=1
+}
+
+import_gentoo_release_keys() {
+    import_bundled_keys
 }
 
 import_public_keys() {
@@ -395,11 +417,24 @@ import_public_keys() {
 
     log_info "Importing public keys"
 
-    gpg --import --quiet <<< "${PUBLIC_KEYS}"
+    local all_keys=""
+    if [[ -n "${REPO_PUBLIC_KEYS:-}" ]]; then
+        all_keys+="${REPO_PUBLIC_KEYS}"$'\n'
+    fi
+    if [[ -n "${BINPKG_PUBLIC_KEY:-}" ]]; then
+        all_keys+="${BINPKG_PUBLIC_KEY}"$'\n'
+    fi
+    if [[ -n "${PUBLIC_KEYS:-}" ]]; then
+        all_keys+="${PUBLIC_KEYS}"$'\n'
+    fi
 
-    gpg --show-keys --with-colons <<< "${PUBLIC_KEYS}" | \
-        awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-        gpg --batch --import-ownertrust --quiet
+    if [[ -n "${all_keys//[[:space:]]/}" ]]; then
+        gpg --import --quiet <<< "${all_keys}"
+
+        gpg --show-keys --with-colons <<< "${all_keys}" | \
+            awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+            gpg --batch --import-ownertrust --quiet
+    fi
 
     readonly public_keys_imported=1
 }
@@ -470,13 +505,21 @@ configure_portage() {
             gpg --batch --homedir "${portage_gnupg_dir}" \
             --import-ownertrust --quiet
     else
-        import_public_keys
-        gpg --batch --export | \
-            gpg --batch --homedir "${portage_gnupg_dir}" --import
+        local binpkg_keys="${BINPKG_PUBLIC_KEY:-${PUBLIC_KEYS:-}}"
+        if [[ -n "${binpkg_keys//[[:space:]]/}" ]]; then
+            gpg --batch --homedir "${portage_gnupg_dir}" --import --quiet <<< "${binpkg_keys}"
+            gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
+                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+                gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
+        else
+            import_public_keys
+            gpg --batch --export | \
+                gpg --batch --homedir "${portage_gnupg_dir}" --import
 
-        gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
-            awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-            gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
+            gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
+                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+                gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
+        fi
     fi
 
     gpg --batch --check-trustdb --homedir "${portage_gnupg_dir}" 2>/dev/null || true
