@@ -1,4 +1,5 @@
-# Sourced by build/CI scripts (bootstrap.sh, build.sh, build-install.sh, update.sh).
+# Sourced by build/CI scripts
+# (bootstrap.sh, build.sh, build-install.sh, update.sh).
 # Requires lib/common.sh to be loaded.
 
 if [[ ! -v _COMMON_SH_INCLUDED ]]; then
@@ -54,31 +55,33 @@ upload_to_storageto() {
         env_cmd=(env XDG_CONFIG_HOME="${temp_config_dir}")
     fi
 
+    local exit_code=0
     "${env_cmd[@]}" storageto upload \
         --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
         sed --expression='s/.*\r//' --expression='/%/d' \
-            --expression='/^[[:space:]]*$/d'
+            --expression='/^[[:space:]]*$/d' || exit_code="${?}"
 
     if [[ -n "${temp_config_dir}" ]]; then
         force_remove "${temp_config_dir}"
     fi
+    return "${exit_code}"
 }
 
 # === Signing & Security ===
 
 import_signing_key() {
-    if [[ -v signing_key_fingerprint ]]; then
+    if [[ -v _signing_key_fingerprint ]]; then
         return
     fi
 
     log_info "Importing PGP signing key"
 
-    signing_key_fingerprint=$(gpg --show-keys --with-colons \
+    _signing_key_fingerprint=$(gpg --show-keys --with-colons \
         <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
 
     gpg --import --quiet <<< "${SIGNING_KEY}"
 
-    printf "%s\n" "${signing_key_fingerprint}:6:" | \
+    printf "%s\n" "${_signing_key_fingerprint}:6:" | \
         gpg --batch --import-ownertrust --quiet
 }
 
@@ -92,10 +95,10 @@ install_portage_gpg_key() {
     create_directory "${portage_gnupg_signing_dir}"
     chmod 0700 "${portage_gnupg_signing_dir}"
 
-    gpg --batch --export-secret-keys "${signing_key_fingerprint}" | \
+    gpg --batch --export-secret-keys "${_signing_key_fingerprint}" | \
         gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
 
-    printf "%s\n" "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
+    printf "%s\n" "BINPKG_GPG_SIGNING_KEY=\"${_signing_key_fingerprint}\"" \
         >> "${target_root}/etc/portage/make.conf"
 }
 
@@ -254,7 +257,7 @@ publish_stage_archive() {
         --exclude="./var/tmp/*" \
         .
     log_info "Signing stage archive ${stage_file}"
-    gpg --batch --detach-sign --local-user "${signing_key_fingerprint}" \
+    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
         "${stage_file}"
 
     log_info "Uploading stage archive ${stage_file}"
@@ -304,7 +307,7 @@ mount_binary_packages() {
 
     local timeout=100
     while [[ "$(</proc/mounts)" != *" ${lowerdir} "* ]]; do
-        if [[ "${timeout}" -le 0 ]]; then break; fi
+        if (( timeout <= 0 )); then break; fi
         sleep 0.1
         ((timeout--))
     done

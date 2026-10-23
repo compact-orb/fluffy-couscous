@@ -46,7 +46,7 @@ fi
 unset env_file
 readonly BUILD_DIR="${WORK_DIR}/build"
 readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
-readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
+readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-http://distfiles.gentoo.org}"
 readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
 readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
 
@@ -62,9 +62,15 @@ else
     _C_RESET='' _C_GREEN='' _C_YELLOW='' _C_RED='' _C_GRAY=''
 fi
 
-log_info() { printf "${_C_GREEN}[%s]${_C_RESET} %s\n" "${0##*/}" "${*}"; }
-log_warn() { printf "${_C_YELLOW}[%s] WARNING:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2; }
-log_error() { printf "${_C_RED}[%s] ERROR:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2; }
+log_info() {
+    printf "${_C_GREEN}[%s]${_C_RESET} %s\n" "${0##*/}" "${*}"
+}
+log_warn() {
+    printf "${_C_YELLOW}[%s] WARNING:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2
+}
+log_error() {
+    printf "${_C_RED}[%s] ERROR:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2
+}
 log_debug() {
     if (( ${DEBUG:-${FLUFFY_DEBUG:-0}} )); then
         printf "${_C_GRAY}[%s] DEBUG:${_C_RESET} %s\n" "${0##*/}" "${*}"
@@ -87,8 +93,10 @@ check_required_commands() {
         fi
     done
 
-    if (( ${#missing_commands[@]} > 0)); then
-        log_error "Missing required commands:$(printf " %s" "${missing_commands[@]}")"
+    if (( ${#missing_commands[@]} > 0 )); then
+        local missing_str
+        missing_str="$(printf " %s" "${missing_commands[@]}")"
+        log_error "Missing required commands:${missing_str}"
         exit 1
     fi
 }
@@ -262,8 +270,9 @@ trap managed_cleanup_all "EXIT"
 
 # === Ebuild Repositories ===
 
+_repo_entries=()
 load_ebuild_repositories() {
-    if [[ -v repo_entries ]]; then
+    if [[ -v _ebuild_repositories_loaded ]]; then
         return
     fi
 
@@ -271,8 +280,10 @@ load_ebuild_repositories() {
     while IFS= read -r repo_entry; do
         if [[ -z "${repo_entry}" ]]; then continue; fi
 
-        repo_entries+=("${repo_entry}")
+        _repo_entries+=("${repo_entry}")
     done <<< "${REPOS}"
+
+    readonly _ebuild_repositories_loaded=1
 }
 
 download_ebuild_repositories() {
@@ -287,7 +298,7 @@ download_ebuild_repositories() {
 
     load_ebuild_repositories
 
-    for repo_entry in "${repo_entries[@]}"; do
+    for repo_entry in "${_repo_entries[@]}"; do
         local repo_name repo_url
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
@@ -335,7 +346,7 @@ configure_ebuild_repositories() {
     local repos_conf_dir="${target_root}/etc/portage/repos.conf"
     create_directory "${repos_conf_dir}"
 
-    for repo_entry in "${repo_entries[@]}"; do
+    for repo_entry in "${_repo_entries[@]}"; do
         local repo_name
         local repo_url
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
@@ -364,7 +375,7 @@ mount_repos() {
     local repos_dir="${target_root}/var/db/repos"
     create_directory "${repos_dir}"
 
-    for repo_entry in "${repo_entries[@]}"; do
+    for repo_entry in "${_repo_entries[@]}"; do
         local repo_name
         local repo_url
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
@@ -408,7 +419,7 @@ import_bundled_keys() {
 }
 
 import_public_keys() {
-    if [[ -v public_keys_imported ]]; then
+    if [[ -v _public_keys_imported ]]; then
         return
     fi
 
@@ -430,7 +441,7 @@ import_public_keys() {
             gpg --batch --import-ownertrust --quiet
     fi
 
-    readonly public_keys_imported=1
+    readonly _public_keys_imported=1
 }
 
 # === Portage Configuration ===
@@ -457,7 +468,8 @@ configure_portage_profile() {
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
-    local relative_repo_profile_dir="../../var/db/repos/${repo}/profiles/${repo_profile}"
+    local relative_repo_profile_dir=\
+"../../var/db/repos/${repo}/profiles/${repo_profile}"
     create_symbolic_link "${relative_repo_profile_dir}" \
         "${portage_conf_profile_dir}"
 }
@@ -484,7 +496,7 @@ configure_portage() {
             log_warn "getuto command not found on host, skipping..."
         fi
     else
-        chroot_run "${target_root}" "getuto"
+        chroot_run "${target_root}" 'getuto'
     fi
 
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
@@ -493,10 +505,10 @@ configure_portage() {
     if [[ -n "${SIGNING_KEY:-}" ]] && \
         declare -F import_signing_key > /dev/null; then
         import_signing_key
-        gpg --batch --export "${signing_key_fingerprint}" | \
+        gpg --batch --export "${_signing_key_fingerprint}" | \
             gpg --batch --homedir "${portage_gnupg_dir}" --import
 
-        printf "%s\n" "${signing_key_fingerprint}:6:" | \
+        printf "%s\n" "${_signing_key_fingerprint}:6:" | \
             gpg --batch --homedir "${portage_gnupg_dir}" \
             --import-ownertrust --quiet
     else
@@ -520,8 +532,9 @@ configure_portage() {
         "${target_root}/etc/kernel/install.d/05-check-chroot.install"
 }
 
+_binpkg_repo_entries=()
 load_binpkg_repositories() {
-    if [[ -v binpkg_repo_entries ]]; then
+    if [[ -v _binpkg_repositories_loaded ]]; then
         return
     fi
 
@@ -529,8 +542,10 @@ load_binpkg_repositories() {
     while IFS= read -r repo_entry; do
         if [[ -z "${repo_entry}" ]]; then continue; fi
 
-        binpkg_repo_entries+=("${repo_entry}")
+        _binpkg_repo_entries+=("${repo_entry}")
     done <<< "${BINPKG_REPOS}"
+
+    readonly _binpkg_repositories_loaded=1
 }
 
 configure_portage_binary_packages() {
@@ -548,7 +563,7 @@ configure_portage_binary_packages() {
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local repo_entry
-    for repo_entry in "${binpkg_repo_entries[@]}"; do
+    for repo_entry in "${_binpkg_repo_entries[@]}"; do
         local repo_name repo_url
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
@@ -610,7 +625,8 @@ kill_chroot_processes() {
     local p
     local root_link
     for p in /proc/[0-9]*; do
-        if [[ -d "${p}" ]] && root_link="$(readlink "${p}/root" 2> /dev/null)"; then
+        if [[ -d "${p}" ]] && \
+            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
             if [[ "${root_link}" == "${target_root}" ]]; then
                 log_warn "Killing lingering chroot process ${p##*/}"
                 kill -9 "${p##*/}" 2> /dev/null || true

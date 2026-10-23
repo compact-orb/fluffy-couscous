@@ -8,7 +8,8 @@ if (( EUID != 0 )); then
 fi
 
 if (( $# < 3 )); then
-    printf "%s\n" "Usage: $0 <PROFILE> <INSTALL_DRIVE> <SWAP_SIZE_GIB> [ENCRYPT]" >&2
+    printf "%s\n" \
+        "Usage: $0 <PROFILE> <INSTALL_DRIVE> <SWAP_SIZE_GIB> [ENCRYPT]" >&2
     exit 1
 fi
 
@@ -63,11 +64,12 @@ readonly SWAP_SIZE_GIB="${3}"
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
 readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid"
-readonly ROOT_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async"
-readonly HOME_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
-readonly VAR_LOG_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid,noexec"
-readonly VAR_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid,noexec"
-readonly PORTAGE_TMP_MOUNT_OPTIONS="defaults,noatime,compress-force=zstd:3,discard=async,nodev,nosuid"
+readonly BTRFS_BASE_OPTS="defaults,noatime,compress-force=zstd:3,discard=async"
+readonly ROOT_MOUNT_OPTIONS="${BTRFS_BASE_OPTS}"
+readonly HOME_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
+readonly VAR_LOG_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
+readonly VAR_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
+readonly PORTAGE_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
 readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
 
 # === Prepare Drive ===
@@ -223,7 +225,8 @@ readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset \
     "${INSTALL_MOUNT_DIR}/swap/swapfile")"
 log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
 
-# Bind mount /var/tmp/portage and /var/cache to install drive to avoid issues with space
+# Bind mount /var/tmp/portage and /var/cache to install drive to avoid
+# issues with space
 create_directory "/var/tmp/portage"
 managed_mount "_active_install_mounts" --bind \
     "${INSTALL_MOUNT_DIR}/var/tmp/portage" "/var/tmp/portage"
@@ -261,7 +264,7 @@ USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
     sys-apps/baselayout
 
 IFS=" " read -r -a buildpkgs <<< "$("${WORK_DIR}/bin/build.py")"
-emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
+emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
     --root="${INSTALL_MOUNT_DIR}" "${buildpkgs[@]}"
 unset buildpkgs
 locale-gen --prefix "${INSTALL_MOUNT_DIR}"
@@ -303,10 +306,10 @@ install_packages=(
     "sys-kernel/linux-firmware"
 )
 
-chroot_run "${INSTALL_MOUNT_DIR}" "
-    emerge --emptytree --jobs=\"\$(nproc)\" @system ${install_packages[*]}
+chroot_run "${INSTALL_MOUNT_DIR}" '
+    emerge --emptytree --jobs="$(nproc)" @system '"${install_packages[*]}"'
     emerge --depclean
-    "
+    '
 
 log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
 fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"

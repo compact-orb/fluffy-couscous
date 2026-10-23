@@ -46,7 +46,7 @@ else
     configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
 
     chroot_run "${SEED_DIR}" \
-        'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update "@world"'
+        'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update @world'
 fi
 
 # === Bootstrapping Stage ===
@@ -59,14 +59,14 @@ managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
 
 chroot_run "${SEED_DIR}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
-    "sys-apps/baselayout"
+        sys-apps/baselayout
     '
 
 copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
 chroot_run "${SEED_DIR}" '
     buildpkgs=$(/tmp/build.py)
-    emerge --implicit-system-deps="n" --jobs="$(nproc)" --oneshot \
-    --root="/tmp/stage" ${buildpkgs}
+    emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
+        --root="/tmp/stage" ${buildpkgs}
     locale-gen --prefix "/tmp/stage"
     '
 

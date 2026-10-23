@@ -27,12 +27,32 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: ./.github/actions/install-dependencies
+      # TODO: Cache and dynamically find the latest version
+      - name: Install Dependencies
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          aria2c --dir="/tmp" \
+            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
+          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
+            --directory="/tmp"
+          sudo mv /tmp/storageto "/usr/local/bin/storageto"
+          sudo chown root:root "/usr/local/bin/storageto"
+          rm "/tmp/storageto-linux-amd64.tar.gz"
 
       # TODO: Specify profile via env and run each in parallel
-      - uses: ./.github/actions/run-script
-        with:
-          sudo-preserve-env: ${{ env.SUDO_PRESERVE_ENV }}
-          script: >-
-            bin/update.sh
+      - name: Run update.sh
+        run: |
+          # Workaround for stripping carriage return characters from GitHub
+          # Actions environment variables set via the web interface.
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          # Workaround for missing `/run/user/0`.
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
             "automatic-journey:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
