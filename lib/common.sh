@@ -301,7 +301,8 @@ download_ebuild_repositories() {
             log_info "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
-        log_info "Verifying latest commit signature for ${repo_name} in ${repo_dir}"
+        log_info "Verifying latest commit signature for ${repo_name}" \
+            "in ${repo_dir}"
         git -C "${repo_dir}" verify-commit HEAD
     done
 
@@ -489,7 +490,8 @@ configure_portage() {
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
     create_directory "${portage_gnupg_dir}"
 
-    if [[ -n "${SIGNING_KEY:-}" ]] && declare -F import_signing_key >/dev/null; then
+    if [[ -n "${SIGNING_KEY:-}" ]] && \
+        declare -F import_signing_key >/dev/null; then
         import_signing_key
         gpg --batch --export "${signing_key_fingerprint}" | \
             gpg --batch --homedir "${portage_gnupg_dir}" --import
@@ -499,14 +501,18 @@ configure_portage() {
             --import-ownertrust --quiet
     else
         if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
-            gpg --batch --homedir "${portage_gnupg_dir}" --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
-            gpg --batch --homedir "${portage_gnupg_dir}" --list-keys --with-colons 2>/dev/null | \
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+                --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+                --list-keys --with-colons 2>/dev/null | \
                 awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
-                gpg --batch --homedir "${portage_gnupg_dir}" --import-ownertrust --quiet
+                gpg --batch --homedir "${portage_gnupg_dir}" \
+                    --import-ownertrust --quiet
         fi
     fi
 
-    gpg --batch --check-trustdb --homedir "${portage_gnupg_dir}" 2>/dev/null || true
+    gpg --batch --check-trustdb \
+        --homedir "${portage_gnupg_dir}" 2>/dev/null || true
 
     # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"

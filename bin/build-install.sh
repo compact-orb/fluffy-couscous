@@ -138,7 +138,9 @@ for dir in "bin" "lib" "keys" "portage"; do
 done
 
 chmod -R a+rx "${INSTALLER_TARGET_DIR}/bin"
-chmod -R a+rX "${INSTALLER_TARGET_DIR}/lib" "${INSTALLER_TARGET_DIR}/keys" "${INSTALLER_TARGET_DIR}/portage"
+chmod -R a+rX "${INSTALLER_TARGET_DIR}/lib" \
+    "${INSTALLER_TARGET_DIR}/keys" \
+    "${INSTALLER_TARGET_DIR}/portage"
 
 # Create symlink so user can run install.sh directly from PATH
 create_directory "${STAGE_DIR}/usr/local/bin"

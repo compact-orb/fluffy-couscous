@@ -14,7 +14,8 @@ fi
 
 # Required to avoid mounting relating issues
 if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
-    exec unshare --mount --propagation private env _INSTALL_UNSHARED=1 "$0" "${@}"
+    exec unshare --mount --propagation private \
+        env _INSTALL_UNSHARED=1 "$0" "${@}"
 fi
 
 # === CLI Arguments & Setup ===
@@ -48,7 +49,8 @@ if [[ "${ENCRYPT}" == "true" ]]; then
     )
 fi
 
-source "$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
 
 check_required_commands
 
@@ -322,7 +324,7 @@ EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file
 
-# Clean up installer-specific Portage configuration and establish profile symlink
+# Clean up installer Portage configuration and establish profile symlink
 remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
