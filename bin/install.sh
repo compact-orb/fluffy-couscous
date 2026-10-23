@@ -140,10 +140,6 @@ readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" \
     "${ROOT_TARGET_DEV}")"
 readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" \
     "${ROOT_PARTITION}")"
-if (( ENCRYPT )); then
-    readonly LUKS_UUID="$(blkid --match-tag "UUID" --output "value" \
-        "${ROOT_PARTITION}")"
-fi
 
 btrfs_tmp_dir="$(mktemp --directory)"
 mount --types "btrfs" "${ROOT_TARGET_DEV}" "${btrfs_tmp_dir}"
@@ -284,15 +280,8 @@ configure_ebuild_repositories "${INSTALL_MOUNT_DIR}"
 configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
-declare cmdline
-cmdline="root=UUID=${ROOT_UUID} rootflags=subvol=@"
-if (( ENCRYPT )); then
-    cmdline="rd.luks.uuid=${LUKS_UUID} ${cmdline}"
-fi
-cmdline+=" resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET}"
-cmdline+=" rw console=tty0 console=ttyS0,115200"
-create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" "${cmdline}"
-unset cmdline
+create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
+    "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw console=tty0 console=ttyS0,115200"
 
 install_packages=(
     "app-admin/ansible"
@@ -311,13 +300,12 @@ install_packages=(
     "sys-kernel/linux-firmware"
 )
 
-declare install_packages_str
-printf -v install_packages_str "%s " "${install_packages[@]}"
+IFS=" "
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    emerge --emptytree --jobs="$(nproc)" @system '"${install_packages_str}"'
+    emerge --emptytree --jobs="$(nproc)" @system '"${install_packages[*]}"'
     emerge --depclean
     '
-unset install_packages_str
+IFS=$'\n\t'
 
 log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
 fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
@@ -349,10 +337,7 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     systemd-machine-id-setup
     systemctl preset-all
     bootctl --no-variables install
-    ansible-pull --checkout="main" \
-        --url="'"${ANSIBLE_PULL_URL}"'" \
-        --inventory="localhost," \
-        --limit="localhost"
+    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     '
 
 # === Clean Up ===
