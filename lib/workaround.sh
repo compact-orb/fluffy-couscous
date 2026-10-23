@@ -1,7 +1,7 @@
 # This file is sourced by bootstrap.sh — do not execute directly.
 if [[ -z "${SEED_DIR:-}" ]] || [[ -z "${PROFILE:-}" ]]; then
     log_error "workaround.sh must be sourced, and requires SEED_DIR and PROFILE to be set." 
-    return 1 2>/dev/null || exit 1
+    return 1 2> /dev/null || exit 1
 fi
 
 # Workarounds for preparing a non-LLVM seed for building a LLVM stage

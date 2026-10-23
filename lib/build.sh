@@ -49,17 +49,18 @@ upload_to_storageto() {
         token_args+=("--no-token")
     fi
 
+    local -a env_cmd=()
     if [[ -n "${temp_config_dir}" ]]; then
-        XDG_CONFIG_HOME="${temp_config_dir}" storageto upload \
-            --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
-            sed --expression='s/.*\r//' --expression='/%/d' \
-                --expression='/^[[:space:]]*$/d'
+        env_cmd=(env XDG_CONFIG_HOME="${temp_config_dir}")
+    fi
+
+    "${env_cmd[@]}" storageto upload \
+        --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
+        sed --expression='s/.*\r//' --expression='/%/d' \
+            --expression='/^[[:space:]]*$/d'
+
+    if [[ -n "${temp_config_dir}" ]]; then
         force_remove "${temp_config_dir}"
-    else
-        storageto upload \
-            --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
-            sed --expression='s/.*\r//' --expression='/%/d' \
-                --expression='/^[[:space:]]*$/d'
     fi
 }
 
@@ -77,7 +78,7 @@ import_signing_key() {
 
     gpg --import --quiet <<< "${SIGNING_KEY}"
 
-    echo "${signing_key_fingerprint}:6:" | \
+    printf "%s\n" "${signing_key_fingerprint}:6:" | \
         gpg --batch --import-ownertrust --quiet
 }
 
@@ -89,12 +90,12 @@ install_portage_gpg_key() {
 
     local portage_gnupg_signing_dir="${target_root}${PORTAGE_GPG_DIR}"
     create_directory "${portage_gnupg_signing_dir}"
-    chmod "0700" "${portage_gnupg_signing_dir}"
+    chmod 0700 "${portage_gnupg_signing_dir}"
 
     gpg --batch --export-secret-keys "${signing_key_fingerprint}" | \
         gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
 
-    echo "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
+    printf "%s\n" "BINPKG_GPG_SIGNING_KEY=\"${signing_key_fingerprint}\"" \
         >> "${target_root}/etc/portage/make.conf"
 }
 
@@ -109,13 +110,13 @@ install_secureboot_keys() {
 
     local secureboot_dir="${target_root}${PORTAGE_SECUREBOOT_DIR}"
     create_directory "${secureboot_dir}"
-    chmod "0700" "${secureboot_dir}"
+    chmod 0700 "${secureboot_dir}"
 
     create_file "${secureboot_dir}/db.key" "${SECUREBOOT_KEY}"
-    chmod "0600" "${secureboot_dir}/db.key"
+    chmod 0600 "${secureboot_dir}/db.key"
 
     create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
-    chmod "0644" "${secureboot_dir}/db.pem"
+    chmod 0644 "${secureboot_dir}/db.pem"
 }
 
 # === Stage Downloading and Extraction ===

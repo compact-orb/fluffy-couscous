@@ -3,12 +3,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    echo "You must be root to run this script." >&2
+    printf "%s\n" "You must be root to run this script." >&2
     exit 1
 fi
 
 if (( $# < 3 )); then
-    echo "Usage: $0 <PROFILE> <INSTALL_DRIVE> <SWAP_SIZE_GIB> [ENCRYPT]" >&2
+    printf "%s\n" "Usage: $0 <PROFILE> <INSTALL_DRIVE> <SWAP_SIZE_GIB> [ENCRYPT]" >&2
     exit 1
 fi
 
@@ -49,6 +49,9 @@ if [[ "${ENCRYPT}" == "true" ]]; then
     )
 fi
 
+# Inner realpath resolves the symlink (/usr/local/bin/install.sh ->
+# /opt/fluffy-couscous/bin/install.sh) before dirname, so ../lib/ resolves
+# relative to the real script location.
 source "$(realpath \
     "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
 

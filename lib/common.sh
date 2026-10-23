@@ -26,7 +26,7 @@ required_commands+=(
 readonly _COMMON_SH_INCLUDED=1
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 env_file="${WORK_DIR}/.env"
-if [[ -f "$env_file" ]]; then
+if [[ -f "${env_file}" ]]; then
     # Preserve environment variables already set before sourcing .env
     declare -A _preserved_env=()
     while IFS= read -r _var_name; do
@@ -35,7 +35,7 @@ if [[ -f "$env_file" ]]; then
         fi
     done < <(compgen -e)
 
-    source "$env_file"
+    source "${env_file}"
 
     for _var_name in "${!_preserved_env[@]}"; do
         printf -v "${_var_name}" '%s' "${_preserved_env[${_var_name}]}"
@@ -43,6 +43,7 @@ if [[ -f "$env_file" ]]; then
     done
     unset _preserved_env _var_name
 fi
+unset env_file
 readonly BUILD_DIR="${WORK_DIR}/build"
 readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
 readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-"http://distfiles.gentoo.org"}"
@@ -76,10 +77,10 @@ check_required_commands() {
     local missing_commands=()
     local -A seen=()
     for command in "${required_commands[@]}"; do
-        if [[ -v seen["$command"] ]]; then
+        if [[ -v seen["${command}"] ]]; then
             continue
         fi
-        seen["$command"]=1
+        seen["${command}"]=1
 
         if ! command -v "${command}" > /dev/null 2>&1; then
             missing_commands+=("${command}")
@@ -152,7 +153,7 @@ parse_profile() {
         repo_profile="${repo}"
         repo="gentoo"
     fi
-    echo "${repo} ${repo_profile}"
+    printf "%s %s\n" "${repo}" "${repo_profile}"
 }
 
 # === Mount Management ===
@@ -274,10 +275,9 @@ load_ebuild_repositories() {
     done <<< "${REPOS}"
 }
 
-_ebuild_repositories_downloaded=0
 download_ebuild_repositories() {
-    if (( _ebuild_repositories_downloaded == 1 )); then
-        return 0
+    if [[ -v _ebuild_repositories_downloaded ]]; then
+        return
     fi
 
     log_info "Downloading ebuild repositories"
@@ -306,7 +306,7 @@ download_ebuild_repositories() {
         git -C "${repo_dir}" verify-commit HEAD
     done
 
-    _ebuild_repositories_downloaded=1
+    readonly _ebuild_repositories_downloaded=1
 }
 
 normalize_target_root() {
@@ -388,7 +388,7 @@ unmount_repos() {
 # === GPG and Security ===
 
 import_bundled_keys() {
-    if (( ${_BUNDLED_KEYS_IMPORTED:-0} )); then
+    if [[ -v _BUNDLED_KEYS_IMPORTED ]]; then
         return
     fi
 
@@ -478,7 +478,7 @@ configure_portage() {
     configure_ebuild_repositories "${target_root}"
 
     if [[ -z "${target_root}" ]]; then
-        if command -v getuto >/dev/null 2>&1; then
+        if command -v getuto > /dev/null 2>&1; then
             getuto
         else
             log_warn "getuto command not found on host, skipping..."
@@ -491,12 +491,12 @@ configure_portage() {
     create_directory "${portage_gnupg_dir}"
 
     if [[ -n "${SIGNING_KEY:-}" ]] && \
-        declare -F import_signing_key >/dev/null; then
+        declare -F import_signing_key > /dev/null; then
         import_signing_key
         gpg --batch --export "${signing_key_fingerprint}" | \
             gpg --batch --homedir "${portage_gnupg_dir}" --import
 
-        echo "${signing_key_fingerprint}:6:" | \
+        printf "%s\n" "${signing_key_fingerprint}:6:" | \
             gpg --batch --homedir "${portage_gnupg_dir}" \
             --import-ownertrust --quiet
     else
@@ -504,7 +504,7 @@ configure_portage() {
             gpg --batch --homedir "${portage_gnupg_dir}" \
                 --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
             gpg --batch --homedir "${portage_gnupg_dir}" \
-                --list-keys --with-colons 2>/dev/null | \
+                --list-keys --with-colons 2> /dev/null | \
                 awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
                 gpg --batch --homedir "${portage_gnupg_dir}" \
                     --import-ownertrust --quiet
@@ -512,7 +512,7 @@ configure_portage() {
     fi
 
     gpg --batch --check-trustdb \
-        --homedir "${portage_gnupg_dir}" 2>/dev/null || true
+        --homedir "${portage_gnupg_dir}" 2> /dev/null || true
 
     # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"
@@ -550,7 +550,7 @@ configure_portage_binary_packages() {
     local repo_entry
     for repo_entry in "${binpkg_repo_entries[@]}"; do
         local repo_name repo_url
-        IFS=" " read -r repo_name repo_url < <(echo "${repo_entry}")
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local binpkg_repo_conf_file="${repo_dir}/${repo_name}.conf"
         log_debug "Creating ${binpkg_repo_conf_file}"
@@ -610,10 +610,10 @@ kill_chroot_processes() {
     local p
     local root_link
     for p in /proc/[0-9]*; do
-        if [[ -d "$p" ]] && root_link="$(readlink "$p/root" 2>/dev/null)"; then
-            if [[ "$root_link" == "$target_root" ]]; then
+        if [[ -d "${p}" ]] && root_link="$(readlink "${p}/root" 2> /dev/null)"; then
+            if [[ "${root_link}" == "${target_root}" ]]; then
                 log_warn "Killing lingering chroot process ${p##*/}"
-                kill -9 "${p##*/}" 2>/dev/null || true
+                kill -9 "${p##*/}" 2> /dev/null || true
             fi
         fi
     done

@@ -3,12 +3,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    echo "You must be root to run this script." >&2
+    printf "%s\n" "You must be root to run this script." >&2
     exit 1
 fi
 
 if (( $# < 1 )); then
-    echo "Usage: $0 <PROFILE>"
+    printf "%s\n" "Usage: $0 <PROFILE>" >&2
     exit 1
 fi
 

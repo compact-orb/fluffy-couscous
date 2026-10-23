@@ -3,12 +3,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    echo "You must be root to run this script." >&2
+    printf "%s\n" "You must be root to run this script." >&2
     exit 1
 fi
 
 if (( $# < 1 )); then
-    echo "Usage: $0 <PROFILE>"
+    printf "%s\n" "Usage: $0 <PROFILE>" >&2
     exit 1
 fi
 
@@ -148,7 +148,7 @@ create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
     "${STAGE_DIR}/usr/local/bin/install.sh"
 
 # Write sanitized, public configuration for the installer
-cat << EOF > "${INSTALLER_TARGET_DIR}/.env"
+IFS= read -d "" -r installer_env << EOF || true
 GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
 REPOS="${REPOS}"
 BINPKG_REPOS="${BINPKG_REPOS}"
@@ -156,6 +156,8 @@ ANSIBLE_PULL_URL="${ANSIBLE_PULL_URL}"
 BINPKG_PUBLIC_KEY="${BINPKG_PUBLIC_KEY:-}"
 REPO_PUBLIC_KEYS="${REPO_PUBLIC_KEYS:-}"
 EOF
+printf "%s" "${installer_env}" > "${INSTALLER_TARGET_DIR}/.env"
+unset installer_env
 chmod 0644 "${INSTALLER_TARGET_DIR}/.env"
 
 # === Build SquashFS Image ===

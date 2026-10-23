@@ -3,12 +3,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    echo "You must be root to run this script." >&2
+    printf "%s\n" "You must be root to run this script." >&2
     exit 1
 fi
 
 if (( $# < 3 )); then
-    echo "Usage: $0 <SEED_ARCH> <SEED_NAME> <PROFILE> [workaround]"
+    printf "%s\n" "Usage: $0 <SEED_ARCH> <SEED_NAME> <PROFILE> [workaround]" >&2
     exit 1
 fi
 
@@ -54,8 +54,8 @@ fi
 create_directory "${STAGE_DIR}"
 create_directory "${SEED_STAGE_BIND_DIR}"
 _active_bootstrap_mounts=()
-managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" "\
-    ${SEED_STAGE_BIND_DIR}"
+managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
+    "${SEED_STAGE_BIND_DIR}"
 
 chroot_run "${SEED_DIR}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \

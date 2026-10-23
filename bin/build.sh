@@ -3,13 +3,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 if (( EUID != 0 )); then
-    echo "You must be root to run this script." >&2
+    printf "%s\n" "You must be root to run this script." >&2
     exit 1
 fi
 
-
 if (( $# < 3 )); then
-    echo "Usage: $0 <PROFILE> <PACKAGES> <USEPKG_EXCLUDE>"
+    printf "%s\n" "Usage: $0 <PROFILE> <PACKAGES> <USEPKG_EXCLUDE>" >&2
     exit 1
 fi
 
