@@ -69,7 +69,8 @@ chroot_run "${STAGE_DIR}" '
         sys-kernel/linux-firmware
     emerge --depclean
     passwd --delete "root"
-    systemctl enable NetworkManager.service systemd-resolved.service
+    systemctl enable NetworkManager.service NetworkManager-wait-online.service \
+        systemd-resolved.service
     /usr/lib/systemd/systemd-update-done
     '
 
