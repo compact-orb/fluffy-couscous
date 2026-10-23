@@ -857,9 +857,11 @@ mount_chroot_filesystems() {
     local target_root="${1}"
     log_info "Mounting chroot filesystems for ${target_root}"
 
-    create_empty_file "${target_root}/etc/resolv.conf"
-    managed_mount "_active_chroot_mounts" --bind --options "ro" \
-        "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
+    create_directory "${target_root}/etc"
+    if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
+        cp --dereference --force "/etc/resolv.conf" \
+            "${target_root}/etc/resolv.conf"
+    fi
 
     local target_proc_dir="${target_root}/proc"
     create_directory "${target_proc_dir}"

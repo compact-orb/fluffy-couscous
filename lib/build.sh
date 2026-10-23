@@ -135,12 +135,14 @@ fetch_seed_stage() {
 
     create_directory "${output_dir}"
 
+    local autobuild_url="${GENTOO_MIRROR_URL}/releases/${architecture}"
+    autobuild_url+="/autobuilds/latest-${name}.txt"
     local seed_path
-    seed_path=$(curl --silent \
-        "${GENTOO_MIRROR_URL}/releases/${architecture}/autobuilds/latest-${name}.txt" |
+    seed_path=$(curl --silent "${autobuild_url}" |
         gpg --decrypt --quiet | awk '!/^#/ && NF {print $1; exit}')
 
-    local latest_autobuild_path="${GENTOO_MIRROR_URL}/releases/${architecture}/autobuilds/${seed_path}"
+    local latest_autobuild_path="${GENTOO_MIRROR_URL}/releases/${architecture}"
+    latest_autobuild_path+="/autobuilds/${seed_path}"
 
     local download_dir
     download_dir="$(mktemp --directory)"
