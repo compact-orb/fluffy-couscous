@@ -127,7 +127,7 @@ fetch_seed_stage() {
 
     log_info "Downloading and extracting latest ${name} to ${output_dir}"
 
-    import_gentoo_release_keys
+    import_bundled_keys
 
     create_directory "${output_dir}"
 

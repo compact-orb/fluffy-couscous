@@ -282,7 +282,7 @@ download_ebuild_repositories() {
 
     log_info "Downloading ebuild repositories"
 
-    import_gentoo_release_keys
+    import_bundled_keys
     import_public_keys
 
     load_ebuild_repositories
@@ -404,10 +404,6 @@ import_bundled_keys() {
     done
 
     readonly _BUNDLED_KEYS_IMPORTED=1
-}
-
-import_gentoo_release_keys() {
-    import_bundled_keys
 }
 
 import_public_keys() {
