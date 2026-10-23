@@ -385,21 +385,15 @@ configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 unmount_repos
 
-create_directory "${INSTALL_MOUNT_DIR}/etc/sudoers.d"
-create_file "${INSTALL_MOUNT_DIR}/etc/sudoers.d/wheel" \
-    "%wheel ALL=(ALL:ALL) ALL"
-chmod 0440 "${INSTALL_MOUNT_DIR}/etc/sudoers.d/wheel"
-
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    passwd --lock "root"
-    useradd --create-home --user-group --groups wheel \
-        --shell /bin/bash "'"${USERNAME}"'"
-    printf "%s:%s\n" "'"${USERNAME}"'" "'"${PASSWORD}"'" | \
-        chpasswd --crypt-method SHA512 --sha-rounds 50000
     systemd-machine-id-setup
     systemctl preset-all
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
+    passwd --lock "root"
+    useradd --create-home --user-group --groups wheel \
+        --shell /bin/bash "'"${USERNAME}"'"
+    printf "%s\n" "'"${PASSWORD}"'" | passwd --stdin "'"${USERNAME}"'"
     '
 unset USERNAME PASSWORD
 
@@ -408,3 +402,5 @@ unset USERNAME PASSWORD
 managed_unmount_all "_active_install_mounts"
 
 managed_cryptsetup close "root"
+
+log_info "Installation finished successfully."
