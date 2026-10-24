@@ -705,6 +705,7 @@ configure_portage() {
 
     gpg --batch --check-trustdb \
         --homedir "${portage_gnupg_dir}" 2> /dev/null || true
+    chmod ugo+r "${portage_gnupg_dir}/trustdb.gpg" 2> /dev/null || true
 
     # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"
