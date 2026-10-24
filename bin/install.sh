@@ -101,7 +101,7 @@ fi
 
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
-readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid"
+readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,umask=0077"
 readonly BTRFS_BASE_OPTS="defaults,noatime,compress-force=zstd:3,discard=async"
 readonly ROOT_MOUNT_OPTIONS="${BTRFS_BASE_OPTS}"
 readonly HOME_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
@@ -268,10 +268,6 @@ managed_mount "_active_install_mounts" \
 btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
     "${INSTALL_MOUNT_DIR}/swap/swapfile"
 
-readonly RESUME_OFFSET="$(btrfs inspect-internal map-swapfile --resume-offset \
-    "${INSTALL_MOUNT_DIR}/swap/swapfile")"
-log_info "Btrfs swapfile hibernation resume offset: ${RESUME_OFFSET}"
-
 # Bind mount /var/tmp/portage and /var/cache to install drive to avoid
 # issues with space
 create_directory "/var/tmp/portage"
@@ -334,7 +330,7 @@ configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
-    "resume=UUID=${ROOT_UUID} resume_offset=${RESUME_OFFSET} rw console=tty0 console=ttyS0,115200"
+    "rw console=tty0 console=ttyS0,115200"
 
 install_packages=(
     "app-admin/ansible"
