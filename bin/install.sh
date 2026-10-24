@@ -7,6 +7,7 @@ IFS=$'\n\t'
 required_commands=(
     "blkid"
     "btrfs"
+    "chown"
     "dirname"
     "emerge"
     "getuto"
@@ -380,6 +381,8 @@ remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 unmount_repos
+
+chown -R portage:portage "${INSTALL_MOUNT_DIR}/var/db/repos"
 
 chroot_run "${INSTALL_MOUNT_DIR}" '
     systemd-machine-id-setup
