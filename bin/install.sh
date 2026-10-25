@@ -111,6 +111,8 @@ readonly VAR_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
 readonly PORTAGE_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
 readonly VAR_CACHE_BINPKGS_MOUNT_OPTIONS=\
 "${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
+readonly VAR_CACHE_BINHOST_MOUNT_OPTIONS=\
+"${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
 readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
 
 # === Prepare Drive ===
@@ -210,6 +212,8 @@ btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp"
 btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp_portage"
 btrfs subvolume create "${btrfs_tmp_dir}/@var_cache_binpkgs"
 chattr +C "${btrfs_tmp_dir}/@var_cache_binpkgs"
+btrfs subvolume create "${btrfs_tmp_dir}/@var_cache_binhost"
+chattr +C "${btrfs_tmp_dir}/@var_cache_binhost"
 btrfs subvolume create "${btrfs_tmp_dir}/@swap"
 
 root_subvol_id="$(btrfs subvolume list "${btrfs_tmp_dir}" | awk \
@@ -276,6 +280,15 @@ managed_mount "_active_install_mounts" \
     "${INSTALL_MOUNT_DIR}/var/cache/binpkgs"
 chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache/binpkgs"
 
+create_directory "${INSTALL_MOUNT_DIR}/var/cache/binhost"
+managed_mount "_active_install_mounts" \
+    --options \
+    "${VAR_CACHE_BINHOST_MOUNT_OPTIONS},subvol=@var_cache_binhost" \
+    --types "btrfs" \
+    "${ROOT_TARGET_DEV}" \
+    "${INSTALL_MOUNT_DIR}/var/cache/binhost"
+chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache/binhost"
+
 create_directory "${INSTALL_MOUNT_DIR}/swap"
 managed_mount "_active_install_mounts" \
     --options "${SWAP_MOUNT_OPTIONS},subvol=@swap" \
@@ -298,6 +311,9 @@ managed_mount "_active_install_mounts" --bind \
 create_directory "/var/cache/binpkgs"
 managed_mount "_active_install_mounts" --bind \
     "${INSTALL_MOUNT_DIR}/var/cache/binpkgs" "/var/cache/binpkgs"
+create_directory "/var/cache/binhost"
+managed_mount "_active_install_mounts" --bind \
+    "${INSTALL_MOUNT_DIR}/var/cache/binhost" "/var/cache/binhost"
 
 # === Configure Host Environment ===
 
@@ -382,6 +398,7 @@ fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
 log_debug "Creating ${fstab_file}"
 portage_opts="${PORTAGE_TMP_MOUNT_OPTIONS},subvol=@var_tmp_portage"
 binpkg_opts="${VAR_CACHE_BINPKGS_MOUNT_OPTIONS},subvol=@var_cache_binpkgs"
+binhost_opts="${VAR_CACHE_BINHOST_MOUNT_OPTIONS},subvol=@var_cache_binhost"
 declare fstab_content
 IFS= read -d "" -r fstab_content << EOF || true
 UUID=${ROOT_UUID} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
@@ -391,13 +408,14 @@ UUID=${ROOT_UUID} /var/log btrfs ${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log 0 0
 UUID=${ROOT_UUID} /var/tmp btrfs ${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp 0 0
 UUID=${ROOT_UUID} /var/tmp/portage btrfs ${portage_opts} 0 0
 UUID=${ROOT_UUID} /var/cache/binpkgs btrfs ${binpkg_opts} 0 0
+UUID=${ROOT_UUID} /var/cache/binhost btrfs ${binhost_opts} 0 0
 UUID=${ROOT_UUID} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
 /swap/swapfile none swap defaults 0 0
 tmpfs /tmp tmpfs defaults,noatime,nodev,nosuid,noexec,mode=1777 0 0
 tmpfs /dev/shm tmpfs defaults,noatime,nodev,nosuid,noexec 0 0
 EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
-unset fstab_content fstab_file portage_opts binpkg_opts
+unset fstab_content fstab_file portage_opts binpkg_opts binhost_opts
 
 # Clean up installer Portage configuration and establish profile symlink
 remove_portage_configuration "${INSTALL_MOUNT_DIR}"

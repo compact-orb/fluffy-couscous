@@ -75,12 +75,6 @@ upload_portage_failure_logs() {
     if [[ -v SEED_DIR && -d "${SEED_DIR}/var/tmp/portage" ]]; then
         search_roots+=("${SEED_DIR}")
     fi
-    if [[ -d "/tmp/stage/var/tmp/portage" ]]; then
-        search_roots+=("/tmp/stage")
-    fi
-    if [[ -d "/var/tmp/portage" ]]; then
-        search_roots+=("")
-    fi
 
     local -a log_files=()
     local root
