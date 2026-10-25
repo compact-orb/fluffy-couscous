@@ -437,8 +437,19 @@ managed_cryptsetup_close_all() {
     _active_crypt_devices=()
 }
 
+_failure_hooks=()
+register_failure_hook() {
+    _failure_hooks+=("${1}")
+}
+
 managed_cleanup_all() {
     local exit_code="${?}"
+    if (( exit_code != 0 )); then
+        local hook
+        for hook in "${_failure_hooks[@]}"; do
+            "${hook}" "${exit_code}" || true
+        done
+    fi
     local i
     for (( i=${#_registered_mount_arrays[@]}-1; i>=0; i-- )); do
         managed_unmount_all "${_registered_mount_arrays[$i]}" || true

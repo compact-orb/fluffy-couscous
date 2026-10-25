@@ -67,6 +67,62 @@ upload_to_storageto() {
     return "${exit_code}"
 }
 
+upload_portage_failure_logs() {
+    local -a search_roots=()
+    if [[ -v STAGE_DIR && -d "${STAGE_DIR}/var/tmp/portage" ]]; then
+        search_roots+=("${STAGE_DIR}")
+    fi
+    if [[ -v SEED_DIR && -d "${SEED_DIR}/var/tmp/portage" ]]; then
+        search_roots+=("${SEED_DIR}")
+    fi
+    if [[ -d "/tmp/stage/var/tmp/portage" ]]; then
+        search_roots+=("/tmp/stage")
+    fi
+    if [[ -d "/var/tmp/portage" ]]; then
+        search_roots+=("")
+    fi
+
+    local -a log_files=()
+    local root
+    for root in "${search_roots[@]}"; do
+        local portage_dir="${root}/var/tmp/portage"
+        if [[ -d "${portage_dir}" ]]; then
+            while IFS= read -r -d '' temp_dir; do
+                log_files+=("${temp_dir}")
+            done < <(find "${portage_dir}" -mindepth 3 -maxdepth 3 \
+                -type d -name "temp" -print0 2>/dev/null)
+        fi
+        if [[ -f "${root}/var/log/emerge.log" ]]; then
+            log_files+=("${root}/var/log/emerge.log")
+        fi
+    done
+
+    if (( ${#log_files[@]} == 0 )); then
+        return 0
+    fi
+
+    if ! command -v storageto >/dev/null 2>&1; then
+        log_warn "storageto not found; skipping failure log upload"
+        return 0
+    fi
+
+    log_warn "Build failed; gathering Portage failure logs for upload..."
+    local archive_name="portage-failure-logs-$(date +%Y%m%d%H%M%S).tar.zst"
+    local archive="/tmp/${archive_name}"
+
+    tar --create --file="${archive}" \
+        --use-compress-program="zstd --long -9 --threads=0" \
+        --directory="/" \
+        "${log_files[@]#/}" 2>/dev/null || true
+
+    if [[ -f "${archive}" && -s "${archive}" ]]; then
+        upload_to_storageto "${archive}"
+        force_remove "${archive}"
+    fi
+}
+
+register_failure_hook upload_portage_failure_logs
+
 # === Signing & Security ===
 
 import_signing_key() {
