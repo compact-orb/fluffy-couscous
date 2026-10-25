@@ -331,7 +331,7 @@ configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
-    "rw console=tty0 console=ttyS0,115200 lsm=landlock,yama,bpf,apparmor"
+    "rw console=tty0 console=ttyS0,115200 lsm=landlock,yama,apparmor,bpf"
 
 install_packages=(
     "app-admin/ansible"

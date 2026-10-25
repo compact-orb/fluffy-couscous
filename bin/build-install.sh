@@ -56,7 +56,7 @@ add_dracutmodules+=" dmsquash-live "'
 create_directory "${STAGE_DIR}/etc/kernel"
 cmdline="root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1"
 cmdline="${cmdline} console=tty0 console=ttyS0,115200"
-cmdline="${cmdline} lsm=landlock,yama,bpf,apparmor"
+cmdline="${cmdline} lsm=landlock,yama,apparmor,bpf"
 create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 
 # === Build Install ===
