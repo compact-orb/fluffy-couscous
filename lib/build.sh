@@ -10,6 +10,7 @@ required_commands+=(
     "aria2c"
     "basename"
     "curl"
+    "date"
     "fusermount3" # Required by rclone mount
     "mktemp"
     "rclone"

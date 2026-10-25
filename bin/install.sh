@@ -7,6 +7,7 @@ IFS=$'\n\t'
 required_commands=(
     "blkid"
     "btrfs"
+    "chattr"
     "chown"
     "dirname"
     "emerge"
