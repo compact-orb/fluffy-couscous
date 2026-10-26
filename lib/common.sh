@@ -673,6 +673,15 @@ configure_portage_profile() {
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
+    local profile_dir=\
+"${target_root}/var/db/repos/${repo}/profiles/${repo_profile}"
+    if [[ -d "${target_root}/var/db/repos/${repo}" && \
+        ! -d "${profile_dir}" ]]; then
+        log_error \
+            "Profile '${repo_profile}' not found in repository '${repo}'"
+        return 1
+    fi
+
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
     local relative_repo_profile_dir=\
 "../../var/db/repos/${repo}/profiles/${repo_profile}"

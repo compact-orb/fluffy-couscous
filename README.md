@@ -43,31 +43,31 @@ All scripts require `root` privileges and support `-h` / `--help` for option det
 sudo ./bin/bootstrap.sh \
   --arch amd64 \
   --name stage3-amd64-systemd \
-  --profile "custom-overlay:amd64/hardened-systemd" \
+  --profile "custom-overlay:amd64/x86-64-v3/base" \
   --workaround
 
 # Or bootstrap using an existing custom stage3 as seed
 sudo ./bin/bootstrap.sh \
-  --profile "custom-overlay:amd64/hardened-systemd" \
+  --profile "custom-overlay:amd64/x86-64-v3/gnome" \
   --seed-stage \
-  "custom-overlay:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
+  "custom-overlay:amd64/x86-64-v3/base"
 
 # Update base system packages and refresh the stage3 archive
-sudo ./bin/update.sh --profile "custom-overlay:amd64/hardened-systemd"
+sudo ./bin/update.sh --profile "custom-overlay:amd64/x86-64-v3/base"
 
 # Build additional binary packages
 sudo ./bin/build.sh \
   --packages "app-admin/ansible sys-kernel/gentoo-kernel" \
-  --profile "custom-overlay:amd64/hardened-systemd"
+  --profile "custom-overlay:amd64/x86-64-v3/base"
 
 # Build live installer ISO
-sudo ./bin/build-install.sh --profile "custom-overlay:amd64/hardened-systemd"
+sudo ./bin/build-install.sh --profile "custom-overlay:amd64/x86-64-v3/base"
 
 # Install target system from booted live media
 sudo install.sh \
   --drive /dev/nvme0n1 \
   --encrypt \
-  --profile "custom-overlay:amd64/hardened-systemd" \
+  --profile "custom-overlay:amd64/x86-64-v3/base" \
   --swap 16
 ```
 
