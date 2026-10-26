@@ -845,8 +845,21 @@ kill_chroot_processes() {
         if [[ -d "${p}" ]] && \
             root_link="$(readlink "${p}/root" 2> /dev/null)"; then
             if [[ "${root_link}" == "${target_root}" ]]; then
-                log_warn "Killing lingering chroot process ${p##*/}"
-                kill -9 "${p##*/}" 2> /dev/null || true
+                local pid="${p##*/}"
+                local exe_link exe_name=""
+                exe_link="$(readlink "${p}/exe" 2> /dev/null)"
+                if [[ -n "${exe_link}" ]]; then
+                    exe_name="$(basename "${exe_link% (deleted)}")"
+                fi
+                if [[ -z "${exe_name}" && -r "${p}/comm" ]]; then
+                    exe_name="$(< "${p}/comm")"
+                fi
+                local proc_info="${pid}"
+                if [[ -n "${exe_name}" ]]; then
+                    proc_info+=" (${exe_name})"
+                fi
+                log_warn "Killing lingering chroot process ${proc_info}"
+                kill -9 "${pid}" 2> /dev/null || true
             fi
         fi
     done
