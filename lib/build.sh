@@ -325,6 +325,7 @@ publish_stage_archive() {
         --exclude="./root/*" \
         --exclude="./tmp/*" \
         --exclude="./var/cache/*" \
+        --exclude="./var/db/repos/*" \
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
