@@ -133,7 +133,8 @@ import_signing_key() {
     log_info "Importing PGP signing key"
 
     _signing_key_fingerprint=$(gpg --show-keys --with-colons \
-        <<< "${SIGNING_KEY}" | awk --field-separator=":" '/^fpr/ {print $10}')
+        <<< "${SIGNING_KEY}" | \
+        awk --field-separator=":" '/^fpr/ {print $10; exit}')
 
     gpg --import --quiet <<< "${SIGNING_KEY}"
 
