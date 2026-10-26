@@ -673,10 +673,15 @@ configure_portage_profile() {
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
-    local profile_dir=\
-"${target_root}/var/db/repos/${repo}/profiles/${repo_profile}"
-    if [[ -d "${target_root}/var/db/repos/${repo}" && \
-        ! -d "${profile_dir}" ]]; then
+    local repo_dir=""
+    if [[ -d "${target_root}/var/db/repos/${repo}/profiles" ]]; then
+        repo_dir="${target_root}/var/db/repos/${repo}"
+    elif [[ -d "${LOCAL_REPOS_DIR}/${repo}/profiles" ]]; then
+        repo_dir="${LOCAL_REPOS_DIR}/${repo}"
+    fi
+
+    if [[ -n "${repo_dir}" && \
+        ! -d "${repo_dir}/profiles/${repo_profile}" ]]; then
         log_error \
             "Profile '${repo_profile}' not found in repository '${repo}'"
         return 1
