@@ -71,6 +71,22 @@ sudo install.sh \
   --swap 16
 ```
 
+## Downstream Gentoo Mirror (GitHub Actions Only)
+
+To prevent ebuild tree desynchronization between system updates, package builds,
+and installed systems, a controlled downstream fork of `gentoo-mirror/gentoo`
+can be maintained (e.g. `<owner>/gentoo-mirror`).
+
+This repository includes a standalone, GitHub-only workflow (`Sync`, located at
+[`.github/workflows/sync.yml`](.github/workflows/sync.yml)) to fast-forward the
+fork on demand without local dependencies:
+
+- **Trigger**: Manually dispatched (`workflow_dispatch`) via GitHub Actions.
+- **Authentication**: Requires a `SYNC_FORK_PAT` repository secret with write
+  access to the fork (`${{ github.repository_owner }}/gentoo-mirror`).
+- **Operation**: Runs `gh repo sync --force` against `gentoo-mirror/gentoo`
+  (branch `master`).
+
 ## Attribution
 
 - `bin/build.py` is derived from `targets/stage1/build.py` in [Gentoo Catalyst](https://gitweb.gentoo.org/proj/catalyst.git/) (Copyright 1999-2024 Gentoo Authors) and is licensed under `GPL-2.0-or-later`.
