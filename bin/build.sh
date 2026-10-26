@@ -18,9 +18,11 @@ cli_define_option "PACKAGES" "-P|--packages" \
     "Space-separated package atoms" 1
 cli_define_option "USEPKG_EXCLUDE" "-e|--exclude" \
     "Binary packages to exclude" 0 ""
+cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
+    "Prune obsolete binary packages not installed" 0
 
 cli_parse "${@}"
-readonly PROFILE PACKAGES USEPKG_EXCLUDE
+readonly PROFILE PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS
 
 check_root
 check_required_commands
@@ -47,15 +49,21 @@ mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
 # === Build Packages ===
 
-# Emerge gentoolkit first to supply revdep-rebuild.sh, then emerge requested
-# packages. Rebuild reverse dependencies from source (--usepkg=n) to fix
-# broken linkage before cleaning unused dependencies.
+# Emerge gentoolkit first to supply revdep-rebuild.sh and eclean-pkg, then
+# emerge requested packages. Rebuild reverse dependencies from source
+# (--usepkg=n) to fix broken linkage before cleaning unused dependencies.
+# When --clean is requested, prune binary packages not matching installed
+# versions and refresh the binhost index.
 chroot_run "${STAGE_DIR}" '
     emerge --jobs="$(nproc)" app-portage/gentoolkit
     emerge --jobs="$(nproc)" \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" '"${PACKAGES}"'
     revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
     emerge --depclean
+    if (( '"${CLEAN_BINPKGS}"' == 1 )); then
+        eclean-pkg --deep
+        emaint --fix binhost
+    fi
     '
 
 # === Cleanup & Upload ===
