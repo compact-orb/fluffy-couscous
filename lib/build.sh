@@ -28,6 +28,7 @@ s3_rclone() {
     rclone \
         --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
         --s3-endpoint "${S3_ENDPOINT}" \
+        --s3-no-check-bucket \
         --s3-provider "Other" \
         --s3-region "${S3_REGION}" \
         --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
