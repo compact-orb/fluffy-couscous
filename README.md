@@ -85,7 +85,7 @@ fork on demand without local dependencies:
 - **Authentication**: Requires a `SYNC_FORK_PAT` repository secret with write
   access to the fork (`${{ github.repository_owner }}/gentoo-mirror`).
 - **Operation**: Runs `gh repo sync --force` against `gentoo-mirror/gentoo`
-  (branch `master`).
+  (branch `stable`).
 
 ## Attribution
 

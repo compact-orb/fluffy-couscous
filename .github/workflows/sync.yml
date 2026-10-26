@@ -14,5 +14,5 @@ jobs:
         run: |
           gh repo sync "${{ github.repository_owner }}/gentoo-mirror" \
             --source "gentoo-mirror/gentoo" \
-            --branch "master" \
+            --branch "stable" \
             --force
