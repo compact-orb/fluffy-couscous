@@ -107,8 +107,10 @@ upload_portage_failure_logs() {
     fi
 
     log_warn "Build failed; gathering Portage failure logs for upload..."
-    local archive_name="portage-failure-logs-$(date +%Y%m%d%H%M%S).tar.zst"
-    local archive="/tmp/${archive_name}"
+    local archive_dir archive_name archive
+    archive_dir="$(mktemp --directory)"
+    archive_name="portage-failure-logs-$(date +%Y%m%d%H%M%S).tar.zst"
+    archive="${archive_dir}/${archive_name}"
 
     tar --create --file="${archive}" \
         --use-compress-program="zstd --long -9 --threads=0" \
@@ -117,8 +119,9 @@ upload_portage_failure_logs() {
 
     if [[ -f "${archive}" && -s "${archive}" ]]; then
         upload_to_storageto "${archive}"
-        force_remove "${archive}"
     fi
+
+    force_remove "${archive_dir}"
 }
 
 register_failure_hook upload_portage_failure_logs
