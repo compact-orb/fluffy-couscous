@@ -39,12 +39,18 @@ chmod 0600 .env
 All scripts require `root` privileges and support `-h` / `--help` for option details:
 
 ```bash
-# Bootstrap a new profile stage3 and binhost
+# Bootstrap from an official Gentoo seed stage
 sudo ./bin/bootstrap.sh \
   --arch amd64 \
   --name stage3-amd64-systemd \
   --profile "custom-overlay:amd64/hardened-systemd" \
   --workaround
+
+# Or bootstrap using an existing custom stage3 as seed
+sudo ./bin/bootstrap.sh \
+  --profile "custom-overlay:amd64/hardened-systemd" \
+  --seed-stage \
+  "custom-overlay:amd64/llvm-libstdc++-hardened-systemd-optimize-x86-64-v3"
 
 # Update base system packages and refresh the stage3 archive
 sudo ./bin/update.sh --profile "custom-overlay:amd64/hardened-systemd"

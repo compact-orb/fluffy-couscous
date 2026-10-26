@@ -12,15 +12,34 @@ required_commands=(
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 
-cli_define_option "SEED_ARCH" "-a|--arch" "Stage seed architecture" 1
-cli_define_option "SEED_NAME" "-n|--name" "Stage seed tarball name" 1
+cli_define_option "SEED_ARCH" "-a|--arch" "Stage seed architecture" 0 ""
+cli_define_option "SEED_NAME" "-n|--name" "Stage seed tarball name" 0 ""
+cli_define_option "SEED_STAGE" "-s|--seed-stage" \
+    "Custom stage3 profile to use as seed" 0 ""
 cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
 cli_define_flag "WORKAROUND" "-w|--workaround" \
     "Apply bootstrap workaround instead of full rebuild"
 
 cli_parse "${@}"
-readonly SEED_ARCH SEED_NAME PROFILE WORKAROUND
+readonly SEED_ARCH SEED_NAME SEED_STAGE PROFILE WORKAROUND
+
+if [[ -n "${SEED_STAGE}" ]]; then
+    if [[ -n "${SEED_ARCH}" || -n "${SEED_NAME}" ]]; then
+        log_error "--seed-stage cannot be used with --arch or --name."
+        exit 1
+    fi
+    if (( WORKAROUND )); then
+        log_error "--workaround cannot be used with --seed-stage."
+        exit 1
+    fi
+else
+    if [[ -z "${SEED_ARCH}" || -z "${SEED_NAME}" ]]; then
+        log_error "Must specify either --seed-stage" \
+            "or both --arch and --name."
+        exit 1
+    fi
+fi
 
 check_root
 check_required_commands
@@ -31,8 +50,12 @@ readonly SEED_STAGE_BIND_DIR="${SEED_DIR}/tmp/stage"
 
 # === Seed Environment Preparation ===
 
-fetch_seed_stage "${SEED_DIR}" \
-    "${SEED_ARCH}" "${SEED_NAME}"
+if [[ -n "${SEED_STAGE}" ]]; then
+    fetch_project_stage "${SEED_DIR}" "${SEED_STAGE}" "stage3"
+else
+    fetch_seed_stage "${SEED_DIR}" \
+        "${SEED_ARCH}" "${SEED_NAME}"
+fi
 
 configure_ebuild_repositories "${SEED_DIR}"
 mount_repos "${SEED_DIR}"
@@ -43,8 +66,12 @@ else
     remove_portage_configuration "${SEED_DIR}"
     configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
 
-    chroot_run "${SEED_DIR}" \
-        'emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --update @world'
+    if [[ -z "${SEED_STAGE}" ]]; then
+        chroot_run "${SEED_DIR}" '
+            emerge --deep --getbinpkg --jobs="$(nproc)" \
+                --newuse --update @world
+            '
+    fi
 fi
 
 # === Bootstrapping Stage ===

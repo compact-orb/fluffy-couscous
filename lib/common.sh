@@ -635,6 +635,9 @@ import_public_keys() {
     if [[ -n "${BINPKG_PUBLIC_KEY:-}" ]]; then
         all_keys+="${BINPKG_PUBLIC_KEY}"$'\n'
     fi
+    if [[ -n "${SEED_PUBLIC_KEYS:-}" ]]; then
+        all_keys+="${SEED_PUBLIC_KEYS}"$'\n'
+    fi
 
     if [[ -n "${all_keys//[[:space:]]/}" ]]; then
         gpg --import --quiet <<< "${all_keys}"

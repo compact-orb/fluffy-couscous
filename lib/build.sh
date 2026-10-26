@@ -234,7 +234,13 @@ fetch_project_stage() {
     local stage_type="${3}"
     log_info "Downloading and extracting Gentoo ${stage_type} to ${target_root}"
 
-    import_signing_key
+    import_bundled_keys
+    import_public_keys
+
+    if [[ -n "${SIGNING_KEY:-}" ]] && \
+        declare -F import_signing_key > /dev/null; then
+        import_signing_key
+    fi
 
     create_directory "${target_root}"
 
