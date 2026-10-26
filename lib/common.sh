@@ -27,7 +27,8 @@ readonly _COMMON_SH_INCLUDED=1
 readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 env_file="${WORK_DIR}/.env"
 if [[ -f "${env_file}" ]]; then
-    # Preserve environment variables already set before sourcing .env
+    # Preserve environment variables already set before sourcing .env so
+    # caller/CI overrides take precedence over values in the .env file.
     declare -A _preserved_env=()
     while IFS= read -r _var_name; do
         if [[ -n "${_var_name}" && -n "${!_var_name}" ]]; then
@@ -333,6 +334,8 @@ create_symbolic_link() {
 
 # === Configuration Parsing ===
 
+# Splits "repo:profile/path" into "repo profile/path", defaulting to "gentoo"
+# when no repository prefix is specified.
 parse_profile() {
     local target_profile="${1}"
     local repo repo_profile
@@ -372,8 +375,11 @@ managed_unmount_all() {
 
     local exit_code="0"
     local i
+    # Unmount in reverse order so nested child mounts detach before parents.
     for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
         local m="${mounts_array_name[$i]}"
+        # Check space-delimited target in /proc/mounts directly to avoid
+        # requiring util-linux mountpoint(1).
         if [[ "$(</proc/mounts)" == *" ${m} "* ]]; then
             log_debug "Unmounting ${m}"
             umount --recursive "${m}" || exit_code="${?}"
@@ -444,6 +450,8 @@ register_failure_hook() {
 
 managed_cleanup_all() {
     local exit_code="${?}"
+    # Run failure hooks before unmounting so chroot build logs are still
+    # accessible on disk when a build fails.
     if (( exit_code != 0 )); then
         local hook
         for hook in "${_failure_hooks[@]}"; do
@@ -503,6 +511,8 @@ download_ebuild_repositories() {
             log_info "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
+        # Enforce GPG commit signature verification on all ebuild repositories
+        # using bundled keys (keys/*.asc) and REPO_PUBLIC_KEYS.
         log_info "Verifying latest commit signature for ${repo_name}" \
             "in ${repo_dir}"
         git -C "${repo_dir}" verify-commit HEAD
@@ -511,6 +521,8 @@ download_ebuild_repositories() {
     readonly _ebuild_repositories_downloaded=1
 }
 
+# Normalizes "/" or empty root to "" so path concatenations like
+# "${target_root}/etc/portage" do not produce leading "//".
 normalize_target_root() {
     local raw_root="${1:-/}"
     local -n out_root="${2}"
@@ -693,6 +705,8 @@ configure_portage() {
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
     create_directory "${portage_gnupg_dir}"
 
+    # Build scripts derive the verification key from SIGNING_KEY; live
+    # installer environments have no private key and use BINPKG_PUBLIC_KEY.
     if [[ -n "${SIGNING_KEY:-}" ]] && \
         declare -F import_signing_key > /dev/null; then
         import_signing_key
@@ -716,6 +730,8 @@ configure_portage() {
 
     gpg --batch --check-trustdb \
         --homedir "${portage_gnupg_dir}" 2> /dev/null || true
+    # Portage drops root privileges to the portage user during signature
+    # verification, so trustdb.gpg must be world-readable.
     chmod ugo+r "${portage_gnupg_dir}/trustdb.gpg" 2> /dev/null || true
 
     # Mask check-chroot plugin to allow kernel-install in chroot
@@ -778,6 +794,8 @@ mount_chroot_filesystems() {
     log_info "Mounting chroot filesystems for ${target_root}"
 
     create_directory "${target_root}/etc"
+    # Avoid clobbering /etc/resolv.conf if it is already a symlink (e.g. to
+    # systemd-resolved's stub-resolv.conf).
     if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
         cp --dereference --force "/etc/resolv.conf" \
             "${target_root}/etc/resolv.conf"
@@ -809,6 +827,8 @@ unmount_chroot_filesystems() {
     managed_unmount_all "_active_chroot_mounts"
 }
 
+# Kills background daemons (such as gpg-agent started by FEATURES=gpg-keepalive)
+# that would otherwise keep chroot mounts busy during unmount.
 kill_chroot_processes() {
     local target_root
     target_root="$(realpath "${1}")"

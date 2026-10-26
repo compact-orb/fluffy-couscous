@@ -52,14 +52,20 @@ fi
 create_directory "${STAGE_DIR}"
 create_directory "${SEED_STAGE_BIND_DIR}"
 _active_bootstrap_mounts=()
+# Bind-mount STAGE_DIR to /tmp/stage in SEED_DIR so emerge --root=/tmp/stage
+# writes stage1 bootstrap packages directly into the new target root.
 managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
     "${SEED_STAGE_BIND_DIR}"
 
+# Install baselayout with USE=build first to create the root filesystem
+# skeleton in /tmp/stage before emerging stage1 toolchain packages.
 chroot_run "${SEED_DIR}" '
     USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
         sys-apps/baselayout
     '
 
+# Resolve the stacked profile packages.build list via build.py and install the
+# stage1 bootstrap toolchain into /tmp/stage without pulling implicit @system.
 copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
 chroot_run "${SEED_DIR}" '
     buildpkgs=$(/tmp/build.py)
@@ -85,6 +91,8 @@ mount_repos "${STAGE_DIR}"
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
 
+# Rebuild the entire @system set inside the new root using the stage1 toolchain
+# so all base packages and generated binary packages match the target profile.
 chroot_run "${STAGE_DIR}" '
     emerge --emptytree --jobs="$(nproc)" @system
     emerge --depclean

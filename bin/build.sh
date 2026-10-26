@@ -29,19 +29,27 @@ readonly STAGE_DIR="${BUILD_DIR}/stage"
 
 # === Environment Preparation ===
 
+# Fetch the existing base stage3 tarball from S3 and verify GPG signature.
 fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
+# Configure Portage settings (USE flags, make.conf, masks) for stage3 build.
 configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 
+# Bind-mount synced ebuild repositories into the stage chroot.
 mount_repos "${STAGE_DIR}"
 
+# Install package signing and Secure Boot keys inside chroot for binpkg build.
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
 
+# Mount S3 binhost via rclone and layer a writable OverlayFS on binpkgs dir.
 mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
 # === Build Packages ===
 
+# Emerge gentoolkit first to supply revdep-rebuild.sh, then emerge requested
+# packages. Rebuild reverse dependencies from source (--usepkg=n) to fix
+# broken linkage before cleaning unused dependencies.
 chroot_run "${STAGE_DIR}" '
     emerge --jobs="$(nproc)" app-portage/gentoolkit
     emerge --jobs="$(nproc)" \
@@ -56,6 +64,9 @@ unmount_repos
 
 remove_portage_configuration "${STAGE_DIR}"
 
+# Sync the merged OverlayFS back to S3 so new binpkgs upload and removed
+# binpkgs are pruned; unmount overlay and discard ephemeral build chroot
+# without touching the baseline stage3 archive in S3.
 upload_mounted_binary_packages "${STAGE_DIR}" "${PROFILE}"
 unmount_binary_packages
 

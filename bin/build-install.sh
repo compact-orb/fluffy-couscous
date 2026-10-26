@@ -50,11 +50,15 @@ mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 create_directory "${STAGE_DIR}/boot/loader/entries"
 create_empty_file "${STAGE_DIR}/etc/machine-id"
 
+# Configure dracut for live booting with dmsquash-live module to mount the
+# SquashFS root filesystem from CD/USB media.
 create_directory "${STAGE_DIR}/etc/dracut.conf.d"
 create_file "${STAGE_DIR}/etc/dracut.conf.d/install.conf" \
     'hostonly="no"
 add_dracutmodules+=" dmsquash-live "'
 
+# Configure live kernel command line: specify CDLABEL to locate live media,
+# enable writable overlayfs, serial/tty console, and security LSM order.
 create_directory "${STAGE_DIR}/etc/kernel"
 cmdline="root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1"
 cmdline="${cmdline} console=tty0 console=ttyS0,115200"
@@ -63,6 +67,8 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 
 # === Build Install ===
 
+# Install live environment packages. Delete root password to allow
+# passwordless console login, enable NetworkManager, and record system state.
 chroot_run "${STAGE_DIR}" '
     emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
@@ -80,6 +86,7 @@ chroot_run "${STAGE_DIR}" '
     /usr/lib/systemd/systemd-update-done
     '
 
+# Point resolv.conf to systemd-resolved stub listener for DNS resolution.
 force_remove "${STAGE_DIR}/etc/resolv.conf"
 create_symbolic_link "/run/systemd/resolve/stub-resolv.conf" \
     "${STAGE_DIR}/etc/resolv.conf"
@@ -96,6 +103,8 @@ unmount_binary_packages
 
 log_info "Creating EFI Partition"
 
+# Set up UEFI bootloader directory on ESP. Copy signed systemd-boot to
+# grubx64.efi because standard Microsoft-signed Shim chainloads grubx64.efi.
 create_directory "${STAGE_DIR}/boot/EFI/BOOT"
 
 copy_file "${STAGE_DIR}/usr/share/shim/BOOTX64.EFI" \
@@ -105,12 +114,15 @@ copy_file "${STAGE_DIR}/usr/share/shim/mmx64.efi" \
 copy_file "${STAGE_DIR}/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" \
     "${STAGE_DIR}/boot/EFI/BOOT/grubx64.efi"
 
+# systemd-boot loader entry paths are relative to the ESP root, not /boot.
 sed --in-place 's| /boot/| /|g' "${STAGE_DIR}"/boot/loader/entries/*.conf
 
+# Export Secure Boot certificate in DER format for MokManager key enrollment.
 openssl x509 -inform "PEM" -outform "DER" \
      -out "${STAGE_DIR}/boot/Secure Boot Certificate.der" \
      <<< "${SECUREBOOT_CERT}"
 
+# Calculate required ESP FAT32 size with 3% headroom, enforcing 35MB minimum.
 esp_size_mb=$(du --summarize --block-size="1M" "${STAGE_DIR}/boot" | \
     awk '{
         size = int($1 * 1.03) + 2
@@ -144,7 +156,8 @@ create_directory "${STAGE_DIR}/usr/local/bin"
 create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
     "${STAGE_DIR}/usr/local/bin/install.sh"
 
-# Write sanitized, public configuration for the installer
+# Write sanitized .env containing only public repo and verification keys;
+# secrets (SIGNING_KEY, SECUREBOOT_KEY, S3 credentials) are strictly omitted.
 IFS= read -d "" -r installer_env << EOF || true
 GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
 REPOS="${REPOS}"
@@ -159,6 +172,8 @@ chmod 0644 "${INSTALLER_TARGET_DIR}/.env"
 
 # === Build SquashFS Image ===
 
+# Compress root filesystem into SquashFS image with zstd, excluding /boot
+# (placed on the ESP image) and ephemeral files/caches.
 log_info "Creating SquashFS image"
 create_directory "${ISO_DIR}/LiveOS"
 mksquashfs "${STAGE_DIR}" "${ISO_DIR}/LiveOS/squashfs.img" \
@@ -176,6 +191,8 @@ mksquashfs "${STAGE_DIR}" "${ISO_DIR}/LiveOS/squashfs.img" \
 
 # === Build ISO Image ===
 
+# Generate hybrid UEFI bootable ISO with xorriso, embedding the ESP image as
+# partition 2 (type 0xef) for native UEFI boot from CD/USB.
 log_info "Building ISO image"
 force_remove "${ISO_FILE}"
 xorriso \

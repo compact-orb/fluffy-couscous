@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+# Copyright 1999-2024 Gentoo Authors
+# Derived from Gentoo Catalyst (targets/stage1/build.py)
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 import os
 import sys

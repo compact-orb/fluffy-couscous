@@ -54,7 +54,8 @@ fi
 
 check_required_commands
 
-# Required to avoid mounting relating issues
+# Re-execute in a private mount namespace so installation mounts (binds,
+# chroot filesystems, tmpfs) remain isolated from the live host.
 if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
     exec unshare --mount --propagation private \
         env _INSTALL_UNSHARED=1 "$0" "${@}"
@@ -120,7 +121,9 @@ readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
 
 wipefs --all --force "${INSTALL_DRIVE}"
 
-# TODO: Detect architecture and adapt root accordingly
+# Partition disk with GPT: 1GiB ESP (type=U) and Linux root (x86-64).
+# Conforms to systemd Discoverable Partitions Specification (DPS) so systemd
+# auto-discovers / and /boot without root= or rd.luks.uuid= in kernel cmdline.
 sfdisk "${INSTALL_DRIVE}" <<EOF
 label: gpt
 size=1GiB, type=U
@@ -140,6 +143,8 @@ readonly ROOT_PARTITION="${part_prefix}2"
 unset part_prefix
 
 if (( ENCRYPT )); then
+    # Format root with LUKS2 using a 20-byte random base32 emergency key.
+    # Pause execution so user has time to record the recovery key.
     readonly RECOVERY_KEY="$(head --bytes=20 /dev/urandom | base32 | \
         fold --width=5 | paste --delimiters='-' --serial -)"
     luks_key_file="$(mktemp)"
@@ -162,6 +167,8 @@ if (( ENCRYPT )); then
         "Press [Enter] once you have securely recorded this key..."
     echo
 
+    # Enroll TPM2 PCR 7 (Secure Boot state) with user PIN so volume unlocks
+    # automatically at boot only when the firmware boot chain is untampered.
     log_info "Enrolling TPM2 device with PIN (PCR 7)..."
     tpm2_creds_dir="$(mktemp --directory)"
     chmod 0700 "${tpm2_creds_dir}"
@@ -206,6 +213,9 @@ readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" \
 
 btrfs_tmp_dir="$(mktemp --directory)"
 mount --types "btrfs" "${ROOT_TARGET_DEV}" "${btrfs_tmp_dir}"
+# Create subvolumes for system isolation. Mark binpkgs and binhost with +C
+# (nodatacow) to avoid compression overhead on pre-compressed packages and
+# isolate high-churn package caches from root snapshots.
 btrfs subvolume create "${btrfs_tmp_dir}/@"
 btrfs subvolume create "${btrfs_tmp_dir}/@home"
 btrfs subvolume create "${btrfs_tmp_dir}/@var_log"
@@ -301,7 +311,7 @@ btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
     "${INSTALL_MOUNT_DIR}/swap/swapfile"
 
 # Bind mount /var/tmp/portage and /var/cache to install drive to avoid
-# issues with space
+# exhausting live environment tmpfs/ramdisk space during package builds.
 create_directory "/var/tmp/portage"
 managed_mount "_active_install_mounts" --bind \
     "${INSTALL_MOUNT_DIR}/var/tmp/portage" "/var/tmp/portage"
@@ -331,7 +341,10 @@ configure_portage_binary_packages "/" "${PROFILE}"
 
 # === Install Stage 1 ===
 
-# Needed when installing baselayout binary package with merge-usr
+# sys-apps/baselayout defaults to merged-usr (split-usr is unset), but
+# when extracted from a binary package into a fresh root, it skips the
+# merge setup and installs as split-usr. We pre-create the UsrMerge symlinks
+# so it installs into a merged-usr layout.
 create_directory "${INSTALL_MOUNT_DIR}/usr/bin"
 create_directory "${INSTALL_MOUNT_DIR}/usr/lib"
 create_directory "${INSTALL_MOUNT_DIR}/usr/lib64"
@@ -426,6 +439,9 @@ unmount_repos
 
 chown -R portage:portage "${INSTALL_MOUNT_DIR}/var/db/repos"
 
+# Initialize machine-id, install systemd-boot to ESP (without writing NVRAM
+# variables from inside chroot), run Ansible pull for post-install setup,
+# lock root account, and create unprivileged admin user in wheel group.
 chroot_run "${INSTALL_MOUNT_DIR}" '
     systemd-machine-id-setup
     systemctl preset-all

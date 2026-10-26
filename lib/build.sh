@@ -41,6 +41,8 @@ upload_to_storageto() {
 
     local token_args=()
     local temp_config_dir=""
+    # storageto reads its API token from $XDG_CONFIG_HOME/storageto/token, so
+    # write STORAGETO_KEY into a temporary directory when set.
     if [[ -n "${STORAGETO_KEY:-}" ]]; then
         temp_config_dir="$(mktemp --directory)"
         create_directory "${temp_config_dir}/storageto"
@@ -57,6 +59,7 @@ upload_to_storageto() {
     fi
 
     local exit_code=0
+    # Filter carriage-return progress output so CI logs only show final URLs.
     "${env_cmd[@]}" storageto upload \
         --expire="7d" "${token_args[@]}" "${@}" 2>&1 | \
         sed --expression='s/.*\r//' --expression='/%/d' \
@@ -82,6 +85,8 @@ upload_portage_failure_logs() {
     for root in "${search_roots[@]}"; do
         local portage_dir="${root}/var/tmp/portage"
         if [[ -d "${portage_dir}" ]]; then
+            # Depth 3 matches <category>/<package>-<ver>/temp where Portage
+            # stores build.log and environment dumps for failed merges.
             while IFS= read -r -d '' temp_dir; do
                 log_files+=("${temp_dir}")
             done < <(find "${portage_dir}" -mindepth 3 -maxdepth 3 \
@@ -136,6 +141,8 @@ import_signing_key() {
         gpg --batch --import-ownertrust --quiet
 }
 
+# Installs the private signing key into an isolated keyring (/var/lib/portage/
+# gnupg-sign) used only by root during binpkg creation; stripped before packing.
 install_portage_gpg_key() {
     local target_root="${1}"
     log_info "Applying Portage signing key for ${target_root}"
@@ -293,6 +300,8 @@ publish_stage_archive() {
     local stage_file="${archive_dir}/${stage_filename}"
     local sig_file="${archive_dir}/${sig_filename}"
     log_info "Creating stage archive ${stage_file}"
+    # Strip signing keys, Secure Boot keys, kernel/boot artifacts, and runtime
+    # caches so the published stage archive is clean and redistributable.
     tar --create --file="${stage_file}" --directory="${target_root}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
         --use-compress-program="zstd --long=31 -9 --threads=0" \
@@ -329,6 +338,9 @@ publish_stage_archive() {
 # === Binary Package Caching Mount ===
 
 _active_binpkg_mounts=()
+# Mounts the remote S3 binary package directory read-only via rclone and layers
+# a writable local OverlayFS on /var/cache/binpkgs so Portage can read existing
+# binpkgs on demand and write new/updated packages locally before syncing back.
 mount_binary_packages() {
     local target_root="${1}"
     local profile="${2}"
@@ -372,6 +384,8 @@ mount_binary_packages() {
     # Manually add rclone mount to the list of mounts to be unmounted later
     _active_binpkg_mounts+=("${lowerdir}")
 
+    # Pre-warm the FUSE directory cache in a single request so Portage
+    # dependency resolution does not stall on per-directory S3 listings.
     log_info "Pre-loading metadata for ${lowerdir}"
     rclone rc --no-output --unix-socket "${rc_sock}" "vfs/refresh" \
         "recursive=true"
@@ -397,6 +411,8 @@ upload_mounted_binary_packages() {
 
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
 
+    # Sync the merged OverlayFS mount so newly built packages are uploaded and
+    # any packages removed or replaced in the upper layer are pruned on S3.
     s3_rclone sync "${binpkgs_dir}" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }
