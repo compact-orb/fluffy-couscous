@@ -60,9 +60,9 @@ if (( RESUME == 1 )); then
         ' || build_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --jobs="$(nproc)" app-portage/gentoolkit
         emerge --jobs="$(nproc)" \
-            --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" '"${PACKAGES}"'
+            --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
+            app-portage/gentoolkit '"${PACKAGES}"'
         revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
         emerge --depclean
         if (( '"${CLEAN_BINPKGS}"' == 1 )); then

@@ -375,7 +375,7 @@ tar_create() {
 # Splits "repo:profile/path" into "repo profile/path", defaulting to "gentoo"
 # when no repository prefix is specified.
 parse_profile() {
-    local target_profile="${1}"
+    local target_profile="${1//$'\r'/}"
     local repo repo_profile
     IFS=":" read -r repo repo_profile <<< "${target_profile}"
     if [[ -z "${repo_profile}" ]]; then

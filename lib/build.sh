@@ -293,7 +293,7 @@ has_resume_stage() {
     local output
     output="$(s3_rclone lsf \
         ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" 2> /dev/null || true)"
-    [[ "${output}" == "${stage_filename}" ]]
+    [[ "${output//$'\r'/}" == "${stage_filename}" ]]
 }
 
 fetch_resume_stage() {
