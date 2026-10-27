@@ -21,7 +21,7 @@ cli_define_option "USEPKG_EXCLUDE" "-e|--exclude" \
 cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
     "Prune obsolete binary packages not installed" 0
 cli_define_option "TIMEOUT" "-t|--timeout" \
-    "Timeout duration for emerge (e.g. 330m)" 0 "0"
+    "Timeout duration for emerge (e.g. 330m)" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique snapshot identifier for resumption" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
@@ -81,4 +81,4 @@ elif (( build_exit != 0 )); then
     exit "${build_exit}"
 fi
 
-finish_stage_build "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}"
+finish_stage_build "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" ""

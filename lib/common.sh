@@ -901,7 +901,7 @@ chroot_run() {
     shift
 
     local -a timeout_cmd=()
-    if [[ -n "${CHROOT_TIMEOUT:-}" && "${CHROOT_TIMEOUT}" != "0" ]]; then
+    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
         timeout_cmd=(timeout --kill-after="60s" --signal="TERM" \
             "${CHROOT_TIMEOUT}")
     fi

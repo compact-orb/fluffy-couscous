@@ -73,7 +73,7 @@ upload_to_storageto() {
 }
 
 upload_portage_failure_logs() {
-    local exit_code="${1:-1}"
+    local exit_code="${1}"
     if (( exit_code == 124 )); then
         return 0
     fi
@@ -245,7 +245,7 @@ fetch_project_stage() {
     import_bundled_keys
     import_public_keys
 
-    if [[ -n "${SIGNING_KEY:-}" ]] && \
+    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
         declare -F import_signing_key > /dev/null; then
         import_signing_key
     fi
@@ -304,7 +304,7 @@ fetch_resume_stage() {
     import_bundled_keys
     import_public_keys
 
-    if [[ -n "${SIGNING_KEY:-}" ]] && \
+    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
         declare -F import_signing_key > /dev/null; then
         import_signing_key
     fi
@@ -564,8 +564,8 @@ upload_mounted_binary_packages() {
 prepare_stage_environment() {
     local stage_dir="${1}"
     local profile="${2}"
-    local resume="${3:-0}"
-    local resume_id="${4:-}"
+    local resume="${3}"
+    local resume_id="${4}"
 
     if (( resume == 1 )); then
         if [[ -z "${resume_id}" ]]; then
@@ -592,7 +592,7 @@ handle_build_timeout() {
     local stage_dir="${1}"
     local profile="${2}"
     local timeout="${3}"
-    local resume_id="${4:-}"
+    local resume_id="${4}"
 
     log_warn "Build timed out after ${timeout}"
     upload_mounted_binary_packages "${stage_dir}" "${profile}"
@@ -609,8 +609,8 @@ handle_build_timeout() {
 finish_stage_build() {
     local stage_dir="${1}"
     local profile="${2}"
-    local resume_id="${3:-}"
-    local publish_stage="${4:-}"
+    local resume_id="${3}"
+    local publish_stage="${4}"
 
     unmount_repos
     remove_portage_configuration "${stage_dir}"

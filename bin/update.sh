@@ -15,7 +15,7 @@ source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
 cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
 cli_define_option "TIMEOUT" "-t|--timeout" \
-    "Timeout duration for emerge (e.g. 330m)" 0 "0"
+    "Timeout duration for emerge (e.g. 330m)" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique snapshot identifier for resumption" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
