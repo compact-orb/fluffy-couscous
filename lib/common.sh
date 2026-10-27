@@ -862,9 +862,15 @@ chroot_run() {
 
     shift
 
+    local -a timeout_cmd=()
+    if [[ -n "${CHROOT_TIMEOUT:-}" && "${CHROOT_TIMEOUT}" != "0" ]]; then
+        timeout_cmd=(timeout --kill-after="60s" --signal="TERM" \
+            "${CHROOT_TIMEOUT}")
+    fi
+
     local exit_code="0"
-    chroot "${target_root}" /bin/bash --login -e -c "${*}" || \
-        exit_code="${?}"
+    "${timeout_cmd[@]}" chroot "${target_root}" /bin/bash --login -e \
+        -c "${*}" || exit_code="${?}"
 
     kill_chroot_processes "${target_root}"
     unmount_chroot_filesystems

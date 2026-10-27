@@ -19,11 +19,56 @@ env:
   SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
+  PROFILES: ${{ vars.PROFILES }}
+  BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
+  BUILD_TIMEOUT: "330m"
 
 jobs:
-  build:
-    name: Build
+  setup:
+    name: Setup Matrix
     runs-on: ubuntu-26.04
+    outputs:
+      profiles: ${{ steps.matrix.outputs.profiles }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+
+      - name: Prune Stale Snapshots
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          # Purge any abandoned resume snapshots older than 24 hours
+          s3_rclone delete --min-age "24h" \
+            ":s3:${S3_BUCKET_NAME}/resumes/" || true
+
+      - name: Generate Profile Matrix
+        id: matrix
+        run: |
+          matrix_json=$(echo "${PROFILES}" | awk 'NF {
+            if (n++) printf ", ";
+            else printf "[";
+            printf "\"%s\"", $0;
+          } END {
+            if (n) print "]";
+            else print "[]";
+          }')
+          echo "profiles=${matrix_json}" >> "$GITHUB_OUTPUT"
+
+  build-attempt-1:
+    name: Build (Attempt 1)
+    needs: setup
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -43,7 +88,6 @@ jobs:
           sudo chown root:root "/usr/local/bin/storageto"
           rm "/tmp/storageto-linux-amd64.tar.gz"
 
-      # TODO: Specify profile via env and run each in parallel
       - name: Run build.sh
         run: |
           # Workaround for stripping carriage return characters from GitHub
@@ -55,5 +99,317 @@ jobs:
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
-            --profile="automatic-journey:amd64/x86-64-v3/base" \
-            --packages="app-admin/ansible app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano app-emulation/cloud-init app-forensics/lynis dev-vcs/git net-misc/networkmanager sys-apps/apparmor sys-apps/apparmor-utils sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/squashfs-tools sys-fs/xfsprogs sys-kernel/gentoo-kernel sys-kernel/installkernel sys-kernel/linux-firmware sec-policy/apparmor-profiles sec-policy/apparmor-d sys-process/audit"
+            --profile="${{ matrix.profile }}" \
+            --packages="${BUILD_PACKAGES}" \
+            --timeout="${BUILD_TIMEOUT}" \
+            --resume-id="${{ github.run_id }}"
+
+  check-attempt-1:
+    name: Check Resumes (After Attempt 1)
+    needs: [setup, build-attempt-1]
+    if: always() && needs.build-attempt-1.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resumes: ${{ steps.check.outputs.has_resumes }}
+      profiles: ${{ steps.check.outputs.profiles }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+
+      - name: Check S3 for Timed-Out Profiles
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          resuming=()
+          while IFS= read -r profile || [[ -n "${profile}" ]]; do
+            [[ -z "${profile}" ]] && continue
+            repo_profile="${profile#*:}"
+            profile_name="${repo_profile//\//-}"
+            snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
+            if s3_rclone lsf \
+              ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
+              grep -q "^${snapshot}\$"; then
+              resuming+=("${profile}")
+            fi
+          done <<< "${PROFILES}"
+
+          if [[ ${#resuming[@]} -gt 0 ]]; then
+            json=$(printf '%s\n' "${resuming[@]}" | awk 'NF {
+              if (n++) printf ", ";
+              else printf "[";
+              printf "\"%s\"", $0;
+            } END {
+              print "]";
+            }')
+            echo "has_resumes=true" >> "$GITHUB_OUTPUT"
+            echo "profiles=${json}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resumes=false" >> "$GITHUB_OUTPUT"
+            echo "profiles=[]" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-attempt-2:
+    name: Build (Attempt 2)
+    needs: [setup, check-attempt-1]
+    if: needs.check-attempt-1.outputs.has_resumes == 'true'
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJson(needs.check-attempt-1.outputs.profiles) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Dependencies
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          aria2c --dir="/tmp" \
+            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
+          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
+            --directory="/tmp"
+          sudo mv /tmp/storageto "/usr/local/bin/storageto"
+          sudo chown root:root "/usr/local/bin/storageto"
+          rm "/tmp/storageto-linux-amd64.tar.gz"
+
+      - name: Run build.sh (Resume)
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
+            --profile="${{ matrix.profile }}" \
+            --packages="${BUILD_PACKAGES}" \
+            --timeout="${BUILD_TIMEOUT}" \
+            --resume-id="${{ github.run_id }}" \
+            --resume
+
+  check-attempt-2:
+    name: Check Resumes (After Attempt 2)
+    needs: [setup, build-attempt-2]
+    if: always() && needs.build-attempt-2.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resumes: ${{ steps.check.outputs.has_resumes }}
+      profiles: ${{ steps.check.outputs.profiles }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+
+      - name: Check S3 for Timed-Out Profiles
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          resuming=()
+          while IFS= read -r profile || [[ -n "${profile}" ]]; do
+            [[ -z "${profile}" ]] && continue
+            repo_profile="${profile#*:}"
+            profile_name="${repo_profile//\//-}"
+            snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
+            if s3_rclone lsf \
+              ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
+              grep -q "^${snapshot}\$"; then
+              resuming+=("${profile}")
+            fi
+          done <<< "${PROFILES}"
+
+          if [[ ${#resuming[@]} -gt 0 ]]; then
+            json=$(printf '%s\n' "${resuming[@]}" | awk 'NF {
+              if (n++) printf ", ";
+              else printf "[";
+              printf "\"%s\"", $0;
+            } END {
+              print "]";
+            }')
+            echo "has_resumes=true" >> "$GITHUB_OUTPUT"
+            echo "profiles=${json}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resumes=false" >> "$GITHUB_OUTPUT"
+            echo "profiles=[]" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-attempt-3:
+    name: Build (Attempt 3)
+    needs: [setup, check-attempt-2]
+    if: needs.check-attempt-2.outputs.has_resumes == 'true'
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJson(needs.check-attempt-2.outputs.profiles) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Dependencies
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          aria2c --dir="/tmp" \
+            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
+          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
+            --directory="/tmp"
+          sudo mv /tmp/storageto "/usr/local/bin/storageto"
+          sudo chown root:root "/usr/local/bin/storageto"
+          rm "/tmp/storageto-linux-amd64.tar.gz"
+
+      - name: Run build.sh (Resume)
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
+            --profile="${{ matrix.profile }}" \
+            --packages="${BUILD_PACKAGES}" \
+            --timeout="${BUILD_TIMEOUT}" \
+            --resume-id="${{ github.run_id }}" \
+            --resume
+
+  check-attempt-3:
+    name: Check Resumes (After Attempt 3)
+    needs: [setup, build-attempt-3]
+    if: always() && needs.build-attempt-3.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resumes: ${{ steps.check.outputs.has_resumes }}
+      profiles: ${{ steps.check.outputs.profiles }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+
+      - name: Check S3 for Timed-Out Profiles
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          resuming=()
+          while IFS= read -r profile || [[ -n "${profile}" ]]; do
+            [[ -z "${profile}" ]] && continue
+            repo_profile="${profile#*:}"
+            profile_name="${repo_profile//\//-}"
+            snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
+            if s3_rclone lsf \
+              ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
+              grep -q "^${snapshot}\$"; then
+              resuming+=("${profile}")
+            fi
+          done <<< "${PROFILES}"
+
+          if [[ ${#resuming[@]} -gt 0 ]]; then
+            json=$(printf '%s\n' "${resuming[@]}" | awk 'NF {
+              if (n++) printf ", ";
+              else printf "[";
+              printf "\"%s\"", $0;
+            } END {
+              print "]";
+            }')
+            echo "has_resumes=true" >> "$GITHUB_OUTPUT"
+            echo "profiles=${json}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resumes=false" >> "$GITHUB_OUTPUT"
+            echo "profiles=[]" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-attempt-4:
+    name: Build (Attempt 4)
+    needs: [setup, check-attempt-3]
+    if: needs.check-attempt-3.outputs.has_resumes == 'true'
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJson(needs.check-attempt-3.outputs.profiles) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Dependencies
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          aria2c --dir="/tmp" \
+            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
+          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
+            --directory="/tmp"
+          sudo mv /tmp/storageto "/usr/local/bin/storageto"
+          sudo chown root:root "/usr/local/bin/storageto"
+          rm "/tmp/storageto-linux-amd64.tar.gz"
+
+      - name: Run build.sh (Resume)
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build.sh \
+            --profile="${{ matrix.profile }}" \
+            --packages="${BUILD_PACKAGES}" \
+            --timeout="${BUILD_TIMEOUT}" \
+            --resume-id="${{ github.run_id }}" \
+            --resume
+
+  cleanup:
+    name: Cleanup Snapshots
+    runs-on: ubuntu-26.04
+    needs:
+      - setup
+      - build-attempt-1
+      - check-attempt-1
+      - build-attempt-2
+      - check-attempt-2
+      - build-attempt-3
+      - check-attempt-3
+      - build-attempt-4
+    if: always()
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install rclone
+        run: |
+          aria2c --dir="/tmp" \
+            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
+          sudo apt update; sudo apt install --yes \
+            /tmp/rclone-v1.75.2-linux-amd64.deb
+          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+
+      - name: Purge Run Snapshots
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include "stage3-*-resume-${{ github.run_id }}.tar.zst*" || true

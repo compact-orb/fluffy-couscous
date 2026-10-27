@@ -73,6 +73,11 @@ upload_to_storageto() {
 }
 
 upload_portage_failure_logs() {
+    local exit_code="${1:-1}"
+    if (( exit_code == 124 )); then
+        return 0
+    fi
+
     local -a search_roots=()
     if [[ -v STAGE_DIR && -d "${STAGE_DIR}/var/tmp/portage" ]]; then
         search_roots+=("${STAGE_DIR}")
@@ -279,6 +284,68 @@ fetch_project_stage() {
     force_remove "${download_dir}"
 }
 
+has_resume_stage() {
+    local profile="${1}"
+    local resume_id="${2}"
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local profile_name="${repo_profile//\//-}"
+    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+
+    local output
+    output="$(s3_rclone lsf \
+        ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" 2> /dev/null || true)"
+    [[ "${output}" == "${stage_filename}" ]]
+}
+
+fetch_resume_stage() {
+    local target_root="${1}"
+    local profile="${2}"
+    local resume_id="${3}"
+    log_info "Downloading and extracting resume snapshot to ${target_root}"
+
+    import_bundled_keys
+    import_public_keys
+
+    if [[ -n "${SIGNING_KEY:-}" ]] && \
+        declare -F import_signing_key > /dev/null; then
+        import_signing_key
+    fi
+
+    create_directory "${target_root}"
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local profile_name="${repo_profile//\//-}"
+    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local sig_filename="${stage_filename}.sig"
+    local download_dir
+    download_dir="$(mktemp --directory)"
+    local stage_file="${download_dir}/${stage_filename}"
+    local sig_file="${download_dir}/${sig_filename}"
+
+    log_info "Downloading resume stage archive ${stage_file}"
+    s3_rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
+        "${download_dir}"
+
+    log_info "Downloading resume stage signature ${sig_file}"
+    s3_rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+        "${download_dir}"
+
+    log_info "Verifying resume stage archive ${stage_file}"
+    gpg --verify "${sig_file}" "${stage_file}"
+
+    log_info "Extracting resume stage archive ${stage_file} to ${target_root}"
+    tar --directory="${target_root}" --extract --file="${stage_file}" \
+        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+        --use-compress-program="zstd --long=31"
+
+    force_remove "${stage_file}"
+    force_remove "${sig_file}"
+    force_remove "${download_dir}"
+}
+
 # === Stage Uploading ===
 
 upload_binary_packages() {
@@ -345,6 +412,79 @@ publish_stage_archive() {
     force_remove "${stage_file}"
     force_remove "${sig_file}"
     force_remove "${archive_dir}"
+}
+
+publish_resume_stage() {
+    local target_root="${1}"
+    local profile="${2}"
+    local resume_id="${3}"
+    log_info "Uploading resume snapshot from ${target_root}"
+
+    import_signing_key
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local profile_name="${repo_profile//\//-}"
+    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local sig_filename="${stage_filename}.sig"
+    local archive_dir
+    archive_dir="$(mktemp --directory)"
+    local stage_file="${archive_dir}/${stage_filename}"
+    local sig_file="${archive_dir}/${sig_filename}"
+    log_info "Creating resume stage archive ${stage_file}"
+    # Preserve /var/db/pkg and /var/cache/edb/resume* so Portage can resume
+    # the interrupted emerge queue in the next attempt; exclude ephemeral build
+    # directories and binary packages already synced to S3.
+    tar --create --file="${stage_file}" --directory="${target_root}" \
+        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+        --use-compress-program="zstd --long --threads=0 -9" \
+        --exclude=".${PORTAGE_GPG_DIR}" \
+        --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
+        --exclude="./boot/*" \
+        --exclude="./etc/kernel" \
+        --exclude="./etc/machine-id" \
+        --exclude="./etc/resolv.conf" \
+        --exclude="./root/*" \
+        --exclude="./tmp/*" \
+        --exclude="./var/cache/binpkgs*" \
+        --exclude="./var/cache/distfiles/*" \
+        --exclude="./var/db/repos/*" \
+        --exclude="./var/lib/systemd/catalog/database" \
+        --exclude="./var/log/*" \
+        --exclude="./var/tmp/*" \
+        .
+    log_info "Signing resume stage archive ${stage_file}"
+    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
+        "${stage_file}"
+
+    log_info "Uploading resume archive ${stage_file}"
+    s3_rclone copy "${stage_file}" \
+        ":s3:${S3_BUCKET_NAME}/resumes"
+
+    log_info "Uploading resume archive signature ${sig_file}"
+    s3_rclone copy "${sig_file}" \
+        ":s3:${S3_BUCKET_NAME}/resumes"
+
+    force_remove "${stage_file}"
+    force_remove "${sig_file}"
+    force_remove "${archive_dir}"
+}
+
+clear_resume_stage() {
+    local profile="${1}"
+    local resume_id="${2}"
+    log_info "Removing resume snapshot for ${profile} (${resume_id})"
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local profile_name="${repo_profile//\//-}"
+    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local sig_filename="${stage_filename}.sig"
+
+    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
+        > /dev/null 2>&1 || true
+    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+        > /dev/null 2>&1 || true
 }
 
 # === Binary Package Caching Mount ===
