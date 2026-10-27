@@ -340,11 +340,17 @@ tar_extract() {
     local target_dir="${2}"
     shift 2
 
+    local -a compress_opts=()
+    if [[ "${archive}" == *.tar.zst || "${archive}" == *.zst ]]; then
+        compress_opts=(--use-compress-program="zstd --long=31")
+    fi
+
     tar --directory="${target_dir}" \
         --extract \
         --file="${archive}" \
         --numeric-owner \
         --preserve-permissions \
+        "${compress_opts[@]}" \
         --xattrs-include="*.*" \
         "${@}"
 }
@@ -359,6 +365,7 @@ tar_create() {
         --file="${archive}" \
         --numeric-owner \
         --preserve-permissions \
+        --use-compress-program="zstd --long=31 --threads=0 -9" \
         --xattrs-include="*.*" \
         "${@}"
 }

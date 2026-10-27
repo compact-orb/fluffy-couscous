@@ -273,8 +273,7 @@ fetch_project_stage() {
     gpg --verify "${sig_file}" "${stage_file}"
 
     log_info "Extracting stage archive ${stage_file} to ${target_root}"
-    tar_extract "${stage_file}" "${target_root}" \
-        --use-compress-program="zstd --long=31"
+    tar_extract "${stage_file}" "${target_root}"
 
     force_remove "${stage_file}"
     force_remove "${sig_file}"
@@ -334,8 +333,7 @@ fetch_resume_stage() {
     gpg --verify "${sig_file}" "${stage_file}"
 
     log_info "Extracting resume stage archive ${stage_file} to ${target_root}"
-    tar_extract "${stage_file}" "${target_root}" \
-        --use-compress-program="zstd --long=31"
+    tar_extract "${stage_file}" "${target_root}"
 
     force_remove "${stage_file}"
     force_remove "${sig_file}"
@@ -390,7 +388,6 @@ publish_stage_archive() {
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
-        --use-compress-program="zstd --long=31 --threads=0 -9" \
         "."
     log_info "Signing stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
@@ -445,7 +442,6 @@ publish_resume_stage() {
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
-        --use-compress-program="zstd --long --threads=0 -9" \
         "."
     log_info "Signing resume stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
