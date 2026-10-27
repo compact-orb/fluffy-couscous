@@ -20,6 +20,8 @@ env:
   SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
+  RCLONE_VERSION: "v1.75.2"
+  STORAGETO_VERSION: "v0.5.0"
 
 jobs:
   build-install:
@@ -28,21 +30,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # TODO: Cache and dynamically find the latest version
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
       - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
-          aria2c --dir="/tmp" \
-            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
-          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
-            --directory="/tmp"
-          sudo mv /tmp/storageto "/usr/local/bin/storageto"
-          sudo chown root:root "/usr/local/bin/storageto"
-          rm "/tmp/storageto-linux-amd64.tar.gz"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update; sudo apt install --yes xorriso
 
       # TODO: Specify profile via env and run each in parallel
       - name: Run build-install.sh

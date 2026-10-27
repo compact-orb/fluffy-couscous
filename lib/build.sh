@@ -230,9 +230,7 @@ fetch_seed_stage() {
     remove_file "${seed_tarball}.asc"
 
     log_info "Extracting ${seed_tarball} to ${output_dir}"
-    tar --directory="${output_dir}" --extract \
-        --file="${seed_tarball}" --numeric-owner \
-        --preserve-permissions --xattrs-include='*.*'
+    tar_extract "${seed_tarball}" "${output_dir}"
 
     remove_file "${seed_tarball}"
     force_remove "${download_dir}"
@@ -275,8 +273,7 @@ fetch_project_stage() {
     gpg --verify "${sig_file}" "${stage_file}"
 
     log_info "Extracting stage archive ${stage_file} to ${target_root}"
-    tar --directory="${target_root}" --extract --file="${stage_file}" \
-        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+    tar_extract "${stage_file}" "${target_root}" \
         --use-compress-program="zstd --long=31"
 
     force_remove "${stage_file}"
@@ -337,8 +334,7 @@ fetch_resume_stage() {
     gpg --verify "${sig_file}" "${stage_file}"
 
     log_info "Extracting resume stage archive ${stage_file} to ${target_root}"
-    tar --directory="${target_root}" --extract --file="${stage_file}" \
-        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
+    tar_extract "${stage_file}" "${target_root}" \
         --use-compress-program="zstd --long=31"
 
     force_remove "${stage_file}"
@@ -380,9 +376,7 @@ publish_stage_archive() {
     log_info "Creating stage archive ${stage_file}"
     # Strip signing keys, Secure Boot keys, kernel/boot artifacts, and runtime
     # caches so the published stage archive is clean and redistributable.
-    tar --create --file="${stage_file}" --directory="${target_root}" \
-        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
-        --use-compress-program="zstd --long=31 --threads=0 -9" \
+    tar_create "${stage_file}" "${target_root}" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
         --exclude="./boot/*" \
@@ -396,7 +390,8 @@ publish_stage_archive() {
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
-        .
+        --use-compress-program="zstd --long=31 --threads=0 -9" \
+        "."
     log_info "Signing stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
         "${stage_file}"
@@ -435,9 +430,7 @@ publish_resume_stage() {
     # Preserve /var/db/pkg and /var/cache/edb/resume* so Portage can resume
     # the interrupted emerge queue in the next attempt; exclude ephemeral build
     # directories and binary packages already synced to S3.
-    tar --create --file="${stage_file}" --directory="${target_root}" \
-        --preserve-permissions --numeric-owner --xattrs-include='*.*' \
-        --use-compress-program="zstd --long --threads=0 -9" \
+    tar_create "${stage_file}" "${target_root}" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
         --exclude="./boot/*" \
@@ -452,7 +445,8 @@ publish_resume_stage() {
         --exclude="./var/lib/systemd/catalog/database" \
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
-        .
+        --use-compress-program="zstd --long --threads=0 -9" \
+        "."
     log_info "Signing resume stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
         "${stage_file}"

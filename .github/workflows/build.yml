@@ -22,6 +22,8 @@ env:
   PROFILES: ${{ vars.PROFILES }}
   BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
   BUILD_TIMEOUT: "330m"
+  RCLONE_VERSION: "v1.75.2"
+  STORAGETO_VERSION: "v0.5.0"
 
 jobs:
   setup:
@@ -32,20 +34,42 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install rclone
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
       - name: Prune Stale Snapshots
         run: |
           source lib/common.sh
           source lib/build.sh
           # Purge any abandoned resume snapshots older than 24 hours
-          s3_rclone delete --min-age "24h" \
+          s3_rclone delete --min-age="24h" \
             ":s3:${S3_BUCKET_NAME}/resumes/" || true
 
       - name: Generate Profile Matrix
@@ -72,21 +96,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # TODO: Cache and dynamically find the latest version
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
       - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
-          aria2c --dir="/tmp" \
-            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
-          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
-            --directory="/tmp"
-          sudo mv /tmp/storageto "/usr/local/bin/storageto"
-          sudo chown root:root "/usr/local/bin/storageto"
-          rm "/tmp/storageto-linux-amd64.tar.gz"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
       - name: Run build.sh
         run: |
@@ -115,13 +153,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install rclone
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
 
       - name: Check S3 for Timed-Out Profiles
         id: check
@@ -136,7 +187,7 @@ jobs:
             snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
             if s3_rclone lsf \
               ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
-              grep -q "^${snapshot}\$"; then
+              grep --quiet "^${snapshot}\$"; then
               resuming+=("${profile}")
             fi
           done <<< "${PROFILES}"
@@ -168,20 +219,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
       - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
-          aria2c --dir="/tmp" \
-            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
-          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
-            --directory="/tmp"
-          sudo mv /tmp/storageto "/usr/local/bin/storageto"
-          sudo chown root:root "/usr/local/bin/storageto"
-          rm "/tmp/storageto-linux-amd64.tar.gz"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
       - name: Run build.sh (Resume)
         run: |
@@ -208,13 +274,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install rclone
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
 
       - name: Check S3 for Timed-Out Profiles
         id: check
@@ -229,7 +308,7 @@ jobs:
             snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
             if s3_rclone lsf \
               ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
-              grep -q "^${snapshot}\$"; then
+              grep --quiet "^${snapshot}\$"; then
               resuming+=("${profile}")
             fi
           done <<< "${PROFILES}"
@@ -261,20 +340,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
       - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
-          aria2c --dir="/tmp" \
-            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
-          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
-            --directory="/tmp"
-          sudo mv /tmp/storageto "/usr/local/bin/storageto"
-          sudo chown root:root "/usr/local/bin/storageto"
-          rm "/tmp/storageto-linux-amd64.tar.gz"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
       - name: Run build.sh (Resume)
         run: |
@@ -301,13 +395,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install rclone
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
 
       - name: Check S3 for Timed-Out Profiles
         id: check
@@ -322,7 +429,7 @@ jobs:
             snapshot="stage3-${profile_name}-resume-${{ github.run_id }}.tar.zst"
             if s3_rclone lsf \
               ":s3:${S3_BUCKET_NAME}/resumes/${snapshot}" 2>/dev/null | \
-              grep -q "^${snapshot}\$"; then
+              grep --quiet "^${snapshot}\$"; then
               resuming+=("${profile}")
             fi
           done <<< "${PROFILES}"
@@ -354,20 +461,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
       - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb xorriso
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
-          aria2c --dir="/tmp" \
-            "https://github.com/storageto/cli/releases/download/v0.5.0/storageto-linux-amd64.tar.gz"
-          tar --extract --file="/tmp/storageto-linux-amd64.tar.gz" \
-            --directory="/tmp"
-          sudo mv /tmp/storageto "/usr/local/bin/storageto"
-          sudo chown root:root "/usr/local/bin/storageto"
-          rm "/tmp/storageto-linux-amd64.tar.gz"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
       - name: Run build.sh (Resume)
         run: |
@@ -399,17 +521,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install rclone
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
         run: |
-          aria2c --dir="/tmp" \
-            "https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.deb"
-          sudo apt update; sudo apt install --yes \
-            /tmp/rclone-v1.75.2-linux-amd64.deb
-          rm "/tmp/rclone-v1.75.2-linux-amd64.deb"
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
 
       - name: Purge Run Snapshots
         run: |
           source lib/common.sh
           source lib/build.sh
           s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
-            --include "stage3-*-resume-${{ github.run_id }}.tar.zst*" || true
+            --include="stage3-*-resume-${{ github.run_id }}.tar.zst*" || true

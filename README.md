@@ -87,44 +87,20 @@ fork on demand without local dependencies:
 - **Operation**: Runs `gh repo sync --force` against `gentoo-mirror/gentoo`
   (branch `stable`).
 
-## CI/CD Workflow Configuration (GitHub Actions Only)
+## CI/CD Workflows (GitHub Actions Only)
 
 The `Build` ([`.github/workflows/build.yml`](.github/workflows/build.yml)) and
 `Update` ([`.github/workflows/update.yml`](.github/workflows/update.yml))
-workflows are configured using repository variables (`vars`):
+workflows run on GitHub-hosted runners using repository variables:
 
-- **`PROFILES`**: Newline-separated list of profiles to process in parallel
-  (e.g. `automatic-journey:amd64/x86-64-v3/base`). The workflow converts this
-  list into a dynamic GitHub Actions matrix.
-- **`BUILD_PACKAGES`**: Space-separated list of package atoms to build in
-  `build.yml` (e.g. `app-admin/ansible sys-kernel/gentoo-kernel`).
+- **`PROFILES`**: Newline-separated list of target profiles executed in
+  parallel via matrix.
+- **`BUILD_PACKAGES`**: Space-separated list of package atoms for `build.yml`.
 
-### Timeout Resumption & Storage Management
-
-To prevent builds from being aborted mid-way by the GitHub Actions 6-hour runner
-limit, `build.sh` and `update.sh` include an internal execution timer
-(`--timeout="330m"`) and multi-attempt resumption architecture:
-
-1. **Graceful Timeout**: At 5 hours 30 minutes, `emerge` receives `SIGTERM`,
-   allowing Portage to finalize disk writes and record its resume state in
-   `/var/cache/edb/resume`.
-2. **Intermediate Snapshots**: Completed binary packages are uploaded to S3,
-   and an intermediate snapshot is archived to
-   `:s3:${S3_BUCKET_NAME}/resumes/stage3-<profile>-resume-<run_id>.tar.zst`
-   with a detached GPG signature.
-3. **Chained Resumption**: The workflow automatically chains up to 4 attempts.
-   Between attempts, an intermediate checker job inspects S3 and triggers the
-   next attempt matrix *only* for profiles that timed out, invoking the script
-   with `--resume` (`emerge --resume`).
-4. **Storage Leak Prevention**:
-   - **On Success**: `clear_resume_stage` deletes the snapshot immediately once
-     all packages finish.
-   - **Workflow Cleanup**: A dedicated `cleanup` job (`if: always()`) purges
-     any run-scoped snapshots upon workflow completion.
-   - **Aging Garbage Collection**: At the start of each run, snapshots older
-     than 24 hours are pruned from S3.
-   - **S3 Bucket Lifecycle Rule**: An object expiration lifecycle rule
-     (1–2 days) should be configured on the `resumes/` prefix in the S3 bucket.
+Workflows enforce a 5.5-hour execution timer (`--timeout="330m"`), automatically
+saving intermediate state to S3 and resuming timed-out profiles across up to 4
+attempts. Stale snapshots are pruned automatically; setting a 1–2 day expiration
+lifecycle rule on `resumes/` in S3 is recommended.
 
 ## Attribution
 

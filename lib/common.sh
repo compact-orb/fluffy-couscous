@@ -19,6 +19,7 @@ required_commands+=(
     "realpath"
     "rm"
     "rmdir"
+    "tar"
     "udevadm"
     "umount"
 )
@@ -330,6 +331,36 @@ create_file() {
 create_symbolic_link() {
     log_debug "Creating symbolic link from ${1} to ${2}"
     ln --force --symbolic "${1}" "${2}"
+}
+
+# === Archive Helpers ===
+
+tar_extract() {
+    local archive="${1}"
+    local target_dir="${2}"
+    shift 2
+
+    tar --directory="${target_dir}" \
+        --extract \
+        --file="${archive}" \
+        --numeric-owner \
+        --preserve-permissions \
+        --xattrs-include="*.*" \
+        "${@}"
+}
+
+tar_create() {
+    local archive="${1}"
+    local source_dir="${2}"
+    shift 2
+
+    tar --create \
+        --directory="${source_dir}" \
+        --file="${archive}" \
+        --numeric-owner \
+        --preserve-permissions \
+        --xattrs-include="*.*" \
+        "${@}"
 }
 
 # === Configuration Parsing ===
@@ -848,7 +879,7 @@ kill_chroot_processes() {
                 local exe
                 exe="$(basename "$(readlink "${p}/exe")")"
                 log_warn "Killing lingering chroot process ${p##*/} (${exe})"
-                kill -9 "${p##*/}" 2> /dev/null || true
+                kill -s KILL "${p##*/}" 2> /dev/null || true
             fi
         fi
     done
