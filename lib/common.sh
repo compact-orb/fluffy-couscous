@@ -907,8 +907,8 @@ kill_chroot_processes() {
     done
 
     local iteration
-    for (( iteration=0; iteration<30; iteration++ )); do
-        sleep 0.5
+    for (( iteration=0; iteration<300; iteration++ )); do
+        sleep 1
         local has_lingering=0
         for p in /proc/[0-9]*; do
             if [[ -d "${p}" ]] && \
@@ -973,7 +973,7 @@ chroot_run() {
 
     local -a timeout_cmd=()
     if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
-        timeout_cmd=(timeout --kill-after="60s" --signal="TERM" \
+        timeout_cmd=(timeout --kill-after="300s" --signal="TERM" \
             "${CHROOT_TIMEOUT}")
     fi
 
