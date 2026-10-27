@@ -558,3 +558,72 @@ upload_mounted_binary_packages() {
     s3_rclone sync "${binpkgs_dir}" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
 }
+
+# === Stage Build Lifecycle ===
+
+prepare_stage_environment() {
+    local stage_dir="${1}"
+    local profile="${2}"
+    local resume="${3:-0}"
+    local resume_id="${4:-}"
+
+    if (( resume == 1 )); then
+        if [[ -z "${resume_id}" ]]; then
+            log_error "Resume requested but no resume ID provided"
+            exit 1
+        fi
+        if ! has_resume_stage "${profile}" "${resume_id}"; then
+            log_error "Resume snapshot for ${profile} (${resume_id}) not found"
+            exit 1
+        fi
+        fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}"
+    else
+        fetch_project_stage "${stage_dir}" "${profile}" "stage3"
+    fi
+
+    configure_portage "${stage_dir}" "${profile}" "stage3"
+    mount_repos "${stage_dir}"
+    install_portage_gpg_key "${stage_dir}"
+    install_secureboot_keys "${stage_dir}"
+    mount_binary_packages "${stage_dir}" "${profile}"
+}
+
+handle_build_timeout() {
+    local stage_dir="${1}"
+    local profile="${2}"
+    local timeout="${3}"
+    local resume_id="${4:-}"
+
+    log_warn "Build timed out after ${timeout}"
+    upload_mounted_binary_packages "${stage_dir}" "${profile}"
+    unmount_binary_packages
+    if [[ -n "${resume_id}" ]]; then
+        publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}"
+    fi
+    unmount_repos
+    remove_portage_configuration "${stage_dir}"
+    force_remove "${stage_dir}"
+    exit 124
+}
+
+finish_stage_build() {
+    local stage_dir="${1}"
+    local profile="${2}"
+    local resume_id="${3:-}"
+    local publish_stage="${4:-}"
+
+    unmount_repos
+    remove_portage_configuration "${stage_dir}"
+    upload_mounted_binary_packages "${stage_dir}" "${profile}"
+    unmount_binary_packages
+
+    if [[ -n "${publish_stage}" ]]; then
+        publish_stage_archive "${stage_dir}" "${profile}" "${publish_stage}"
+    fi
+
+    if [[ -n "${resume_id}" ]]; then
+        clear_resume_stage "${profile}" "${resume_id}"
+    fi
+
+    force_remove "${stage_dir}"
+}

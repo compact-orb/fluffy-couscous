@@ -38,33 +38,8 @@ readonly STAGE_DIR="${BUILD_DIR}/stage"
 
 # === Environment Preparation ===
 
-if (( RESUME == 1 )); then
-    if [[ -z "${RESUME_ID}" ]]; then
-        log_error "Resume requested but no resume ID provided"
-        exit 1
-    fi
-    if ! has_resume_stage "${PROFILE}" "${RESUME_ID}"; then
-        log_error "Resume snapshot for ${PROFILE} (${RESUME_ID}) not found"
-        exit 1
-    fi
-    fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}"
-else
-    # Fetch the existing base stage3 tarball from S3 and verify GPG signature.
-    fetch_project_stage "${STAGE_DIR}" "${PROFILE}" "stage3"
-fi
-
-# Configure Portage settings (USE flags, make.conf, masks) for stage3 build.
-configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
-
-# Bind-mount synced ebuild repositories into the stage chroot.
-mount_repos "${STAGE_DIR}"
-
-# Install package signing and Secure Boot keys inside chroot for binpkg build.
-install_portage_gpg_key "${STAGE_DIR}"
-install_secureboot_keys "${STAGE_DIR}"
-
-# Mount S3 binhost via rclone and layer a writable OverlayFS on binpkgs dir.
-mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
+prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
+    "${RESUME}" "${RESUME_ID}"
 
 # === Build Packages ===
 
@@ -100,33 +75,10 @@ fi
 # === Cleanup & Upload ===
 
 if (( build_exit == 124 )); then
-    log_warn "Build timed out after ${TIMEOUT}"
-    # Sync all binary packages completed so far back to S3.
-    upload_mounted_binary_packages "${STAGE_DIR}" "${PROFILE}"
-    unmount_binary_packages
-    if [[ -n "${RESUME_ID}" ]]; then
-        publish_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}"
-    fi
-    unmount_repos
-    remove_portage_configuration "${STAGE_DIR}"
-    force_remove "${STAGE_DIR}"
-    exit 124
+    handle_build_timeout "${STAGE_DIR}" "${PROFILE}" \
+        "${TIMEOUT}" "${RESUME_ID}"
 elif (( build_exit != 0 )); then
     exit "${build_exit}"
 fi
 
-unmount_repos
-
-remove_portage_configuration "${STAGE_DIR}"
-
-# Sync the merged OverlayFS back to S3 so new binpkgs upload and removed
-# binpkgs are pruned; unmount overlay and discard ephemeral build chroot
-# without touching the baseline stage3 archive in S3.
-upload_mounted_binary_packages "${STAGE_DIR}" "${PROFILE}"
-unmount_binary_packages
-
-if [[ -n "${RESUME_ID}" ]]; then
-    clear_resume_stage "${PROFILE}" "${RESUME_ID}"
-fi
-
-force_remove "${STAGE_DIR}"
+finish_stage_build "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}"
