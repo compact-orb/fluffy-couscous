@@ -116,8 +116,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes xorriso
+          sudo apt update
+          sudo apt install --no-install-recommends --yes xorriso
 
       - name: Run build-install.sh
         run: |
