@@ -114,7 +114,7 @@ upload_portage_failure_logs() {
     archive="${archive_dir}/${archive_name}"
 
     tar --create --file="${archive}" \
-        --use-compress-program="zstd --long -9 --threads=0" \
+        --use-compress-program="zstd --long --threads=0 -9" \
         --directory="/" \
         "${log_files[@]#/}" 2>/dev/null || true
 
@@ -315,7 +315,7 @@ publish_stage_archive() {
     # caches so the published stage archive is clean and redistributable.
     tar --create --file="${stage_file}" --directory="${target_root}" \
         --preserve-permissions --numeric-owner --xattrs-include='*.*' \
-        --use-compress-program="zstd --long=31 -9 --threads=0" \
+        --use-compress-program="zstd --long=31 --threads=0 -9" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
         --exclude="./boot/*" \
