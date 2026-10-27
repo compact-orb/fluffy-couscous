@@ -22,8 +22,8 @@ env:
   PROFILES: ${{ vars.PROFILES }}
   BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
   BUILD_TIMEOUT: "330m"
-  RCLONE_VERSION: "v1.75.2"
-  STORAGETO_VERSION: "v0.5.0"
+  TOOL_RCLONE_VERSION: "v1.75.2"
+  TOOL_STORAGETO_VERSION: "v0.5.0"
 
 jobs:
   setup:
@@ -39,22 +39,22 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
             tar --directory="${HOME}/.cache/tools" --extract \
               --file="/tmp/storageto-linux-amd64.tar.gz"
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
@@ -101,22 +101,22 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
             tar --directory="${HOME}/.cache/tools" --extract \
               --file="/tmp/storageto-linux-amd64.tar.gz"
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
@@ -158,17 +158,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
@@ -224,22 +224,22 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
             tar --directory="${HOME}/.cache/tools" --extract \
               --file="/tmp/storageto-linux-amd64.tar.gz"
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
@@ -279,17 +279,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
@@ -345,22 +345,22 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
             tar --directory="${HOME}/.cache/tools" --extract \
               --file="/tmp/storageto-linux-amd64.tar.gz"
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
@@ -400,17 +400,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
@@ -466,22 +466,22 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
             tar --directory="${HOME}/.cache/tools" --extract \
               --file="/tmp/storageto-linux-amd64.tar.gz"
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
@@ -526,17 +526,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
             aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/

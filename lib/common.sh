@@ -304,8 +304,34 @@ remove_directory() {
 }
 
 force_remove() {
-    log_debug "Force removing ${1}"
-    rm --force --recursive "${1}"
+    local target="${1}"
+    log_debug "Force removing ${target}"
+
+    if [[ -d "${target}" ]]; then
+        local real_target
+        real_target="$(realpath "${target}" 2> /dev/null || \
+            printf "%s" "${target}")"
+        local -a leftover_mounts=()
+        local mountpoint
+        while IFS= read -r mountpoint; do
+            if [[ "${mountpoint}" == "${real_target}" || \
+                "${mountpoint}" == "${real_target}/"* ]]; then
+                leftover_mounts+=("${mountpoint}")
+            fi
+        done < <(awk '{print $2}' /proc/mounts 2> /dev/null || true)
+
+        if (( ${#leftover_mounts[@]} > 0 )); then
+            local i
+            for (( i=${#leftover_mounts[@]}-1; i>=0; i-- )); do
+                log_warn "Mount remaining at ${leftover_mounts[$i]};" \
+                    "lazy unmounting before removal"
+                umount --recursive --lazy "${leftover_mounts[$i]}" \
+                    2> /dev/null || true
+            done
+        fi
+    fi
+
+    rm --force --recursive "${target}"
 }
 
 copy_file() {
@@ -412,6 +438,7 @@ managed_unmount_all() {
     declare -n mounts_array_name="${1}"
 
     local exit_code="0"
+    local remaining_mounts=()
     local i
     # Unmount in reverse order so nested child mounts detach before parents.
     for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
@@ -420,11 +447,20 @@ managed_unmount_all() {
         # requiring util-linux mountpoint(1).
         if [[ "$(</proc/mounts)" == *" ${m} "* ]]; then
             log_debug "Unmounting ${m}"
-            umount --recursive "${m}" || exit_code="${?}"
+            if ! umount --recursive "${m}" 2> /dev/null; then
+                sleep 1
+                if ! umount --recursive "${m}" 2> /dev/null; then
+                    log_warn "Standard unmount failed for ${m}; lazy unmounting"
+                    if ! umount --recursive --lazy "${m}"; then
+                        exit_code="${?}"
+                        remaining_mounts+=("${m}")
+                    fi
+                fi
+            fi
         fi
     done
 
-    mounts_array_name=()
+    mounts_array_name=("${remaining_mounts[@]}")
     if (( exit_code != 0 )); then
         log_error "Error unmounting one or more filesystems"
         return "${exit_code}"
@@ -868,8 +904,8 @@ unmount_chroot_filesystems() {
     managed_unmount_all "_active_chroot_mounts"
 }
 
-# Kills background daemons (such as gpg-agent started by FEATURES=gpg-keepalive)
-# that would otherwise keep chroot mounts busy during unmount.
+# Kills lingering background processes that would otherwise keep chroot
+# mounts busy during unmount.
 kill_chroot_processes() {
     local target_root
     target_root="$(realpath "${1}")"
@@ -877,18 +913,33 @@ kill_chroot_processes() {
         return
     fi
 
-    local p
-    local root_link
-    for p in /proc/[0-9]*; do
-        if [[ -d "${p}" ]] && \
-            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
-            if [[ "${root_link}" == "${target_root}" ]]; then
-                local exe
-                exe="$(basename "$(readlink "${p}/exe")")"
-                log_warn "Killing lingering chroot process ${p##*/} (${exe})"
-                kill -s KILL "${p##*/}" 2> /dev/null || true
+    local iteration
+    for (( iteration=0; iteration<10; iteration++ )); do
+        local -a pids=()
+        local p
+        for p in /proc/[0-9]*; do
+            if [[ -d "${p}" ]]; then
+                local root_link
+                if root_link="$(readlink "${p}/root" 2> /dev/null)" && \
+                    [[ "${root_link}" == "${target_root}" ]]; then
+                    pids+=("${p##*/}")
+                fi
             fi
+        done
+
+        if (( ${#pids[@]} == 0 )); then
+            return 0
         fi
+
+        local pid
+        for pid in "${pids[@]}"; do
+            local exe
+            exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            log_warn "Killing lingering chroot process ${pid} (${exe:-unknown})"
+            kill -s KILL "${pid}" 2> /dev/null || true
+        done
+        sleep 0.5
     done
 }
 

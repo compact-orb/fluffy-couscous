@@ -24,7 +24,12 @@ required_commands+=(
 
 # === S3 & Cloud Storage ===
 
+# Unset RCLONE_VERSION if inherited from CI environments, as rclone interprets
+# RCLONE_VERSION as the boolean --version flag, causing runtime startup errors.
+unset RCLONE_VERSION 2> /dev/null || true
+
 s3_rclone() {
+    unset RCLONE_VERSION 2> /dev/null || true
     rclone \
         --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
         --s3-endpoint "${S3_ENDPOINT}" \
