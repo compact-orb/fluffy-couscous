@@ -115,14 +115,8 @@ if [[ "${resume_phase}" != "stage3" && \
         managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
             "${SEED_STAGE_BIND_DIR}"
 
-        if [[ -d "${STAGE_DIR}/var/cache/edb" ]]; then
-            create_directory "${SEED_DIR}/var/cache"
-            recursive_copy "${STAGE_DIR}/var/cache/edb" \
-                "${SEED_DIR}/var/cache/edb"
-        fi
-
         CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-            emerge --resume --jobs="$(nproc)"
+            emerge --resume --jobs="$(nproc)" --root="/tmp/stage"
             locale-gen --prefix "/tmp/stage"
             ' || stage1_exit="${?}"
     else
@@ -147,11 +141,6 @@ if [[ "${resume_phase}" != "stage3" && \
     # --- Stage 1 Timeout & Failure Handling ---
     if (( stage1_exit == 124 )); then
         log_warn "Stage 1 build timed out after ${TIMEOUT}"
-        if [[ -d "${SEED_DIR}/var/cache/edb" ]]; then
-            create_directory "${STAGE_DIR}/var/cache"
-            recursive_copy "${SEED_DIR}/var/cache/edb" \
-                "${STAGE_DIR}/var/cache/edb"
-        fi
         managed_unmount_all "_active_bootstrap_mounts"
         unmount_repos
         if [[ -n "${RESUME_ID}" ]]; then

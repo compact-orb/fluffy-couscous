@@ -171,7 +171,7 @@ jobs:
   check-attempt-1:
     name: Check Resumes (After Attempt 1)
     needs: [setup, bootstrap-attempt-1]
-    if: always() && needs.bootstrap-attempt-1.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-1.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -224,7 +224,7 @@ jobs:
   bootstrap-attempt-2:
     name: Bootstrap (Attempt 2)
     needs: [setup, check-attempt-1]
-    if: always() && needs.check-attempt-1.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-1.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -294,7 +294,7 @@ jobs:
   check-attempt-2:
     name: Check Resumes (After Attempt 2)
     needs: [setup, bootstrap-attempt-2]
-    if: always() && needs.bootstrap-attempt-2.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-2.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -347,7 +347,7 @@ jobs:
   bootstrap-attempt-3:
     name: Bootstrap (Attempt 3)
     needs: [setup, check-attempt-2]
-    if: always() && needs.check-attempt-2.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-2.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -417,7 +417,7 @@ jobs:
   check-attempt-3:
     name: Check Resumes (After Attempt 3)
     needs: [setup, bootstrap-attempt-3]
-    if: always() && needs.bootstrap-attempt-3.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-3.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -470,7 +470,7 @@ jobs:
   bootstrap-attempt-4:
     name: Bootstrap (Attempt 4)
     needs: [setup, check-attempt-3]
-    if: always() && needs.check-attempt-3.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-3.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -540,7 +540,7 @@ jobs:
   check-attempt-4:
     name: Check Resumes (After Attempt 4)
     needs: [setup, bootstrap-attempt-4]
-    if: always() && needs.bootstrap-attempt-4.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-4.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -593,7 +593,7 @@ jobs:
   bootstrap-attempt-5:
     name: Bootstrap (Attempt 5)
     needs: [setup, check-attempt-4]
-    if: always() && needs.check-attempt-4.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-4.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -663,7 +663,7 @@ jobs:
   check-attempt-5:
     name: Check Resumes (After Attempt 5)
     needs: [setup, bootstrap-attempt-5]
-    if: always() && needs.bootstrap-attempt-5.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-5.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -716,7 +716,7 @@ jobs:
   bootstrap-attempt-6:
     name: Bootstrap (Attempt 6)
     needs: [setup, check-attempt-5]
-    if: always() && needs.check-attempt-5.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-5.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -786,7 +786,7 @@ jobs:
   check-attempt-6:
     name: Check Resumes (After Attempt 6)
     needs: [setup, bootstrap-attempt-6]
-    if: always() && needs.bootstrap-attempt-6.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-6.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -839,7 +839,7 @@ jobs:
   bootstrap-attempt-7:
     name: Bootstrap (Attempt 7)
     needs: [setup, check-attempt-6]
-    if: always() && needs.check-attempt-6.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-6.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -909,7 +909,7 @@ jobs:
   check-attempt-7:
     name: Check Resumes (After Attempt 7)
     needs: [setup, bootstrap-attempt-7]
-    if: always() && needs.bootstrap-attempt-7.result == 'failure'
+    if: "!cancelled() && needs.bootstrap-attempt-7.result == 'failure'"
     runs-on: ubuntu-26.04
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -962,7 +962,7 @@ jobs:
   bootstrap-attempt-8:
     name: Bootstrap (Attempt 8)
     needs: [setup, check-attempt-7]
-    if: always() && needs.check-attempt-7.outputs.has_resume == 'true'
+    if: "!cancelled() && needs.check-attempt-7.outputs.has_resume == 'true'"
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
