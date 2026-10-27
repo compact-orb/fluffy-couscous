@@ -881,39 +881,82 @@ kill_chroot_processes() {
         return
     fi
 
+    local -a pids=()
+    local p root_link
+    for p in /proc/[0-9]*; do
+        if [[ -d "${p}" ]] && \
+            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
+            if [[ "${root_link}" == "${target_root}" || \
+                "${root_link}" == "${target_root}/"* ]]; then
+                pids+=("${p##*/}")
+            fi
+        fi
+    done
+
+    if (( ${#pids[@]} == 0 )); then
+        return 0
+    fi
+
+    local pid exe
+    for pid in "${pids[@]}"; do
+        exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
+            2> /dev/null || true)"
+        log_warn "Sending SIGTERM to lingering chroot process" \
+            "${pid} (${exe:-unknown})"
+        kill -s "TERM" "${pid}" 2> /dev/null || true
+    done
+
     local iteration
-    for (( iteration=0; iteration<20; iteration++ )); do
-        local -a pids=()
-        local p root_link
+    for (( iteration=0; iteration<30; iteration++ )); do
+        sleep 0.5
+        local has_lingering=0
         for p in /proc/[0-9]*; do
             if [[ -d "${p}" ]] && \
                 root_link="$(readlink "${p}/root" 2> /dev/null)"; then
                 if [[ "${root_link}" == "${target_root}" || \
                     "${root_link}" == "${target_root}/"* ]]; then
-                    pids+=("${p##*/}")
+                    has_lingering=1
+                    break
                 fi
             fi
         done
-
-        if (( ${#pids[@]} == 0 )); then
+        if (( has_lingering == 0 )); then
             return 0
         fi
+    done
 
-        local signal="TERM"
-        if (( iteration >= 4 )); then
-            signal="KILL"
+    log_warn "Lingering chroot processes did not exit; sending SIGKILL"
+    for p in /proc/[0-9]*; do
+        if [[ -d "${p}" ]] && \
+            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
+            if [[ "${root_link}" == "${target_root}" || \
+                "${root_link}" == "${target_root}/"* ]]; then
+                pid="${p##*/}"
+                exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
+                    2> /dev/null || true)"
+                log_warn "Sending SIGKILL to lingering chroot process" \
+                    "${pid} (${exe:-unknown})"
+                kill -s "KILL" "${pid}" 2> /dev/null || true
+            fi
         fi
+    done
 
-        local pid
-        for pid in "${pids[@]}"; do
-            local exe
-            exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
-                2> /dev/null || true)"
-            log_warn "Sending SIG${signal} to lingering chroot process" \
-                "${pid} (${exe:-unknown})"
-            kill -s "${signal}" "${pid}" 2> /dev/null || true
+    for (( iteration=0; iteration<10; iteration++ )); do
+        sleep 0.5
+        local has_lingering=0
+        for p in /proc/[0-9]*; do
+            if [[ -d "${p}" ]] && \
+                root_link="$(readlink "${p}/root" 2> /dev/null)"; then
+                if [[ "${root_link}" == "${target_root}" || \
+                    "${root_link}" == "${target_root}/"* ]]; then
+                    has_lingering=1
+                    break
+                fi
+            fi
         done
-        sleep 0.25
+        if (( has_lingering == 0 )); then
+            return 0
+        fi
     done
 
     log_error "Failed to terminate all chroot processes for ${target_root}"

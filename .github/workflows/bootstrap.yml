@@ -224,7 +224,7 @@ jobs:
   bootstrap-attempt-2:
     name: Bootstrap (Attempt 2)
     needs: [setup, check-attempt-1]
-    if: needs.check-attempt-1.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-1.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -347,7 +347,7 @@ jobs:
   bootstrap-attempt-3:
     name: Bootstrap (Attempt 3)
     needs: [setup, check-attempt-2]
-    if: needs.check-attempt-2.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-2.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -470,7 +470,7 @@ jobs:
   bootstrap-attempt-4:
     name: Bootstrap (Attempt 4)
     needs: [setup, check-attempt-3]
-    if: needs.check-attempt-3.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-3.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -593,7 +593,7 @@ jobs:
   bootstrap-attempt-5:
     name: Bootstrap (Attempt 5)
     needs: [setup, check-attempt-4]
-    if: needs.check-attempt-4.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-4.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -716,7 +716,7 @@ jobs:
   bootstrap-attempt-6:
     name: Bootstrap (Attempt 6)
     needs: [setup, check-attempt-5]
-    if: needs.check-attempt-5.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-5.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -839,7 +839,7 @@ jobs:
   bootstrap-attempt-7:
     name: Bootstrap (Attempt 7)
     needs: [setup, check-attempt-6]
-    if: needs.check-attempt-6.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-6.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
@@ -962,7 +962,7 @@ jobs:
   bootstrap-attempt-8:
     name: Bootstrap (Attempt 8)
     needs: [setup, check-attempt-7]
-    if: needs.check-attempt-7.outputs.has_resume == 'true'
+    if: always() && needs.check-attempt-7.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1

@@ -216,7 +216,7 @@ jobs:
   update-attempt-2:
     name: Update (Attempt 2)
     needs: [setup, check-attempt-1]
-    if: needs.check-attempt-1.outputs.has_resumes == 'true'
+    if: always() && needs.check-attempt-1.outputs.has_resumes == 'true'
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -335,7 +335,7 @@ jobs:
   update-attempt-3:
     name: Update (Attempt 3)
     needs: [setup, check-attempt-2]
-    if: needs.check-attempt-2.outputs.has_resumes == 'true'
+    if: always() && needs.check-attempt-2.outputs.has_resumes == 'true'
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -454,7 +454,7 @@ jobs:
   update-attempt-4:
     name: Update (Attempt 4)
     needs: [setup, check-attempt-3]
-    if: needs.check-attempt-3.outputs.has_resumes == 'true'
+    if: always() && needs.check-attempt-3.outputs.has_resumes == 'true'
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
