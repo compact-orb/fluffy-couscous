@@ -1,0 +1,1039 @@
+name: Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile in repository:profile format"
+        required: true
+        type: string
+      seed_arch:
+        description: "Stage seed architecture (e.g. amd64)"
+        required: false
+        type: string
+      seed_name:
+        description: "Stage seed tarball name"
+        required: false
+        type: string
+      seed_stage:
+        description: "Custom stage3 profile to use as seed"
+        required: false
+        type: string
+      workaround:
+        description: "Apply bootstrap workaround instead of full rebuild"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
+  GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
+  REPOS: ${{ vars.REPOS }}
+  BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
+  SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+  BINPKG_PUBLIC_KEY: ${{ vars.BINPKG_PUBLIC_KEY }}
+  REPO_PUBLIC_KEYS: ${{ vars.REPO_PUBLIC_KEYS }}
+  S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
+  S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+  S3_REGION: ${{ vars.S3_REGION }}
+  S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+  S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+  SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
+  SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
+  STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
+  BUILD_TIMEOUT: "330m"
+  RCLONE_VERSION: "v1.75.2"
+  STORAGETO_VERSION: "v0.5.0"
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Prune Stale Snapshots
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          # Purge any abandoned resume snapshots older than 24 hours
+          s3_rclone delete --min-age="24h" \
+            ":s3:${S3_BUCKET_NAME}/resumes/" || true
+
+  bootstrap-attempt-1:
+    name: Bootstrap (Attempt 1)
+    needs: setup
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          # Workaround for stripping carriage return characters from GitHub
+          # Actions environment variables set via the web interface.
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          # Workaround for missing `/run/user/0`.
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-1:
+    name: Check Resumes (After Attempt 1)
+    needs: [setup, bootstrap-attempt-1]
+    if: always() && needs.bootstrap-attempt-1.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-2:
+    name: Bootstrap (Attempt 2)
+    needs: [setup, check-attempt-1]
+    if: needs.check-attempt-1.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-2:
+    name: Check Resumes (After Attempt 2)
+    needs: [setup, bootstrap-attempt-2]
+    if: always() && needs.bootstrap-attempt-2.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-3:
+    name: Bootstrap (Attempt 3)
+    needs: [setup, check-attempt-2]
+    if: needs.check-attempt-2.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-3:
+    name: Check Resumes (After Attempt 3)
+    needs: [setup, bootstrap-attempt-3]
+    if: always() && needs.bootstrap-attempt-3.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-4:
+    name: Bootstrap (Attempt 4)
+    needs: [setup, check-attempt-3]
+    if: needs.check-attempt-3.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-4:
+    name: Check Resumes (After Attempt 4)
+    needs: [setup, bootstrap-attempt-4]
+    if: always() && needs.bootstrap-attempt-4.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-5:
+    name: Bootstrap (Attempt 5)
+    needs: [setup, check-attempt-4]
+    if: needs.check-attempt-4.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-5:
+    name: Check Resumes (After Attempt 5)
+    needs: [setup, bootstrap-attempt-5]
+    if: always() && needs.bootstrap-attempt-5.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-6:
+    name: Bootstrap (Attempt 6)
+    needs: [setup, check-attempt-5]
+    if: needs.check-attempt-5.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-6:
+    name: Check Resumes (After Attempt 6)
+    needs: [setup, bootstrap-attempt-6]
+    if: always() && needs.bootstrap-attempt-6.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-7:
+    name: Bootstrap (Attempt 7)
+    needs: [setup, check-attempt-6]
+    if: needs.check-attempt-6.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  check-attempt-7:
+    name: Check Resumes (After Attempt 7)
+    needs: [setup, bootstrap-attempt-7]
+    if: always() && needs.bootstrap-attempt-7.result == 'failure'
+    runs-on: ubuntu-26.04
+    outputs:
+      has_resume: ${{ steps.check.outputs.has_resume }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Check S3 for Resume Snapshot
+        id: check
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          profile="${{ inputs.profile }}"
+          repo_profile="${profile#*:}"
+          profile_name="${repo_profile//\//-}"
+          run_id="${{ github.run_id }}"
+          pattern="*-${profile_name}-resume-${run_id}.tar.zst"
+          output="$(s3_rclone lsf \
+            ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="${pattern}" 2> /dev/null || true)"
+          if [[ -n "${output}" ]]; then
+            echo "has_resume=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_resume=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-attempt-8:
+    name: Bootstrap (Attempt 8)
+    needs: [setup, check-attempt-7]
+    if: needs.check-attempt-7.outputs.has_resume == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            aria2c --dir="/tmp" \
+              "https://github.com/storageto/cli/releases/download/${STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/storageto-linux-amd64.tar.gz"
+            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Run bootstrap.sh
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          args=(
+            --profile="${{ inputs.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+            --resume
+          )
+          if [[ -n "${{ inputs.seed_arch }}" ]]; then
+            args+=(--arch="${{ inputs.seed_arch }}")
+          fi
+          if [[ -n "${{ inputs.seed_name }}" ]]; then
+            args+=(--name="${{ inputs.seed_name }}")
+          fi
+          if [[ -n "${{ inputs.seed_stage }}" ]]; then
+            args+=(--seed-stage="${{ inputs.seed_stage }}")
+          fi
+          if [[ "${{ inputs.workaround }}" == "true" ]]; then
+            args+=(--workaround)
+          fi
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/bootstrap.sh "${args[@]}"
+
+  cleanup:
+    name: Cleanup Snapshots
+    runs-on: ubuntu-26.04
+    needs:
+      - setup
+      - bootstrap-attempt-1
+      - check-attempt-1
+      - bootstrap-attempt-2
+      - check-attempt-2
+      - bootstrap-attempt-3
+      - check-attempt-3
+      - bootstrap-attempt-4
+      - check-attempt-4
+      - bootstrap-attempt-5
+      - check-attempt-5
+      - bootstrap-attempt-6
+      - check-attempt-6
+      - bootstrap-attempt-7
+      - check-attempt-7
+      - bootstrap-attempt-8
+    if: always()
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Tools
+        id: cache-tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/tools
+          key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          mkdir --parents "${HOME}/.cache/tools"
+          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+            aria2c --dir="/tmp" \
+              "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            unzip -j "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip" \
+              "*/rclone" -d "${HOME}/.cache/tools"
+            rm --force "/tmp/rclone-${RCLONE_VERSION}-linux-amd64.zip"
+            chmod 0755 "${HOME}/.cache/tools/rclone"
+          fi
+          sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone
+
+      - name: Purge Run Snapshots
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          run_id="${{ github.run_id }}"
+          s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
+            --include="stage*-*-resume-${run_id}.tar.zst*" || true

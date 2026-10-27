@@ -283,11 +283,12 @@ fetch_project_stage() {
 has_resume_stage() {
     local profile="${1}"
     local resume_id="${2}"
+    local stage_type="${3}"
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local profile_name="${repo_profile//\//-}"
-    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
 
     local output
     output="$(s3_rclone lsf \
@@ -299,7 +300,8 @@ fetch_resume_stage() {
     local target_root="${1}"
     local profile="${2}"
     local resume_id="${3}"
-    log_info "Downloading and extracting resume snapshot to ${target_root}"
+    local stage_type="${4}"
+    log_info "Downloading and extracting ${stage_type} snapshot"
 
     import_bundled_keys
     import_public_keys
@@ -313,8 +315,8 @@ fetch_resume_stage() {
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local profile_name="${repo_profile//\//-}"
-    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
     local sig_filename="${stage_filename}.sig"
     local download_dir
     download_dir="$(mktemp --directory)"
@@ -410,14 +412,15 @@ publish_resume_stage() {
     local target_root="${1}"
     local profile="${2}"
     local resume_id="${3}"
-    log_info "Uploading resume snapshot from ${target_root}"
+    local stage_type="${4}"
+    log_info "Uploading ${stage_type} resume snapshot from ${target_root}"
 
     import_signing_key
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local profile_name="${repo_profile//\//-}"
-    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
     local sig_filename="${stage_filename}.sig"
     local archive_dir
     archive_dir="$(mktemp --directory)"
@@ -463,12 +466,13 @@ publish_resume_stage() {
 clear_resume_stage() {
     local profile="${1}"
     local resume_id="${2}"
-    log_info "Removing resume snapshot for ${profile} (${resume_id})"
+    local stage_type="${3}"
+    log_info "Removing ${stage_type} snapshot for ${profile} (${resume_id})"
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local profile_name="${repo_profile//\//-}"
-    local stage_filename="stage3-${profile_name}-resume-${resume_id}.tar.zst"
+    local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
     local sig_filename="${stage_filename}.sig"
 
     s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
@@ -572,11 +576,12 @@ prepare_stage_environment() {
             log_error "Resume requested but no resume ID provided"
             exit 1
         fi
-        if ! has_resume_stage "${profile}" "${resume_id}"; then
+        if ! has_resume_stage "${profile}" "${resume_id}" "stage3"; then
             log_error "Resume snapshot for ${profile} (${resume_id}) not found"
             exit 1
         fi
-        fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}"
+        fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
+            "stage3"
     else
         fetch_project_stage "${stage_dir}" "${profile}" "stage3"
     fi
@@ -598,7 +603,8 @@ handle_build_timeout() {
     upload_mounted_binary_packages "${stage_dir}" "${profile}"
     unmount_binary_packages
     if [[ -n "${resume_id}" ]]; then
-        publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}"
+        publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
+            "stage3"
     fi
     unmount_repos
     remove_portage_configuration "${stage_dir}"
@@ -622,7 +628,7 @@ finish_stage_build() {
     fi
 
     if [[ -n "${resume_id}" ]]; then
-        clear_resume_stage "${profile}" "${resume_id}"
+        clear_resume_stage "${profile}" "${resume_id}" "stage3"
     fi
 
     force_remove "${stage_dir}"

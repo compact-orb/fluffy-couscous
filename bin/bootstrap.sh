@@ -20,9 +20,16 @@ cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
 cli_define_flag "WORKAROUND" "-w|--workaround" \
     "Apply bootstrap workaround instead of full rebuild"
+cli_define_option "TIMEOUT" "-t|--timeout" \
+    "Timeout duration for emerge (e.g. 330m)" 0 ""
+cli_define_option "RESUME_ID" "-r|--resume-id" \
+    "Unique snapshot identifier for resumption" 0 ""
+cli_define_flag "RESUME" "-R|--resume" \
+    "Resume build from intermediate snapshot" 0
 
 cli_parse "${@}"
-readonly SEED_ARCH SEED_NAME SEED_STAGE PROFILE WORKAROUND
+readonly SEED_ARCH SEED_NAME SEED_STAGE PROFILE WORKAROUND \
+    TIMEOUT RESUME_ID RESUME
 
 if [[ -n "${SEED_STAGE}" ]]; then
     if [[ -n "${SEED_ARCH}" || -n "${SEED_NAME}" ]]; then
@@ -48,90 +55,189 @@ readonly SEED_DIR="${BUILD_DIR}/seed"
 readonly STAGE_DIR="${BUILD_DIR}/stage"
 readonly SEED_STAGE_BIND_DIR="${SEED_DIR}/tmp/stage"
 
-# === Seed Environment Preparation ===
+# === Resumption Phase Determination ===
 
-if [[ -n "${SEED_STAGE}" ]]; then
-    fetch_project_stage "${SEED_DIR}" "${SEED_STAGE}" "stage3"
-else
-    fetch_seed_stage "${SEED_DIR}" \
-        "${SEED_ARCH}" "${SEED_NAME}"
-fi
-
-configure_ebuild_repositories "${SEED_DIR}"
-mount_repos "${SEED_DIR}"
-
-if (( WORKAROUND )); then
-    source "${WORK_DIR}/lib/workaround.sh"
-else
-    remove_portage_configuration "${SEED_DIR}"
-    configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
-
-    if [[ -z "${SEED_STAGE}" ]]; then
-        chroot_run "${SEED_DIR}" '
-            emerge --deep --getbinpkg --jobs="$(nproc)" \
-                --newuse --update @world
-            '
+resume_phase=""
+if (( RESUME == 1 )); then
+    if [[ -z "${RESUME_ID}" ]]; then
+        log_error "Resume requested but no resume ID provided"
+        exit 1
+    fi
+    if has_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3"; then
+        resume_phase="stage3"
+    elif has_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"; then
+        resume_phase="stage3-init"
+    elif has_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"; then
+        resume_phase="stage1"
+    else
+        log_error "No resume snapshot found for ${PROFILE} (${RESUME_ID})"
+        exit 1
     fi
 fi
 
-# === Bootstrapping Stage ===
+# === Phase 1 & 2: Stage 1 Bootstrapping ===
 
-create_directory "${STAGE_DIR}"
-create_directory "${SEED_STAGE_BIND_DIR}"
-_active_bootstrap_mounts=()
-# Bind-mount STAGE_DIR to /tmp/stage in SEED_DIR so emerge --root=/tmp/stage
-# writes stage1 bootstrap packages directly into the new target root.
-managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
-    "${SEED_STAGE_BIND_DIR}"
+if [[ "${resume_phase}" != "stage3" && \
+      "${resume_phase}" != "stage3-init" ]]; then
+    # --- Seed Environment Preparation ---
+    if [[ -n "${SEED_STAGE}" ]]; then
+        fetch_project_stage "${SEED_DIR}" "${SEED_STAGE}" "stage3"
+    else
+        fetch_seed_stage "${SEED_DIR}" \
+            "${SEED_ARCH}" "${SEED_NAME}"
+    fi
 
-# Install baselayout with USE=build first to create the root filesystem
-# skeleton in /tmp/stage before emerging stage1 toolchain packages.
-chroot_run "${SEED_DIR}" '
-    USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
-        sys-apps/baselayout
-    '
+    configure_ebuild_repositories "${SEED_DIR}"
+    mount_repos "${SEED_DIR}"
 
-# Resolve the stacked profile packages.build list via build.py and install the
-# stage1 bootstrap toolchain into /tmp/stage without pulling implicit @system.
-copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
-chroot_run "${SEED_DIR}" '
-    buildpkgs=$(/tmp/build.py)
-    emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
-        --root="/tmp/stage" ${buildpkgs}
-    locale-gen --prefix "/tmp/stage"
-    '
+    if (( WORKAROUND )); then
+        source "${WORK_DIR}/lib/workaround.sh"
+    else
+        remove_portage_configuration "${SEED_DIR}"
+        configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
 
-# === Finalizing Stage 3 ===
+        if [[ -z "${SEED_STAGE}" ]]; then
+            chroot_run "${SEED_DIR}" '
+                emerge --deep --getbinpkg --jobs="$(nproc)" \
+                    --newuse --update @world
+                '
+        fi
+    fi
 
-managed_unmount_all "_active_bootstrap_mounts"
+    # --- Toolchain Bootstrapping into /tmp/stage ---
+    _active_bootstrap_mounts=()
+    stage1_exit=0
+    copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
 
-unmount_repos
+    if [[ "${resume_phase}" == "stage1" ]]; then
+        fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage1"
+        create_directory "${SEED_STAGE_BIND_DIR}"
+        managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
+            "${SEED_STAGE_BIND_DIR}"
 
-force_remove "${SEED_DIR}"
+        if [[ -d "${STAGE_DIR}/var/cache/edb" ]]; then
+            create_directory "${SEED_DIR}/var/cache"
+            recursive_copy "${STAGE_DIR}/var/cache/edb" \
+                "${SEED_DIR}/var/cache/edb"
+        fi
+
+        CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
+            emerge --resume --jobs="$(nproc)"
+            locale-gen --prefix "/tmp/stage"
+            ' || stage1_exit="${?}"
+    else
+        create_directory "${STAGE_DIR}"
+        create_directory "${SEED_STAGE_BIND_DIR}"
+        managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
+            "${SEED_STAGE_BIND_DIR}"
+
+        chroot_run "${SEED_DIR}" '
+            USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
+                sys-apps/baselayout
+            '
+
+        CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
+            buildpkgs=$(/tmp/build.py)
+            emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
+                --root="/tmp/stage" ${buildpkgs}
+            locale-gen --prefix "/tmp/stage"
+            ' || stage1_exit="${?}"
+    fi
+
+    # --- Stage 1 Timeout & Failure Handling ---
+    if (( stage1_exit == 124 )); then
+        log_warn "Stage 1 build timed out after ${TIMEOUT}"
+        if [[ -d "${SEED_DIR}/var/cache/edb" ]]; then
+            create_directory "${STAGE_DIR}/var/cache"
+            recursive_copy "${SEED_DIR}/var/cache/edb" \
+                "${STAGE_DIR}/var/cache/edb"
+        fi
+        managed_unmount_all "_active_bootstrap_mounts"
+        unmount_repos
+        if [[ -n "${RESUME_ID}" ]]; then
+            publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
+                "${RESUME_ID}" "stage1"
+        fi
+        force_remove "${SEED_DIR}"
+        force_remove "${STAGE_DIR}"
+        exit 124
+    elif (( stage1_exit != 0 )); then
+        exit "${stage1_exit}"
+    fi
+
+    # --- Stage 1 Completion & Clean Handoff ---
+    managed_unmount_all "_active_bootstrap_mounts"
+    unmount_repos
+    force_remove "${SEED_DIR}"
+    force_remove "${STAGE_DIR}/var/cache/edb"
+
+    if [[ -n "${RESUME_ID}" ]]; then
+        log_info "Stage 1 complete. Publishing stage3-init and yielding."
+        publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
+            "${RESUME_ID}" "stage3-init"
+        clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
+        force_remove "${STAGE_DIR}"
+        exit 124
+    fi
+fi
+
+# === Phase 3: Stage 3 Finalizing Rebuild ===
+
+if [[ "${resume_phase}" == "stage3" ]]; then
+    fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3"
+elif [[ "${resume_phase}" == "stage3-init" ]]; then
+    fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3-init"
+fi
 
 create_directory "${STAGE_DIR}/etc/portage"
-
 configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
-
 mount_repos "${STAGE_DIR}"
-
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
 
-# Rebuild the entire @system set inside the new root using the stage1 toolchain
-# so all base packages and generated binary packages match the target profile.
-chroot_run "${STAGE_DIR}" '
-    emerge --emptytree --jobs="$(nproc)" @system
-    emerge --depclean
-    '
+stage3_exit=0
+if [[ "${resume_phase}" == "stage3" ]]; then
+    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+        emerge --resume --jobs="$(nproc)"
+        emerge --depclean
+        ' || stage3_exit="${?}"
+else
+    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+        emerge --emptytree --jobs="$(nproc)" @system
+        emerge --depclean
+        ' || stage3_exit="${?}"
+fi
+
+# === Stage 3 Timeout & Completion Handling ===
+
+if (( stage3_exit == 124 )); then
+    log_warn "Stage 3 build timed out after ${TIMEOUT}"
+    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
+    if [[ -n "${RESUME_ID}" ]]; then
+        publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
+            "${RESUME_ID}" "stage3"
+        clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
+    fi
+    unmount_repos
+    remove_portage_configuration "${STAGE_DIR}"
+    force_remove "${STAGE_DIR}"
+    exit 124
+elif (( stage3_exit != 0 )); then
+    exit "${stage3_exit}"
+fi
 
 unmount_repos
-
 remove_portage_configuration "${STAGE_DIR}"
 
-# === Artifact Upload ===
+# === Artifact Upload & Cleanup ===
 
 upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
 publish_stage_archive "${STAGE_DIR}" "${PROFILE}" "stage3"
+
+if [[ -n "${RESUME_ID}" ]]; then
+    clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
+    clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
+    clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3"
+fi
 
 force_remove "${STAGE_DIR}"
