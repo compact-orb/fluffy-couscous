@@ -32,6 +32,8 @@ jobs:
     outputs:
       profiles: ${{ steps.matrix.outputs.profiles }}
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -94,6 +96,18 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
+      - uses: compact-orb/maximize-runner-storage@v2
+
+      - uses: compact-orb/optimize-runner-network@v1
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 cryptsetup curl fuse3 git gnupg udev unzip xz-utils zstd
+          sudo apt clean
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -217,6 +231,18 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-1.outputs.profiles) }}
     steps:
+      - uses: compact-orb/maximize-runner-storage@v2
+
+      - uses: compact-orb/optimize-runner-network@v1
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 cryptsetup curl fuse3 git gnupg udev unzip xz-utils zstd
+          sudo apt clean
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -338,6 +364,18 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-2.outputs.profiles) }}
     steps:
+      - uses: compact-orb/maximize-runner-storage@v2
+
+      - uses: compact-orb/optimize-runner-network@v1
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 cryptsetup curl fuse3 git gnupg udev unzip xz-utils zstd
+          sudo apt clean
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -459,6 +497,18 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-3.outputs.profiles) }}
     steps:
+      - uses: compact-orb/maximize-runner-storage@v2
+
+      - uses: compact-orb/optimize-runner-network@v1
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 cryptsetup curl fuse3 git gnupg udev unzip xz-utils zstd
+          sudo apt clean
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -519,6 +569,8 @@ jobs:
       - build-attempt-4
     if: always()
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools

@@ -50,6 +50,8 @@ jobs:
     name: Setup
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -95,6 +97,8 @@ jobs:
     needs: setup
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -215,6 +219,8 @@ jobs:
     if: needs.check-attempt-1.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -333,6 +339,8 @@ jobs:
     if: needs.check-attempt-2.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -451,6 +459,8 @@ jobs:
     if: needs.check-attempt-3.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -569,6 +579,8 @@ jobs:
     if: needs.check-attempt-4.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -687,6 +699,8 @@ jobs:
     if: needs.check-attempt-5.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -805,6 +819,8 @@ jobs:
     if: needs.check-attempt-6.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -923,6 +939,8 @@ jobs:
     if: needs.check-attempt-7.outputs.has_resume == 'true'
     runs-on: ubuntu-26.04
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -1007,6 +1025,8 @@ jobs:
       - bootstrap-attempt-8
     if: always()
     steps:
+      - uses: compact-orb/optimize-runner-network@v1
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
