@@ -32,7 +32,7 @@ jobs:
 
       - name: Cache Tools
         id: cache-tools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/tools
           key: tools-${{ runner.os }}-${{ env.RCLONE_VERSION }}-${{ env.STORAGETO_VERSION }}
