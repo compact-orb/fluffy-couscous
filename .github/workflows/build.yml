@@ -103,9 +103,9 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
-      - uses: compact-orb/maximize-runner-storage@v2
-
       - uses: compact-orb/optimize-runner-network@v1
+
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -235,9 +235,9 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-1.outputs.profiles) }}
     steps:
-      - uses: compact-orb/maximize-runner-storage@v2
-
       - uses: compact-orb/optimize-runner-network@v1
+
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -365,9 +365,9 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-2.outputs.profiles) }}
     steps:
-      - uses: compact-orb/maximize-runner-storage@v2
-
       - uses: compact-orb/optimize-runner-network@v1
+
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -495,9 +495,9 @@ jobs:
       matrix:
         profile: ${{ fromJson(needs.check-attempt-3.outputs.profiles) }}
     steps:
-      - uses: compact-orb/maximize-runner-storage@v2
-
       - uses: compact-orb/optimize-runner-network@v1
+
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
