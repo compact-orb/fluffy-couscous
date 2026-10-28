@@ -209,8 +209,7 @@ fi
 
 if (( stage3_exit == 124 )); then
     log_warn "Stage 3 build timed out after ${TIMEOUT}"
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}" || \
-        log_warn "Failed to upload binary packages after build timeout"
+    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
     if [[ -n "${RESUME_ID}" ]]; then
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
             "${RESUME_ID}" "stage3"
@@ -228,8 +227,7 @@ elif (( stage3_exit != 0 )); then
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
     fi
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}" || \
-        log_warn "Failed to upload binary packages after build failure"
+    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
     unmount_repos
     remove_portage_configuration "${STAGE_DIR}"
     upload_portage_failure_logs "${stage3_exit}"

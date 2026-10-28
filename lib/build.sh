@@ -604,8 +604,7 @@ handle_build_timeout() {
     local resume_id="${4}"
 
     log_warn "Build timed out after ${timeout}"
-    upload_mounted_binary_packages "${stage_dir}" "${profile}" || \
-        log_warn "Failed to upload binary packages after build timeout"
+    upload_mounted_binary_packages "${stage_dir}" "${profile}"
     unmount_binary_packages
     if [[ -n "${resume_id}" ]]; then
         publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
@@ -628,8 +627,7 @@ handle_build_failure() {
     if [[ -n "${resume_id}" ]]; then
         clear_resume_stage "${profile}" "${resume_id}" "stage3"
     fi
-    upload_mounted_binary_packages "${stage_dir}" "${profile}" || \
-        log_warn "Failed to upload binary packages after build failure"
+    upload_mounted_binary_packages "${stage_dir}" "${profile}"
     unmount_binary_packages
     unmount_repos
     remove_portage_configuration "${stage_dir}"
