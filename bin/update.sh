@@ -46,6 +46,13 @@ if (( RESUME == 1 )); then
         MAKEOPTS="--jobs=$(nproc)" emerge @preserved-rebuild
         emerge --depclean
         ' || build_exit="${?}"
+elif [[ -n "${TIMEOUT}" || -n "${RESUME_ID}" ]]; then
+    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+        MAKEOPTS="--jobs=$(nproc)" emerge --deep --newuse --update @system
+        emerge --depclean
+        MAKEOPTS="--jobs=$(nproc)" emerge @preserved-rebuild
+        emerge --depclean
+        ' || build_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
         emerge --deep --jobs="$(nproc)" --newuse --update @system
