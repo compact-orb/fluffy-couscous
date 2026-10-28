@@ -130,21 +130,12 @@ if [[ "${resume_phase}" != "stage3" && \
                 sys-apps/baselayout
             '
 
-        if [[ -n "${TIMEOUT}" || -n "${RESUME_ID}" ]]; then
-            CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-                buildpkgs=$(/tmp/build.py)
-                MAKEOPTS="--jobs=$(nproc)" emerge --implicit-system-deps=n \
-                    --oneshot --root="/tmp/stage" ${buildpkgs}
-                locale-gen --prefix "/tmp/stage"
-                ' || stage1_exit="${?}"
-        else
-            CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-                buildpkgs=$(/tmp/build.py)
-                emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
-                    --root="/tmp/stage" ${buildpkgs}
-                locale-gen --prefix "/tmp/stage"
-                ' || stage1_exit="${?}"
-        fi
+        CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
+            buildpkgs=$(/tmp/build.py)
+            MAKEOPTS="--jobs=$(nproc)" emerge --implicit-system-deps=n \
+                --oneshot --root="/tmp/stage" ${buildpkgs}
+            locale-gen --prefix "/tmp/stage"
+            ' || stage1_exit="${?}"
     fi
 
     # --- Stage 1 Timeout & Failure Handling ---
@@ -199,14 +190,9 @@ if [[ "${resume_phase}" == "stage3" ]]; then
         MAKEOPTS="--jobs=$(nproc)" emerge --resume
         emerge --depclean
         ' || stage3_exit="${?}"
-elif [[ -n "${TIMEOUT}" || -n "${RESUME_ID}" ]]; then
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --emptytree @system
-        emerge --depclean
-        ' || stage3_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --emptytree --jobs="$(nproc)" @system
+        MAKEOPTS="--jobs=$(nproc)" emerge --emptytree @system
         emerge --depclean
         ' || stage3_exit="${?}"
 fi

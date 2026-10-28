@@ -58,24 +58,12 @@ if (( RESUME == 1 )); then
             emaint --fix binhost
         fi
         ' || build_exit="${?}"
-elif [[ -n "${TIMEOUT}" || -n "${RESUME_ID}" ]]; then
+else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
         MAKEOPTS="--jobs=$(nproc)" emerge \
             --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
             app-portage/gentoolkit '"${PACKAGES}"'
         MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- --usepkg=n
-        emerge --depclean
-        if (( '"${CLEAN_BINPKGS}"' == 1 )); then
-            eclean-pkg --deep
-            emaint --fix binhost
-        fi
-        ' || build_exit="${?}"
-else
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --jobs="$(nproc)" \
-            --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
-            app-portage/gentoolkit '"${PACKAGES}"'
-        revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
         emerge --depclean
         if (( '"${CLEAN_BINPKGS}"' == 1 )); then
             eclean-pkg --deep
