@@ -20,9 +20,17 @@ cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique snapshot identifier for resumption" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
     "Resume build from intermediate snapshot" 0
+cli_define_flag "JOBS" "-j|--jobs" \
+    "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
-readonly PROFILE TIMEOUT RESUME_ID RESUME
+readonly PROFILE TIMEOUT RESUME_ID RESUME JOBS
+
+emerge_jobs=1
+if (( JOBS == 1 )); then
+    emerge_jobs="$(nproc)"
+fi
+readonly emerge_jobs
 
 check_root
 check_required_commands
@@ -41,16 +49,19 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 build_exit=0
 if (( RESUME == 1 )); then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --resume
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
         emerge --depclean
-        MAKEOPTS="--jobs=$(nproc)" emerge @preserved-rebuild
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+            @preserved-rebuild
         emerge --depclean
         ' || build_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --deep --newuse --update @system
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+            --deep --newuse --update @system
         emerge --depclean
-        MAKEOPTS="--jobs=$(nproc)" emerge @preserved-rebuild
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+            @preserved-rebuild
         emerge --depclean
         ' || build_exit="${?}"
 fi

@@ -26,10 +26,18 @@ cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique snapshot identifier for resumption" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
     "Resume build from intermediate snapshot" 0
+cli_define_flag "JOBS" "-j|--jobs" \
+    "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
 readonly SEED_ARCH SEED_NAME SEED_STAGE PROFILE WORKAROUND \
-    TIMEOUT RESUME_ID RESUME
+    TIMEOUT RESUME_ID RESUME JOBS
+
+emerge_jobs=1
+if (( JOBS == 1 )); then
+    emerge_jobs="$(nproc)"
+fi
+readonly emerge_jobs
 
 if [[ -n "${SEED_STAGE}" ]]; then
     if [[ -n "${SEED_ARCH}" || -n "${SEED_NAME}" ]]; then
@@ -116,7 +124,8 @@ if [[ "${resume_phase}" != "stage3" && \
             "${SEED_STAGE_BIND_DIR}"
 
         CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-            MAKEOPTS="--jobs=$(nproc)" emerge --resume --root="/tmp/stage"
+            MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+                --resume --root="/tmp/stage"
             locale-gen --prefix "/tmp/stage"
             ' || stage1_exit="${?}"
     else
@@ -132,8 +141,9 @@ if [[ "${resume_phase}" != "stage3" && \
 
         CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
             buildpkgs=$(/tmp/build.py)
-            MAKEOPTS="--jobs=$(nproc)" emerge --implicit-system-deps=n \
-                --oneshot --root="/tmp/stage" ${buildpkgs}
+            MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+                --implicit-system-deps=n --oneshot --root="/tmp/stage" \
+                ${buildpkgs}
             locale-gen --prefix "/tmp/stage"
             ' || stage1_exit="${?}"
     fi
@@ -195,12 +205,13 @@ install_secureboot_keys "${STAGE_DIR}"
 stage3_exit=0
 if [[ "${resume_phase}" == "stage3" ]]; then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --resume
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
         emerge --depclean
         ' || stage3_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --emptytree @system
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+            --emptytree @system
         emerge --depclean
         ' || stage3_exit="${?}"
 fi

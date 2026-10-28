@@ -3,6 +3,11 @@ name: Update
 on:
   workflow_dispatch:
     inputs:
+      jobs:
+        description: "Enable parallel emerge jobs using nproc (defaults to 1)"
+        required: false
+        type: boolean
+        default: false
       timeout:
         description: "Timeout duration for emerge (e.g. 330m or 30m)"
         required: false
@@ -146,10 +151,17 @@ jobs:
           done
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
-            --profile="${{ matrix.profile }}" \
-            --timeout="${BUILD_TIMEOUT}" \
+          args=(
+            --profile="${{ matrix.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
+          )
+          if [[ "${{ inputs.jobs }}" == "true" || \
+                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/update.sh "${args[@]}"
 
   check-attempt-1:
     name: Check Resumes (After Attempt 1)
@@ -264,11 +276,18 @@ jobs:
             ref="${ref//$'\r'/}"
           done
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
-            --profile="${{ matrix.profile }}" \
-            --timeout="${BUILD_TIMEOUT}" \
-            --resume-id="${{ github.run_id }}" \
+          args=(
+            --profile="${{ matrix.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
             --resume
+          )
+          if [[ "${{ inputs.jobs }}" == "true" || \
+                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/update.sh "${args[@]}"
 
   check-attempt-2:
     name: Check Resumes (After Attempt 2)
@@ -383,11 +402,18 @@ jobs:
             ref="${ref//$'\r'/}"
           done
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
-            --profile="${{ matrix.profile }}" \
-            --timeout="${BUILD_TIMEOUT}" \
-            --resume-id="${{ github.run_id }}" \
+          args=(
+            --profile="${{ matrix.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
             --resume
+          )
+          if [[ "${{ inputs.jobs }}" == "true" || \
+                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/update.sh "${args[@]}"
 
   check-attempt-3:
     name: Check Resumes (After Attempt 3)
@@ -502,11 +528,18 @@ jobs:
             ref="${ref//$'\r'/}"
           done
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/update.sh \
-            --profile="${{ matrix.profile }}" \
-            --timeout="${BUILD_TIMEOUT}" \
-            --resume-id="${{ github.run_id }}" \
+          args=(
+            --profile="${{ matrix.profile }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
             --resume
+          )
+          if [[ "${{ inputs.jobs }}" == "true" || \
+                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/update.sh "${args[@]}"
 
   cleanup:
     name: Cleanup Snapshots

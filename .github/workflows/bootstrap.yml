@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: false
+      jobs:
+        description: "Enable parallel emerge jobs using nproc (defaults to 1)"
+        required: false
+        type: boolean
+        default: true
       timeout:
         description: "Timeout duration for emerge (e.g. 330m or 30m)"
         required: false
@@ -167,6 +172,9 @@ jobs:
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
           fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
             bin/bootstrap.sh "${args[@]}"
@@ -290,6 +298,9 @@ jobs:
           fi
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
+          fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
           fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -415,6 +426,9 @@ jobs:
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
           fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
             bin/bootstrap.sh "${args[@]}"
@@ -538,6 +552,9 @@ jobs:
           fi
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
+          fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
           fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -663,6 +680,9 @@ jobs:
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
           fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
             bin/bootstrap.sh "${args[@]}"
@@ -786,6 +806,9 @@ jobs:
           fi
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
+          fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
           fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -911,6 +934,9 @@ jobs:
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
           fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
+          fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
             bin/bootstrap.sh "${args[@]}"
@@ -1034,6 +1060,9 @@ jobs:
           fi
           if [[ "${{ inputs.workaround }}" == "true" ]]; then
             args+=(--workaround)
+          fi
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+            args+=(--jobs)
           fi
 
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \

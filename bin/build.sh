@@ -26,10 +26,18 @@ cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique snapshot identifier for resumption" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
     "Resume build from intermediate snapshot" 0
+cli_define_flag "JOBS" "-j|--jobs" \
+    "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
 readonly PROFILE PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
-    TIMEOUT RESUME_ID RESUME
+    TIMEOUT RESUME_ID RESUME JOBS
+
+emerge_jobs=1
+if (( JOBS == 1 )); then
+    emerge_jobs="$(nproc)"
+fi
+readonly emerge_jobs
 
 check_root
 check_required_commands
@@ -50,8 +58,9 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 build_exit=0
 if (( RESUME == 1 )); then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --resume
-        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- --usepkg=n
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
+        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
+            --jobs='"${emerge_jobs}"' --usepkg=n
         emerge --depclean
         if (( '"${CLEAN_BINPKGS}"' == 1 )); then
             eclean-pkg --deep
@@ -60,10 +69,11 @@ if (( RESUME == 1 )); then
         ' || build_exit="${?}"
 else
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge \
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
             --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
             app-portage/gentoolkit '"${PACKAGES}"'
-        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- --usepkg=n
+        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
+            --jobs='"${emerge_jobs}"' --usepkg=n
         emerge --depclean
         if (( '"${CLEAN_BINPKGS}"' == 1 )); then
             eclean-pkg --deep
