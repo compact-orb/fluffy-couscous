@@ -50,7 +50,7 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 build_exit=0
 if (( RESUME == 1 )); then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --resume --jobs="$(nproc)"
+        MAKEOPTS="--jobs=$(nproc)" emerge --resume
         revdep-rebuild.sh -- --jobs="$(nproc)" --usepkg=n
         emerge --depclean
         if (( '"${CLEAN_BINPKGS}"' == 1 )); then

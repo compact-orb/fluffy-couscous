@@ -116,7 +116,7 @@ if [[ "${resume_phase}" != "stage3" && \
             "${SEED_STAGE_BIND_DIR}"
 
         CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-            emerge --resume --jobs="$(nproc)" --root="/tmp/stage"
+            MAKEOPTS="--jobs=$(nproc)" emerge --resume --root="/tmp/stage"
             locale-gen --prefix "/tmp/stage"
             ' || stage1_exit="${?}"
     else
@@ -187,7 +187,7 @@ install_secureboot_keys "${STAGE_DIR}"
 stage3_exit=0
 if [[ "${resume_phase}" == "stage3" ]]; then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --resume --jobs="$(nproc)"
+        MAKEOPTS="--jobs=$(nproc)" emerge --resume
         emerge --depclean
         ' || stage3_exit="${?}"
 else

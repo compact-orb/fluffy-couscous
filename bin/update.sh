@@ -41,9 +41,9 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 build_exit=0
 if (( RESUME == 1 )); then
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        emerge --resume --jobs="$(nproc)"
+        MAKEOPTS="--jobs=$(nproc)" emerge --resume
         emerge --depclean
-        emerge --jobs="$(nproc)" @preserved-rebuild
+        MAKEOPTS="--jobs=$(nproc)" emerge @preserved-rebuild
         emerge --depclean
         ' || build_exit="${?}"
 else
