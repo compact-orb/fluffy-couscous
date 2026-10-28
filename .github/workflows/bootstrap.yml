@@ -55,7 +55,8 @@ jobs:
     name: Setup
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -102,7 +103,8 @@ jobs:
     needs: setup
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -227,7 +229,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-1.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -350,7 +353,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-2.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -473,7 +477,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-3.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -596,7 +601,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-4.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -719,7 +725,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-5.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -842,7 +849,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-6.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -965,7 +973,8 @@ jobs:
     if: "!cancelled() && needs.check-attempt-7.outputs.has_resume == 'true'"
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -1051,7 +1060,8 @@ jobs:
       - bootstrap-attempt-8
     if: always()
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
