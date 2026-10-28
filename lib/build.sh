@@ -612,6 +612,26 @@ handle_build_timeout() {
     exit 124
 }
 
+handle_build_failure() {
+    local stage_dir="${1}"
+    local profile="${2}"
+    local resume_id="${3}"
+    local exit_code="${4}"
+
+    log_warn "Build failed with exit code ${exit_code};" \
+        "uploading built packages"
+    upload_mounted_binary_packages "${stage_dir}" "${profile}"
+    unmount_binary_packages
+    if [[ -n "${resume_id}" ]]; then
+        clear_resume_stage "${profile}" "${resume_id}" "stage3"
+    fi
+    unmount_repos
+    remove_portage_configuration "${stage_dir}"
+    upload_portage_failure_logs "${exit_code}"
+    force_remove "${stage_dir}"
+    exit "${exit_code}"
+}
+
 finish_stage_build() {
     local stage_dir="${1}"
     local profile="${2}"

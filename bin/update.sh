@@ -61,7 +61,8 @@ if (( build_exit == 124 )); then
     handle_build_timeout "${STAGE_DIR}" "${PROFILE}" \
         "${TIMEOUT}" "${RESUME_ID}"
 elif (( build_exit != 0 )); then
-    exit "${build_exit}"
+    handle_build_failure "${STAGE_DIR}" "${PROFILE}" \
+        "${RESUME_ID}" "${build_exit}"
 fi
 
 finish_stage_build "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3"
