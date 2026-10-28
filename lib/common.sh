@@ -655,7 +655,7 @@ import_bundled_keys() {
             gpg --quiet --import "${key_file}"
 
             gpg --with-colons --show-keys "${key_file}" | \
-                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+                awk -F: '/^fpr/ {print $10 ":6:"}' | \
                 gpg --batch --import-ownertrust --quiet
         fi
     done
@@ -685,7 +685,7 @@ import_public_keys() {
         gpg --import --quiet <<< "${all_keys}"
 
         gpg --show-keys --with-colons <<< "${all_keys}" | \
-            awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+            awk -F: '/^fpr/ {print $10 ":6:"}' | \
             gpg --batch --import-ownertrust --quiet
     fi
 
@@ -767,7 +767,7 @@ configure_portage() {
                 --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
             gpg --batch --homedir "${portage_gnupg_dir}" \
                 --list-keys --with-colons 2> /dev/null | \
-                awk --field-separator=":" '/^fpr/ {print $10 ":6:"}' | \
+                awk -F: '/^fpr/ {print $10 ":6:"}' | \
                 gpg --batch --homedir "${portage_gnupg_dir}" \
                     --import-ownertrust --quiet
         fi
