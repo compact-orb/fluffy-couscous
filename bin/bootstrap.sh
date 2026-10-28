@@ -151,11 +151,11 @@ if [[ "${resume_phase}" != "stage3" && \
         force_remove "${STAGE_DIR}"
         exit 124
     elif (( stage1_exit != 0 )); then
-        managed_unmount_all "_active_bootstrap_mounts"
-        unmount_repos
         if [[ -n "${RESUME_ID}" ]]; then
             clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
         fi
+        managed_unmount_all "_active_bootstrap_mounts"
+        unmount_repos
         upload_portage_failure_logs "${stage1_exit}"
         force_remove "${SEED_DIR}"
         force_remove "${STAGE_DIR}"
@@ -209,7 +209,8 @@ fi
 
 if (( stage3_exit == 124 )); then
     log_warn "Stage 3 build timed out after ${TIMEOUT}"
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
+    upload_binary_packages "${STAGE_DIR}" "${PROFILE}" || \
+        log_warn "Failed to upload binary packages after build timeout"
     if [[ -n "${RESUME_ID}" ]]; then
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
             "${RESUME_ID}" "stage3"
@@ -222,12 +223,13 @@ if (( stage3_exit == 124 )); then
 elif (( stage3_exit != 0 )); then
     log_warn "Stage 3 build failed with exit code ${stage3_exit};" \
         "uploading built packages"
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
     if [[ -n "${RESUME_ID}" ]]; then
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3"
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
     fi
+    upload_binary_packages "${STAGE_DIR}" "${PROFILE}" || \
+        log_warn "Failed to upload binary packages after build failure"
     unmount_repos
     remove_portage_configuration "${STAGE_DIR}"
     upload_portage_failure_logs "${stage3_exit}"
