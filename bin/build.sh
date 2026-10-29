@@ -63,10 +63,14 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # versions and refresh the binhost index.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-    MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+    cpus=$(nproc)
+    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
+    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+        emerge --jobs='"${emerge_jobs}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
         app-portage/gentoolkit '"${PACKAGES}"'
-    MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
+    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+        revdep-rebuild.sh -- \
         --jobs='"${emerge_jobs}"' --usepkg=n
     emerge --depclean
     if (( '"${CLEAN_BINPKGS}"' == 1 )); then
