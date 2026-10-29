@@ -120,7 +120,7 @@ jobs:
       - uses: compact-orb/optimize-runner-network@v1
 
       # Not compatible with Avrea
-      # - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -263,7 +263,7 @@ jobs:
       - uses: compact-orb/optimize-runner-network@v1
 
       # Not compatible with Avrea
-      # - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
