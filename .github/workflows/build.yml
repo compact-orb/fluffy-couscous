@@ -7,12 +7,14 @@ on:
         description: "Enable parallel emerge jobs using nproc (defaults to 1)"
         required: false
         type: boolean
-        default: false
+        # default: false
+        default: true # For Avrea
       timeout:
         description: "Timeout duration for emerge (e.g. 330m or 30m)"
         required: false
         type: string
-        default: "330m"
+        # default: "330m"
+        default: "1380m" # Avrea does not document timeout
 
 env:
   SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
@@ -39,11 +41,13 @@ env:
 jobs:
   setup:
     name: Setup Matrix
-    runs-on: ubuntu-26.04
+    # runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       profiles: ${{ steps.matrix.outputs.profiles }}
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 
@@ -102,13 +106,14 @@ jobs:
   build-attempt-1:
     name: Build (Attempt 1)
     needs: setup
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: compact-orb/maximize-runner-storage@v2
 
@@ -178,7 +183,7 @@ jobs:
     name: Check Resumes (After Attempt 1)
     needs: [setup, build-attempt-1]
     if: "!cancelled() && needs.build-attempt-1.result == 'failure'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -240,13 +245,14 @@ jobs:
     name: Build (Attempt 2)
     needs: [setup, check-attempt-1]
     if: "!cancelled() && needs.check-attempt-1.outputs.has_resumes == 'true'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-1.outputs.profiles) }}
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: compact-orb/maximize-runner-storage@v2
 
@@ -314,7 +320,7 @@ jobs:
     name: Check Resumes (After Attempt 2)
     needs: [setup, build-attempt-2]
     if: "!cancelled() && needs.build-attempt-2.result == 'failure'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -376,13 +382,14 @@ jobs:
     name: Build (Attempt 3)
     needs: [setup, check-attempt-2]
     if: "!cancelled() && needs.check-attempt-2.outputs.has_resumes == 'true'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-2.outputs.profiles) }}
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: compact-orb/maximize-runner-storage@v2
 
@@ -450,7 +457,7 @@ jobs:
     name: Check Resumes (After Attempt 3)
     needs: [setup, build-attempt-3]
     if: "!cancelled() && needs.build-attempt-3.result == 'failure'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -512,13 +519,14 @@ jobs:
     name: Build (Attempt 4)
     needs: [setup, check-attempt-3]
     if: "!cancelled() && needs.check-attempt-3.outputs.has_resumes == 'true'"
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-3.outputs.profiles) }}
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: compact-orb/maximize-runner-storage@v2
 
@@ -584,7 +592,7 @@ jobs:
 
   cleanup:
     name: Cleanup Snapshots
-    runs-on: ubuntu-26.04
+    runs-on: avrea-ubuntu-26.04-32-vcpu
     needs:
       - setup
       - build-attempt-1
@@ -596,7 +604,8 @@ jobs:
       - build-attempt-4
     if: always()
     steps:
-      - uses: compact-orb/optimize-runner-network@v1
+      # Not compatible with Avrea
+      # - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
 

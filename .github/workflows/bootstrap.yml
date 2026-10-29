@@ -60,6 +60,7 @@ env:
 jobs:
   setup:
     name: Setup
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -108,6 +109,7 @@ jobs:
   bootstrap-attempt-1:
     name: Bootstrap (Attempt 1)
     needs: setup
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -184,6 +186,7 @@ jobs:
     name: Check Resumes (After Attempt 1)
     needs: [setup, bootstrap-attempt-1]
     if: "!cancelled() && needs.bootstrap-attempt-1.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -237,6 +240,7 @@ jobs:
     name: Bootstrap (Attempt 2)
     needs: [setup, check-attempt-1]
     if: "!cancelled() && needs.check-attempt-1.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -311,6 +315,7 @@ jobs:
     name: Check Resumes (After Attempt 2)
     needs: [setup, bootstrap-attempt-2]
     if: "!cancelled() && needs.bootstrap-attempt-2.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -364,6 +369,7 @@ jobs:
     name: Bootstrap (Attempt 3)
     needs: [setup, check-attempt-2]
     if: "!cancelled() && needs.check-attempt-2.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -438,6 +444,7 @@ jobs:
     name: Check Resumes (After Attempt 3)
     needs: [setup, bootstrap-attempt-3]
     if: "!cancelled() && needs.bootstrap-attempt-3.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -491,6 +498,7 @@ jobs:
     name: Bootstrap (Attempt 4)
     needs: [setup, check-attempt-3]
     if: "!cancelled() && needs.check-attempt-3.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -565,6 +573,7 @@ jobs:
     name: Check Resumes (After Attempt 4)
     needs: [setup, bootstrap-attempt-4]
     if: "!cancelled() && needs.bootstrap-attempt-4.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -618,6 +627,7 @@ jobs:
     name: Bootstrap (Attempt 5)
     needs: [setup, check-attempt-4]
     if: "!cancelled() && needs.check-attempt-4.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -692,6 +702,7 @@ jobs:
     name: Check Resumes (After Attempt 5)
     needs: [setup, bootstrap-attempt-5]
     if: "!cancelled() && needs.bootstrap-attempt-5.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -745,6 +756,7 @@ jobs:
     name: Bootstrap (Attempt 6)
     needs: [setup, check-attempt-5]
     if: "!cancelled() && needs.check-attempt-5.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -819,6 +831,7 @@ jobs:
     name: Check Resumes (After Attempt 6)
     needs: [setup, bootstrap-attempt-6]
     if: "!cancelled() && needs.bootstrap-attempt-6.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -872,6 +885,7 @@ jobs:
     name: Bootstrap (Attempt 7)
     needs: [setup, check-attempt-6]
     if: "!cancelled() && needs.check-attempt-6.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -946,6 +960,7 @@ jobs:
     name: Check Resumes (After Attempt 7)
     needs: [setup, bootstrap-attempt-7]
     if: "!cancelled() && needs.bootstrap-attempt-7.result == 'failure'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resume: ${{ steps.check.outputs.has_resume }}
@@ -999,6 +1014,7 @@ jobs:
     name: Bootstrap (Attempt 8)
     needs: [setup, check-attempt-7]
     if: "!cancelled() && needs.check-attempt-7.outputs.has_resume == 'true'"
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     steps:
       # Not compatible with Avrea
@@ -1071,6 +1087,7 @@ jobs:
 
   cleanup:
     name: Cleanup Snapshots
+    # runs-on: ubuntu-26.04
     runs-on: avrea-ubuntu-26.04-32-vcpu
     needs:
       - setup
