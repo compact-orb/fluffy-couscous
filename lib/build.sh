@@ -459,7 +459,7 @@ publish_resume_stage() {
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
         --exclude="./.oldroot" \
         --exclude="./etc/resolv.conf" \
-        --exclude="./var/cache/binpkgs/*" \
+        --exclude="./var/cache/binpkgs/*/*" \
         --exclude="./var/db/repos/*" \
         --exclude="./var/lib/systemd/catalog/database" \
         "."

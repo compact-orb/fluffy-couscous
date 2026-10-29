@@ -1144,6 +1144,10 @@ chroot_run_criu() {
     real_target_root="$(realpath "${1}")"
     shift
 
+    modprobe --all \
+        af_packet_diag fuse inet_diag netlink_diag overlay raw_diag \
+        tcp_diag udp_diag unix_diag 2> /dev/null || true
+
     prepare_criu_chroot_filesystem "${real_target_root}"
 
     local criu_dir="${real_target_root}/.criu"
@@ -1318,6 +1322,7 @@ EOF
     fi
 
     rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+    rmdir "${real_target_root}/.oldroot" 2> /dev/null || true
     force_remove "${criu_dir}"
     kill_chroot_processes "${real_target_root}"
 

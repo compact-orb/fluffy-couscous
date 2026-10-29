@@ -104,9 +104,7 @@ if [[ "${resume_phase}" != "stage3" && \
         fi
         download_ebuild_repositories "${SEED_DIR}"
         mount_repos "${SEED_DIR}"
-        if (( ! WORKAROUND )); then
-            install_secureboot_keys "${SEED_DIR}"
-        fi
+        install_secureboot_keys "${SEED_DIR}"
     else
         # --- Seed Environment Preparation ---
         if [[ -n "${SEED_STAGE}" ]]; then
