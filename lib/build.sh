@@ -169,9 +169,16 @@ install_portage_gpg_key() {
 
     gpg --batch --export-secret-keys "${_signing_key_fingerprint}" | \
         gpg --batch --homedir "${portage_gnupg_signing_dir}" --import
+    gpgconf --homedir "${portage_gnupg_signing_dir}" --kill all \
+        2> /dev/null || true
 
-    printf "%s\n" "BINPKG_GPG_SIGNING_KEY=\"${_signing_key_fingerprint}\"" \
-        >> "${target_root}/etc/portage/make.conf"
+    if [[ -f "${target_root}/etc/portage/make.conf" ]] && \
+        ! grep -q "BINPKG_GPG_SIGNING_KEY" \
+            "${target_root}/etc/portage/make.conf"; then
+        printf "%s\n" \
+            "BINPKG_GPG_SIGNING_KEY=\"${_signing_key_fingerprint}\"" \
+            >> "${target_root}/etc/portage/make.conf"
+    fi
 }
 
 install_secureboot_keys() {
@@ -394,6 +401,8 @@ publish_stage_archive() {
     tar_create "${stage_file}" "${target_root}" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
+        --exclude="./.criu" \
+        --exclude="./.oldroot" \
         --exclude="./boot/*" \
         --exclude="./etc/kernel" \
         --exclude="./etc/machine-id" \
@@ -442,24 +451,17 @@ publish_resume_stage() {
     local stage_file="${archive_dir}/${stage_filename}"
     local sig_file="${archive_dir}/${sig_filename}"
     log_info "Creating resume stage archive ${stage_file}"
-    # Preserve /var/db/pkg and /var/cache/edb/resume* so Portage can resume
-    # the interrupted emerge queue in the next attempt; exclude ephemeral build
-    # directories and binary packages already synced to S3.
+    # Preserve /.criu, /var/tmp/portage, /tmp, /var/cache/distfiles,
+    # /var/db/pkg, and /var/cache/edb/resume* so CRIU can restore the live
+    # emerge process tree mid-build.
     tar_create "${stage_file}" "${target_root}" \
         --exclude=".${PORTAGE_GPG_DIR}" \
         --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
-        --exclude="./boot/*" \
-        --exclude="./etc/kernel" \
-        --exclude="./etc/machine-id" \
+        --exclude="./.oldroot" \
         --exclude="./etc/resolv.conf" \
-        --exclude="./root/*" \
-        --exclude="./tmp/*" \
-        --exclude="./var/cache/binpkgs*" \
-        --exclude="./var/cache/distfiles/*" \
+        --exclude="./var/cache/binpkgs/*" \
         --exclude="./var/db/repos/*" \
         --exclude="./var/lib/systemd/catalog/database" \
-        --exclude="./var/log/*" \
-        --exclude="./var/tmp/*" \
         "."
     log_info "Signing resume stage archive ${stage_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
@@ -511,15 +513,17 @@ mount_binary_packages() {
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
     local binpkgs_dir="${target_root}/var/cache/binpkgs"
+    local host_binpkgs_base="${BUILD_DIR}/binpkgs"
+    create_directory "${host_binpkgs_base}"
 
-    local lowerdir="${binpkgs_dir}-lower"
+    local lowerdir="${host_binpkgs_base}/lower"
     create_directory "${lowerdir}"
-    local upperdir="${binpkgs_dir}-upper"
+    local upperdir="${host_binpkgs_base}/upper"
     create_directory "${upperdir}"
-    local workdir="${binpkgs_dir}-work"
+    local workdir="${host_binpkgs_base}/work"
     create_directory "${workdir}"
 
-    local rc_sock="${binpkgs_dir}-rc.sock"
+    local rc_sock="${host_binpkgs_base}/rc.sock"
     force_remove "${rc_sock}"
     log_info "Mounting ${lowerdir}"
     s3_rclone mount --attr-timeout "24h" --buffer-size "64M" \
@@ -560,6 +564,7 @@ mount_binary_packages() {
 unmount_binary_packages() {
     log_info "Unmounting binary packages"
     managed_unmount_all "_active_binpkg_mounts"
+    force_remove "${BUILD_DIR}/binpkgs"
 }
 
 upload_mounted_binary_packages() {
@@ -597,11 +602,16 @@ prepare_stage_environment() {
         fi
         fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
             "stage3"
+        if [[ ! -d "${stage_dir}/.criu" ]]; then
+            log_error "CRIU checkpoint not found in ${stage_dir}"
+            exit 1
+        fi
+        download_ebuild_repositories "${stage_dir}"
     else
         fetch_project_stage "${stage_dir}" "${profile}" "stage3"
+        configure_portage "${stage_dir}" "${profile}" "stage3"
     fi
 
-    configure_portage "${stage_dir}" "${profile}" "stage3"
     mount_repos "${stage_dir}"
     install_portage_gpg_key "${stage_dir}"
     install_secureboot_keys "${stage_dir}"

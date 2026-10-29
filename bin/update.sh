@@ -5,8 +5,14 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
+    "criu"
     "dirname"
+    "mknod"
+    "pivot_root"
     "realpath"
+    "setsid"
+    "tail"
+    "unshare"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
@@ -47,24 +53,14 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # with preserved libraries (@preserved-rebuild) across library soname bumps
 # before final depclean.
 build_exit=0
-if (( RESUME == 1 )); then
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
-        emerge --depclean
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-            @preserved-rebuild
-        emerge --depclean
-        ' || build_exit="${?}"
-else
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-            --deep --newuse --update @system
-        emerge --depclean
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-            @preserved-rebuild
-        emerge --depclean
-        ' || build_exit="${?}"
-fi
+CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+        --deep --newuse --update @system
+    emerge --depclean
+    MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+        @preserved-rebuild
+    emerge --depclean
+    ' || build_exit="${?}"
 
 # === Cleanup & Upload ===
 

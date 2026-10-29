@@ -5,8 +5,15 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
+    "criu"
     "dirname"
+    "mknod"
+    "mv"
+    "pivot_root"
     "realpath"
+    "setsid"
+    "tail"
+    "unshare"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
@@ -87,97 +94,88 @@ fi
 
 if [[ "${resume_phase}" != "stage3" && \
       "${resume_phase}" != "stage3-init" ]]; then
-    # --- Seed Environment Preparation ---
-    if [[ -n "${SEED_STAGE}" ]]; then
-        fetch_project_stage "${SEED_DIR}" "${SEED_STAGE}" "stage3"
-    else
-        fetch_seed_stage "${SEED_DIR}" \
-            "${SEED_ARCH}" "${SEED_NAME}"
-    fi
-
-    configure_ebuild_repositories "${SEED_DIR}"
-    mount_repos "${SEED_DIR}"
-
-    if (( WORKAROUND )); then
-        source "${WORK_DIR}/lib/workaround.sh"
-    else
-        remove_portage_configuration "${SEED_DIR}"
-        configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
-        install_secureboot_keys "${SEED_DIR}"
-
-        if [[ -z "${SEED_STAGE}" ]]; then
-            chroot_run "${SEED_DIR}" '
-                emerge --deep --getbinpkg --jobs="$(nproc)" \
-                    --newuse --update @world
-                '
-        fi
-    fi
-
-    # --- Toolchain Bootstrapping into /tmp/stage ---
-    _active_bootstrap_mounts=()
     stage1_exit=0
-    copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
 
     if [[ "${resume_phase}" == "stage1" ]]; then
-        fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage1"
-        create_directory "${STAGE_DIR}/etc/portage"
-        create_directory "${SEED_STAGE_BIND_DIR}"
-        managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
-            "${SEED_STAGE_BIND_DIR}"
-
-        CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-            MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-                --resume --root="/tmp/stage"
-            locale-gen --prefix "/tmp/stage"
-            ' || stage1_exit="${?}"
+        fetch_resume_stage "${SEED_DIR}" "${PROFILE}" "${RESUME_ID}" "stage1"
+        if [[ ! -d "${SEED_DIR}/.criu" ]]; then
+            log_error "CRIU checkpoint not found in ${SEED_DIR}"
+            exit 1
+        fi
+        download_ebuild_repositories "${SEED_DIR}"
+        mount_repos "${SEED_DIR}"
+        if (( ! WORKAROUND )); then
+            install_secureboot_keys "${SEED_DIR}"
+        fi
     else
-        create_directory "${STAGE_DIR}"
-        create_directory "${STAGE_DIR}/etc/portage"
-        create_directory "${SEED_STAGE_BIND_DIR}"
-        managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
-            "${SEED_STAGE_BIND_DIR}"
+        # --- Seed Environment Preparation ---
+        if [[ -n "${SEED_STAGE}" ]]; then
+            fetch_project_stage "${SEED_DIR}" "${SEED_STAGE}" "stage3"
+        else
+            fetch_seed_stage "${SEED_DIR}" \
+                "${SEED_ARCH}" "${SEED_NAME}"
+        fi
+
+        configure_ebuild_repositories "${SEED_DIR}"
+        mount_repos "${SEED_DIR}"
+
+        if (( WORKAROUND )); then
+            source "${WORK_DIR}/lib/workaround.sh"
+        else
+            remove_portage_configuration "${SEED_DIR}"
+            configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
+            install_secureboot_keys "${SEED_DIR}"
+
+            if [[ -z "${SEED_STAGE}" ]]; then
+                chroot_run "${SEED_DIR}" '
+                    emerge --deep --getbinpkg --jobs="$(nproc)" \
+                        --newuse --update @world
+                    '
+            fi
+        fi
+
+        # --- Toolchain Bootstrapping into /tmp/stage ---
+        copy_file "${WORK_DIR}/bin/build.py" "${SEED_DIR}/tmp/build.py"
+        create_directory "${SEED_STAGE_BIND_DIR}/etc/portage"
 
         chroot_run "${SEED_DIR}" '
             USE="build" emerge --nodeps --oneshot --root="/tmp/stage" \
                 sys-apps/baselayout
             '
-
-        CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
-            buildpkgs=$(/tmp/build.py)
-            MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-                --implicit-system-deps=n --oneshot --root="/tmp/stage" \
-                ${buildpkgs}
-            locale-gen --prefix "/tmp/stage"
-            ' || stage1_exit="${?}"
     fi
+
+    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
+        buildpkgs=$(/tmp/build.py)
+        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+            --implicit-system-deps=n --oneshot --root="/tmp/stage" \
+            ${buildpkgs}
+        locale-gen --prefix "/tmp/stage"
+        ' || stage1_exit="${?}"
 
     # --- Stage 1 Timeout & Failure Handling ---
     if (( stage1_exit == 124 )); then
         log_warn "Stage 1 build timed out after ${TIMEOUT}"
-        managed_unmount_all "_active_bootstrap_mounts"
         unmount_repos
         if [[ -n "${RESUME_ID}" ]]; then
-            publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
+            publish_resume_stage "${SEED_DIR}" "${PROFILE}" \
                 "${RESUME_ID}" "stage1"
         fi
         force_remove "${SEED_DIR}"
-        force_remove "${STAGE_DIR}"
         exit 124
     elif (( stage1_exit != 0 )); then
         if [[ -n "${RESUME_ID}" ]]; then
             clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
         fi
-        managed_unmount_all "_active_bootstrap_mounts"
         unmount_repos
         upload_portage_failure_logs "${stage1_exit}"
         force_remove "${SEED_DIR}"
-        force_remove "${STAGE_DIR}"
         exit "${stage1_exit}"
     fi
 
     # --- Stage 1 Completion & Clean Handoff ---
-    managed_unmount_all "_active_bootstrap_mounts"
     unmount_repos
+    force_remove "${STAGE_DIR}"
+    mv "${SEED_STAGE_BIND_DIR}" "${STAGE_DIR}"
     force_remove "${SEED_DIR}"
     force_remove "${STAGE_DIR}/var/cache/edb"
 
@@ -195,29 +193,29 @@ fi
 
 if [[ "${resume_phase}" == "stage3" ]]; then
     fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3"
-elif [[ "${resume_phase}" == "stage3-init" ]]; then
-    fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3-init"
+    if [[ ! -d "${STAGE_DIR}/.criu" ]]; then
+        log_error "CRIU checkpoint not found in ${STAGE_DIR}"
+        exit 1
+    fi
+    download_ebuild_repositories "${STAGE_DIR}"
+else
+    if [[ "${resume_phase}" == "stage3-init" ]]; then
+        fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" \
+            "${RESUME_ID}" "stage3-init"
+    fi
+    create_directory "${STAGE_DIR}/etc/portage"
+    configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 fi
-
-create_directory "${STAGE_DIR}/etc/portage"
-configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
 mount_repos "${STAGE_DIR}"
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
 
 stage3_exit=0
-if [[ "${resume_phase}" == "stage3" ]]; then
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
-        emerge --depclean
-        ' || stage3_exit="${?}"
-else
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-            --emptytree @system
-        emerge --depclean
-        ' || stage3_exit="${?}"
-fi
+CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+        --emptytree @system
+    emerge --depclean
+    ' || stage3_exit="${?}"
 
 # === Stage 3 Timeout & Completion Handling ===
 

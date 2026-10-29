@@ -5,8 +5,14 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
+    "criu"
     "dirname"
+    "mknod"
+    "pivot_root"
     "realpath"
+    "setsid"
+    "tail"
+    "unshare"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
@@ -56,31 +62,18 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # When --clean is requested, prune binary packages not matching installed
 # versions and refresh the binhost index.
 build_exit=0
-if (( RESUME == 1 )); then
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' --resume
-        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
-            --jobs='"${emerge_jobs}"' --usepkg=n
-        emerge --depclean
-        if (( '"${CLEAN_BINPKGS}"' == 1 )); then
-            eclean-pkg --deep
-            emaint --fix binhost
-        fi
-        ' || build_exit="${?}"
-else
-    CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-        MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
-            --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
-            app-portage/gentoolkit '"${PACKAGES}"'
-        MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
-            --jobs='"${emerge_jobs}"' --usepkg=n
-        emerge --depclean
-        if (( '"${CLEAN_BINPKGS}"' == 1 )); then
-            eclean-pkg --deep
-            emaint --fix binhost
-        fi
-        ' || build_exit="${?}"
-fi
+CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    MAKEOPTS="--jobs=$(nproc)" emerge --jobs='"${emerge_jobs}"' \
+        --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
+        app-portage/gentoolkit '"${PACKAGES}"'
+    MAKEOPTS="--jobs=$(nproc)" revdep-rebuild.sh -- \
+        --jobs='"${emerge_jobs}"' --usepkg=n
+    emerge --depclean
+    if (( '"${CLEAN_BINPKGS}"' == 1 )); then
+        eclean-pkg --deep
+        emaint --fix binhost
+    fi
+    ' || build_exit="${?}"
 
 # === Cleanup & Upload ===
 

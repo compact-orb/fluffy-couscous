@@ -98,9 +98,10 @@ workflows run on GitHub-hosted runners using repository variables:
 - **`BUILD_PACKAGES`**: Space-separated list of package atoms for `build.yml`.
 
 Workflows enforce a 5.5-hour execution timer (`--timeout="330m"`), automatically
-saving intermediate state to S3 and resuming timed-out profiles across up to 4
-attempts. Stale snapshots are pruned automatically; setting a 1–2 day expiration
-lifecycle rule on `resumes/` in S3 is recommended.
+checkpointing live `emerge` process trees mid-build via CRIU (`criu dump` /
+`criu restore`), uploading the intermediate state to S3, and resuming timed-out
+profiles across up to 4 attempts. Stale snapshots are pruned automatically;
+setting a 1–2 day expiration lifecycle rule on `resumes/` in S3 is recommended.
 
 ## Attribution
 
