@@ -45,6 +45,9 @@ if (( JOBS == 1 )); then
     emerge_jobs="$(nproc)"
 fi
 readonly emerge_jobs
+cpus="$(nproc)"
+make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
+readonly cpus make_jobs
 
 if [[ -n "${SEED_STAGE}" ]]; then
     if [[ -n "${SEED_ARCH}" || -n "${SEED_NAME}" ]]; then
@@ -126,12 +129,10 @@ if [[ "${resume_phase}" != "stage3" && \
 
             if [[ -z "${SEED_STAGE}" ]]; then
                 chroot_run "${SEED_DIR}" '
-                    cpus=$(nproc)
-                    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-                    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+                    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
                         emerge --deep --getbinpkg \
                         --jobs='"${emerge_jobs}"' \
-                        --load-average="${cpus}" \
+                        --load-average='"${cpus}"' \
                         --newuse --update @world
                     '
             fi
@@ -149,10 +150,8 @@ if [[ "${resume_phase}" != "stage3" && \
 
     CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${SEED_DIR}" '
         buildpkgs=$(/tmp/build.py)
-        cpus=$(nproc)
-        make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-        MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+        MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
             --implicit-system-deps=n --oneshot --root="/tmp/stage" \
             ${buildpkgs}
         locale-gen --prefix "/tmp/stage"
@@ -218,10 +217,8 @@ install_secureboot_keys "${STAGE_DIR}"
 
 stage3_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-    cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --emptytree @system
     emerge --depclean
     ' || stage3_exit="${?}"

@@ -70,10 +70,7 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 # Install live environment packages. Delete root password to allow
 # passwordless console login, enable NetworkManager, and record system state.
 chroot_run "${STAGE_DIR}" '
-    cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --buildpkg=n --usepkgonly --load-average="${cpus}" \
+    emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
         dev-vcs/git net-misc/networkmanager sys-boot/shim \
         sys-firmware/intel-microcode sys-firmware/sof-firmware \

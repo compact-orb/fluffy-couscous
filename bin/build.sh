@@ -44,6 +44,9 @@ if (( JOBS == 1 )); then
     emerge_jobs="$(nproc)"
 fi
 readonly emerge_jobs
+cpus="$(nproc)"
+make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
+readonly cpus make_jobs
 
 check_root
 check_required_commands
@@ -63,15 +66,13 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # versions and refresh the binhost index.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
-    cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-    emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+    emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
         app-portage/gentoolkit '"${PACKAGES}"'
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         revdep-rebuild.sh -- \
-        --jobs='"${emerge_jobs}"' --load-average="${cpus}" --usepkg=n
+        --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' --usepkg=n
     emerge --depclean
     if (( '"${CLEAN_BINPKGS}"' == 1 )); then
         eclean-pkg --deep

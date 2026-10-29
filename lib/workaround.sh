@@ -17,11 +17,9 @@ create_file "${SEED_DIR}/etc/portage/package.use/clang-runtime" \
     "llvm-runtimes/clang-runtime default-lld polly"
 
 chroot_run "${SEED_DIR}" '
-    cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --getbinpkg --quiet-build \
-        --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+        --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         llvm-core/clang llvm-core/clang-common llvm-core/clang-linker-config \
         llvm-core/lld llvm-runtimes/clang-runtime
     '
@@ -39,19 +37,15 @@ chroot_run "${SEED_DIR}" '
 
 # Author's profile needs extra packages to be merged.
 chroot_run "${SEED_DIR}" \
-    'cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --getbinpkg --quiet-build --jobs='"${emerge_jobs}"' \
-        --load-average="${cpus}" \
+        --load-average='"${cpus}"' \
         net-misc/aria2'
 
 chroot_run "${SEED_DIR}" '
-    cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --deep --getbinpkg --newuse --quiet-build \
-        --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+        --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --update @world
     '
 
@@ -71,16 +65,12 @@ install_secureboot_keys "${SEED_DIR}"
 # is using Clang. This will result in LLVM flags being passed to GCC, resulting
 # in a build failure. To avoid this, Perl is rebuilt.
 chroot_run "${SEED_DIR}" \
-    'cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         dev-lang/perl'
 
 # Update everything with the new profile to reduce the chance of issues.
 chroot_run "${SEED_DIR}" \
-    'cpus=$(nproc)
-    make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
-    MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --deep --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --deep --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --newuse --update @world'
