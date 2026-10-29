@@ -1169,8 +1169,8 @@ chroot_run_criu() {
         rm --force "${exit_file}"
         : > "${log_file}"
 
-        local pidfile
-        pidfile="$(mktemp)"
+        local pidfile="${criu_dir}/restore.pid"
+        rm --force "${pidfile}"
         if ! criu restore \
             --images-dir "${criu_dir}" \
             --root "${real_target_root}" \
@@ -1182,7 +1182,6 @@ chroot_run_criu() {
             --cpu-cap="none" \
             "${ext_restore_args[@]}" \
             -v4 -o "restore.log"; then
-            rm --force "${pidfile}"
             if [[ -f "${criu_dir}/restore.log" ]]; then
                 tail -n 50 "${criu_dir}/restore.log" >&2 || true
             fi
@@ -1190,7 +1189,6 @@ chroot_run_criu() {
             return 1
         fi
         ns_init_pid="$(<"${pidfile}")"
-        rm --force "${pidfile}"
         force_remove "${criu_dir}"
         log_info "Restored CRIU process tree (PID ${ns_init_pid})"
     else
