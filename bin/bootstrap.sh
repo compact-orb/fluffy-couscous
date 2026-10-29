@@ -131,6 +131,7 @@ if [[ "${resume_phase}" != "stage3" && \
                     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
                         emerge --deep --getbinpkg \
                         --jobs='"${emerge_jobs}"' \
+                        --load-average="${cpus}" \
                         --newuse --update @world
                     '
             fi
@@ -151,7 +152,7 @@ if [[ "${resume_phase}" != "stage3" && \
         cpus=$(nproc)
         make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
         MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-            emerge --jobs='"${emerge_jobs}"' \
+        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
             --implicit-system-deps=n --oneshot --root="/tmp/stage" \
             ${buildpkgs}
         locale-gen --prefix "/tmp/stage"
@@ -220,7 +221,7 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     cpus=$(nproc)
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' \
+        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         --emptytree @system
     emerge --depclean
     ' || stage3_exit="${?}"

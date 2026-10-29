@@ -21,7 +21,7 @@ chroot_run "${SEED_DIR}" '
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
         emerge --getbinpkg --quiet-build \
-        --jobs='"${emerge_jobs}"' \
+        --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         llvm-core/clang llvm-core/clang-common llvm-core/clang-linker-config \
         llvm-core/lld llvm-runtimes/clang-runtime
     '
@@ -43,6 +43,7 @@ chroot_run "${SEED_DIR}" \
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
         emerge --getbinpkg --quiet-build --jobs='"${emerge_jobs}"' \
+        --load-average="${cpus}" \
         net-misc/aria2'
 
 chroot_run "${SEED_DIR}" '
@@ -50,7 +51,7 @@ chroot_run "${SEED_DIR}" '
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
         emerge --deep --getbinpkg --newuse --quiet-build \
-        --jobs='"${emerge_jobs}"' \
+        --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         --update @world
     '
 
@@ -73,12 +74,13 @@ chroot_run "${SEED_DIR}" \
     'cpus=$(nproc)
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' dev-lang/perl'
+        emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
+        dev-lang/perl'
 
 # Update everything with the new profile to reduce the chance of issues.
 chroot_run "${SEED_DIR}" \
     'cpus=$(nproc)
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --deep --jobs='"${emerge_jobs}"' \
+        emerge --deep --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         --newuse --update @world'

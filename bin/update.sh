@@ -57,11 +57,11 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     cpus=$(nproc)
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' \
+    emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         --deep --newuse --update @system
     emerge --depclean
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --jobs='"${emerge_jobs}"' \
+    emerge --jobs='"${emerge_jobs}"' --load-average="${cpus}" \
         @preserved-rebuild
     emerge --depclean
     ' || build_exit="${?}"

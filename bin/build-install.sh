@@ -73,7 +73,7 @@ chroot_run "${STAGE_DIR}" '
     cpus=$(nproc)
     make_jobs=$(( cpus > 1 ? cpus - 1 : 1 ))
     MAKEOPTS="--jobs=${make_jobs} --load-average=${make_jobs}" \
-        emerge --buildpkg=n --usepkgonly \
+        emerge --buildpkg=n --usepkgonly --load-average="${cpus}" \
         app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
         dev-vcs/git net-misc/networkmanager sys-boot/shim \
         sys-firmware/intel-microcode sys-firmware/sof-firmware \
