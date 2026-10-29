@@ -141,7 +141,7 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes criu
+          sudo apt install --no-install-recommends --yes criu util-linux-extra
 
       - name: Run update.sh
         run: |
@@ -270,7 +270,7 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes criu
+          sudo apt install --no-install-recommends --yes criu util-linux-extra
 
       - name: Run update.sh (Resume)
         run: |
@@ -397,7 +397,7 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes criu
+          sudo apt install --no-install-recommends --yes criu util-linux-extra
 
       - name: Run update.sh (Resume)
         run: |
@@ -524,7 +524,7 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes criu
+          sudo apt install --no-install-recommends --yes criu util-linux-extra
 
       - name: Run update.sh (Resume)
         run: |

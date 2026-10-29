@@ -124,7 +124,8 @@ jobs:
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip xz-utils zstd
+            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
+            util-linux-extra xz-utils zstd
           sudo apt clean
 
       - uses: actions/checkout@v7
@@ -266,7 +267,8 @@ jobs:
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip xz-utils zstd
+            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
+            util-linux-extra xz-utils zstd
           sudo apt clean
 
       - uses: actions/checkout@v7
@@ -406,7 +408,8 @@ jobs:
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip xz-utils zstd
+            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
+            util-linux-extra xz-utils zstd
           sudo apt clean
 
       - uses: actions/checkout@v7
@@ -546,7 +549,8 @@ jobs:
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip xz-utils zstd
+            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
+            util-linux-extra xz-utils zstd
           sudo apt clean
 
       - uses: actions/checkout@v7
