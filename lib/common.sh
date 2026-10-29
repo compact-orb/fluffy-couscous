@@ -86,6 +86,9 @@ check_root() {
         printf "%s\n" "You must be root to run this script." >&2
         exit 1
     fi
+    if [[ "$(</proc/mounts)" == *" ${WORK_DIR} "* ]]; then
+        mount --make-rprivate "${WORK_DIR}" 2> /dev/null || true
+    fi
 }
 
 check_required_commands() {
@@ -997,6 +1000,8 @@ prepare_criu_chroot_filesystem() {
     create_directory "${target_root}/proc"
     create_directory "${target_root}/sys"
     create_directory "${target_root}/run"
+    create_directory "${target_root}/run/lock"
+    chmod 1777 "${target_root}/run/lock"
     create_directory "${target_root}/dev"
     create_directory "${target_root}/dev/pts"
     create_directory "${target_root}/dev/shm"
@@ -1072,6 +1077,9 @@ wait_for_criu_safe_point() {
             exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
                 2> /dev/null || true)"
             case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    continue
+                    ;;
                 gpg|gpgsm|wget|curl)
                     unsafe=1
                     break
@@ -1094,16 +1102,39 @@ wait_for_criu_safe_point() {
         sleep 0.5
     done
 
-    # Terminate any idle gpg-agent inside the namespace before dumping.
+    # Terminate any idle gpg-agent/scdaemon/dirmngr inside the namespace and
+    # wait for them to exit before dumping.
     local p exe
     for p in /proc/[0-9]*; do
         if is_chroot_process "${p}" "${real_target_root}"; then
             exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
                 2> /dev/null || true)"
-            if [[ "${exe}" == "gpg-agent" || "${exe}" == "scdaemon" ]]; then
-                kill -s "TERM" "${p##*/}" 2> /dev/null || true
-            fi
+            case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    kill -s "TERM" "${p##*/}" 2> /dev/null || true
+                    ;;
+            esac
         fi
+    done
+
+    for (( attempt=0; attempt<20; attempt++ )); do
+        local has_agent=0
+        for p in /proc/[0-9]*; do
+            if is_chroot_process "${p}" "${real_target_root}"; then
+                exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                    2> /dev/null || true)"
+                case "${exe}" in
+                    gpg-agent|scdaemon|dirmngr)
+                        has_agent=1
+                        break
+                        ;;
+                esac
+            fi
+        done
+        if (( has_agent == 0 )); then
+            break
+        fi
+        sleep 0.2
     done
 }
 
