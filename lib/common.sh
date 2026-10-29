@@ -778,6 +778,7 @@ configure_portage() {
     # Portage drops root privileges to the portage user during signature
     # verification, so trustdb.gpg must be world-readable.
     chmod ugo+r "${portage_gnupg_dir}/trustdb.gpg" 2> /dev/null || true
+    gpgconf --homedir "${portage_gnupg_dir}" --kill all 2> /dev/null || true
 
     # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"
@@ -874,6 +875,26 @@ unmount_chroot_filesystems() {
 
 # Kills lingering background processes that would otherwise keep chroot
 # mounts busy during unmount.
+is_chroot_process() {
+    local proc_dir="${1}"
+    local target_root="${2}"
+
+    if [[ ! -d "${proc_dir}" ]]; then
+        return 1
+    fi
+    if [[ "${proc_dir}/root" -ef "${target_root}" ]]; then
+        return 0
+    fi
+    local root_link
+    if root_link="$(readlink "${proc_dir}/root" 2> /dev/null)"; then
+        if [[ "${root_link}" == "${target_root}" || \
+            "${root_link}" == "${target_root}/"* ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 kill_chroot_processes() {
     local target_root
     target_root="$(realpath "${1}")"
@@ -882,14 +903,10 @@ kill_chroot_processes() {
     fi
 
     local -a pids=()
-    local p root_link
+    local p
     for p in /proc/[0-9]*; do
-        if [[ -d "${p}" ]] && \
-            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
-            if [[ "${root_link}" == "${target_root}" || \
-                "${root_link}" == "${target_root}/"* ]]; then
-                pids+=("${p##*/}")
-            fi
+        if is_chroot_process "${p}" "${target_root}"; then
+            pids+=("${p##*/}")
         fi
     done
 
@@ -911,13 +928,9 @@ kill_chroot_processes() {
         sleep 1
         local has_lingering=0
         for p in /proc/[0-9]*; do
-            if [[ -d "${p}" ]] && \
-                root_link="$(readlink "${p}/root" 2> /dev/null)"; then
-                if [[ "${root_link}" == "${target_root}" || \
-                    "${root_link}" == "${target_root}/"* ]]; then
-                    has_lingering=1
-                    break
-                fi
+            if is_chroot_process "${p}" "${target_root}"; then
+                has_lingering=1
+                break
             fi
         done
         if (( has_lingering == 0 )); then
@@ -927,17 +940,13 @@ kill_chroot_processes() {
 
     log_warn "Lingering chroot processes did not exit; sending SIGKILL"
     for p in /proc/[0-9]*; do
-        if [[ -d "${p}" ]] && \
-            root_link="$(readlink "${p}/root" 2> /dev/null)"; then
-            if [[ "${root_link}" == "${target_root}" || \
-                "${root_link}" == "${target_root}/"* ]]; then
-                pid="${p##*/}"
-                exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
-                    2> /dev/null || true)"
-                log_warn "Sending SIGKILL to lingering chroot process" \
-                    "${pid} (${exe:-unknown})"
-                kill -s "KILL" "${pid}" 2> /dev/null || true
-            fi
+        if is_chroot_process "${p}" "${target_root}"; then
+            pid="${p##*/}"
+            exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            log_warn "Sending SIGKILL to lingering chroot process" \
+                "${pid} (${exe:-unknown})"
+            kill -s "KILL" "${pid}" 2> /dev/null || true
         fi
     done
 
@@ -945,13 +954,9 @@ kill_chroot_processes() {
         sleep 0.5
         local has_lingering=0
         for p in /proc/[0-9]*; do
-            if [[ -d "${p}" ]] && \
-                root_link="$(readlink "${p}/root" 2> /dev/null)"; then
-                if [[ "${root_link}" == "${target_root}" || \
-                    "${root_link}" == "${target_root}/"* ]]; then
-                    has_lingering=1
-                    break
-                fi
+            if is_chroot_process "${p}" "${target_root}"; then
+                has_lingering=1
+                break
             fi
         done
         if (( has_lingering == 0 )); then
@@ -963,22 +968,316 @@ kill_chroot_processes() {
     return 1
 }
 
+parse_duration_seconds() {
+    local duration="${1}"
+    if [[ "${duration}" =~ ^([0-9]+)([smhd]?)$ ]]; then
+        local val="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+        case "${unit}" in
+            ""|s) printf "%s\n" "${val}" ;;
+            m) printf "%s\n" "$(( val * 60 ))" ;;
+            h) printf "%s\n" "$(( val * 3600 ))" ;;
+            d) printf "%s\n" "$(( val * 86400 ))" ;;
+        esac
+    else
+        log_error "Invalid timeout duration: ${duration}"
+        return 1
+    fi
+}
+
+prepare_criu_chroot_filesystem() {
+    local target_root="${1}"
+
+    create_directory "${target_root}/etc"
+    if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
+        cp --dereference --force "/etc/resolv.conf" \
+            "${target_root}/etc/resolv.conf"
+    fi
+
+    create_directory "${target_root}/proc"
+    create_directory "${target_root}/sys"
+    create_directory "${target_root}/run"
+    create_directory "${target_root}/dev"
+    create_directory "${target_root}/dev/pts"
+    create_directory "${target_root}/dev/shm"
+    chmod 1777 "${target_root}/dev/shm"
+    create_directory "${target_root}/var/cache/binpkgs"
+    create_directory "${target_root}/var/tmp"
+    create_directory "${target_root}/.oldroot"
+
+    [[ -c "${target_root}/dev/null" ]] || \
+        mknod -m 0666 "${target_root}/dev/null" c 1 3
+    [[ -c "${target_root}/dev/zero" ]] || \
+        mknod -m 0666 "${target_root}/dev/zero" c 1 5
+    [[ -c "${target_root}/dev/full" ]] || \
+        mknod -m 0666 "${target_root}/dev/full" c 1 7
+    [[ -c "${target_root}/dev/random" ]] || \
+        mknod -m 0666 "${target_root}/dev/random" c 1 8
+    [[ -c "${target_root}/dev/urandom" ]] || \
+        mknod -m 0666 "${target_root}/dev/urandom" c 1 9
+    [[ -c "${target_root}/dev/tty" ]] || \
+        mknod -m 0666 "${target_root}/dev/tty" c 5 0
+    [[ -c "${target_root}/dev/console" ]] || \
+        mknod -m 0600 "${target_root}/dev/console" c 5 1
+
+    create_symbolic_link "pts/ptmx" "${target_root}/dev/ptmx"
+    create_symbolic_link "/proc/self/fd" "${target_root}/dev/fd"
+    create_symbolic_link "/proc/self/fd/0" "${target_root}/dev/stdin"
+    create_symbolic_link "/proc/self/fd/1" "${target_root}/dev/stdout"
+    create_symbolic_link "/proc/self/fd/2" "${target_root}/dev/stderr"
+}
+
+collect_criu_ext_mount_maps() {
+    local real_target_root="${1}"
+    local -n dump_args_ref="${2}"
+    local -n restore_args_ref="${3}"
+
+    dump_args_ref=()
+    restore_args_ref=()
+
+    local m_dev m_point m_rest
+    while read -r m_dev m_point m_rest; do
+        if [[ "${m_point}" == "${real_target_root}/"* ]]; then
+            local rel_mount="${m_point#"${real_target_root}"}"
+            case "${rel_mount}" in
+                /proc|/proc/*|/dev|/dev/*|/sys|/sys/*|/run|/run/*|/.oldroot*)
+                    continue
+                    ;;
+            esac
+            local mount_key="${rel_mount#/}"
+            mount_key="${mount_key//\//_}"
+            dump_args_ref+=(--ext-mount-map "${rel_mount}:${mount_key}")
+            restore_args_ref+=(
+                --ext-mount-map "${mount_key}:${real_target_root}${rel_mount}"
+            )
+        fi
+    done < /proc/mounts
+}
+
+wait_for_criu_safe_point() {
+    local real_target_root="${1}"
+
+    # Wait up to 600 seconds if a package is actively writing to
+    # /var/cache/binpkgs, fetching distfiles, or invoking gpg/signing keys so
+    # no binary package or excluded key file is open during criu dump.
+    local attempt
+    for (( attempt=0; attempt<1200; attempt++ )); do
+        local unsafe=0
+        local p
+        for p in /proc/[0-9]*; do
+            if ! is_chroot_process "${p}" "${real_target_root}"; then
+                continue
+            fi
+            local exe
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            case "${exe}" in
+                gpg|gpgsm|wget|curl)
+                    unsafe=1
+                    break
+                    ;;
+            esac
+            local fd fd_target
+            for fd in "${p}/fd/"*; do
+                fd_target="$(readlink "${fd}" 2> /dev/null || true)"
+                if [[ "${fd_target}" == *"/var/cache/binpkgs"* || \
+                    "${fd_target}" == *"${PORTAGE_GPG_DIR}"* || \
+                    "${fd_target}" == *"${PORTAGE_SECUREBOOT_DIR}"* ]]; then
+                    unsafe=1
+                    break 2
+                fi
+            done
+        done
+        if (( unsafe == 0 )); then
+            break
+        fi
+        sleep 0.5
+    done
+
+    # Terminate any idle gpg-agent inside the namespace before dumping.
+    local p exe
+    for p in /proc/[0-9]*; do
+        if is_chroot_process "${p}" "${real_target_root}"; then
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            if [[ "${exe}" == "gpg-agent" || "${exe}" == "scdaemon" ]]; then
+                kill -s "TERM" "${p##*/}" 2> /dev/null || true
+            fi
+        fi
+    done
+}
+
+chroot_run_criu() {
+    local real_target_root
+    real_target_root="$(realpath "${1}")"
+    shift
+
+    prepare_criu_chroot_filesystem "${real_target_root}"
+
+    local criu_dir="${real_target_root}/.criu"
+    local log_file="${real_target_root}/var/tmp/.fluffy-chroot.log"
+    local exit_file="${real_target_root}/var/tmp/.fluffy-chroot.exit"
+    local cmd_file="${real_target_root}/var/tmp/.fluffy-chroot-cmd.sh"
+
+    local -a ext_dump_args=()
+    local -a ext_restore_args=()
+    collect_criu_ext_mount_maps "${real_target_root}" \
+        ext_dump_args ext_restore_args
+
+    local timeout_secs=0
+    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
+        timeout_secs="$(parse_duration_seconds "${CHROOT_TIMEOUT}")"
+    fi
+
+    local ns_init_pid=""
+
+    if [[ -d "${criu_dir}" ]]; then
+        log_info "Restoring CRIU checkpoint for ${real_target_root}"
+        rm --force "${exit_file}"
+        : > "${log_file}"
+
+        local pidfile
+        pidfile="$(mktemp)"
+        if ! criu restore \
+            --images-dir "${criu_dir}" \
+            --root "${real_target_root}" \
+            --restore-detached \
+            --pidfile "${pidfile}" \
+            --file-locks \
+            --link-remap \
+            --tcp-close \
+            --cpu-cap "none" \
+            "${ext_restore_args[@]}" \
+            -v4 -o "restore.log"; then
+            rm --force "${pidfile}"
+            if [[ -f "${criu_dir}/restore.log" ]]; then
+                tail -n 50 "${criu_dir}/restore.log" >&2 || true
+            fi
+            log_error "CRIU restore failed for ${real_target_root}"
+            return 1
+        fi
+        ns_init_pid="$(<"${pidfile}")"
+        rm --force "${pidfile}"
+        force_remove "${criu_dir}"
+        log_info "Restored CRIU process tree (PID ${ns_init_pid})"
+    else
+        rm --force "${exit_file}" "${log_file}"
+        touch "${log_file}"
+
+        cat > "${cmd_file}" << EOF
+#!/bin/bash
+export TERM="dumb"
+exec < /dev/null >> /var/tmp/.fluffy-chroot.log 2>&1
+set +e
+(
+    source /etc/profile 2> /dev/null || true
+    set -e
+    ${*}
+)
+rc=\$?
+printf "%s\n" "\${rc}" > /var/tmp/.fluffy-chroot.exit
+exit "\${rc}"
+EOF
+        chmod 0755 "${cmd_file}"
+
+        unshare --mount --pid --uts --ipc --fork setsid /bin/bash -c "
+            set -e
+            mount --make-rprivate /
+            mount --rbind '${real_target_root}' '${real_target_root}'
+            cd '${real_target_root}'
+            pivot_root . .oldroot
+            mount -t proc proc /proc
+            mount -t devpts -o newinstance,ptmxmode=0666,mode=0620 devpts \
+                /dev/pts
+            umount --lazy /.oldroot
+            exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
+        " < /dev/null > /dev/null 2>&1 &
+        ns_init_pid="${!}"
+    fi
+
+    tail --follow=name --retry -n +1 "${log_file}" 2> /dev/null &
+    local tail_pid="${!}"
+
+    local start_secs="${SECONDS}"
+    local timed_out=0
+
+    while kill -0 "${ns_init_pid}" 2> /dev/null; do
+        if (( timeout_secs > 0 && \
+            (SECONDS - start_secs) >= timeout_secs )); then
+            timed_out=1
+            break
+        fi
+        sleep 1
+    done
+
+    if (( timed_out == 1 )) && kill -0 "${ns_init_pid}" 2> /dev/null; then
+        kill "${tail_pid}" 2> /dev/null || true
+        wait "${tail_pid}" 2> /dev/null || true
+
+        log_warn "Timeout (${CHROOT_TIMEOUT}) reached; checkpointing with CRIU"
+        wait_for_criu_safe_point "${real_target_root}"
+
+        force_remove "${criu_dir}"
+        create_directory "${criu_dir}"
+
+        if ! criu dump \
+            --tree "${ns_init_pid}" \
+            --images-dir "${criu_dir}" \
+            --file-locks \
+            --link-remap \
+            --ghost-limit "1G" \
+            --tcp-close \
+            "${ext_dump_args[@]}" \
+            -v4 -o "dump.log"; then
+            if [[ -f "${criu_dir}/dump.log" ]]; then
+                tail -n 50 "${criu_dir}/dump.log" >&2 || true
+            fi
+            force_remove "${criu_dir}"
+            kill_chroot_processes "${real_target_root}"
+            log_error "CRIU dump failed for ${real_target_root}"
+            return 1
+        fi
+
+        log_info "CRIU checkpoint saved to ${criu_dir}"
+        wait "${ns_init_pid}" 2> /dev/null || true
+        kill_chroot_processes "${real_target_root}"
+        return 124
+    fi
+
+    wait "${ns_init_pid}" 2> /dev/null || true
+    sleep 0.2
+    kill "${tail_pid}" 2> /dev/null || true
+    wait "${tail_pid}" 2> /dev/null || true
+
+    local exit_code=1
+    if [[ -f "${exit_file}" ]]; then
+        exit_code="$(<"${exit_file}")"
+    fi
+
+    rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+    force_remove "${criu_dir}"
+    kill_chroot_processes "${real_target_root}"
+
+    return "${exit_code}"
+}
+
 chroot_run() {
     local target_root="${1}"
     log_info "Running command in chroot for ${target_root}"
 
-    mount_chroot_filesystems "${target_root}"
-
     shift
 
-    local -a timeout_cmd=()
-    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
-        timeout_cmd=(timeout --kill-after="300s" --signal="TERM" \
-            "${CHROOT_TIMEOUT}")
+    if [[ ( -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ) || \
+        -d "${target_root}/.criu" ]]; then
+        local exit_code="0"
+        chroot_run_criu "${target_root}" "${*}" || exit_code="${?}"
+        return "${exit_code}"
     fi
 
+    mount_chroot_filesystems "${target_root}"
+
     local exit_code="0"
-    "${timeout_cmd[@]}" chroot "${target_root}" /bin/bash --login -e \
+    chroot "${target_root}" /bin/bash --login -e \
         -c "${*}" || exit_code="${?}"
 
     kill_chroot_processes "${target_root}"

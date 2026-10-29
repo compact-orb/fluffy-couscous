@@ -146,6 +146,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -277,6 +279,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -406,6 +410,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -535,6 +541,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -664,6 +672,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -793,6 +803,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -922,6 +934,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
@@ -1051,6 +1065,8 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+          sudo apt update
+          sudo apt install --no-install-recommends --yes criu
 
       - name: Run bootstrap.sh
         run: |
