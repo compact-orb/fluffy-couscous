@@ -156,8 +156,7 @@ jobs:
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
           )
-          if [[ "${{ inputs.jobs }}" == "true" || \
-                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -282,8 +281,7 @@ jobs:
             --resume-id="${{ github.run_id }}"
             --resume
           )
-          if [[ "${{ inputs.jobs }}" == "true" || \
-                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -408,8 +406,7 @@ jobs:
             --resume-id="${{ github.run_id }}"
             --resume
           )
-          if [[ "${{ inputs.jobs }}" == "true" || \
-                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -534,8 +531,7 @@ jobs:
             --resume-id="${{ github.run_id }}"
             --resume
           )
-          if [[ "${{ inputs.jobs }}" == "true" || \
-                "${{ vars.BUILD_JOBS }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
