@@ -1,19 +1,22 @@
 name: Build
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       jobs:
         description: "Enable parallel emerge jobs using nproc (defaults to 1)"
         required: false
         type: boolean
-        default: false
+        default: true
         # default: true # For Avrea
       timeout:
         description: "Timeout duration for emerge (e.g. 330m or 30m)"
         required: false
         type: string
-        default: "330m"
+        default: "1m"
         # default: "1380m" # Avrea does not document timeout
 
 env:
@@ -34,7 +37,7 @@ env:
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
   PROFILES: ${{ vars.PROFILES }}
   BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
-  BUILD_TIMEOUT: ${{ inputs.timeout || '330m' }}
+  BUILD_TIMEOUT: ${{ inputs.timeout || '1m' }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 
@@ -117,7 +120,7 @@ jobs:
       - uses: compact-orb/optimize-runner-network@v1
 
       # Not compatible with Avrea
-      - uses: compact-orb/maximize-runner-storage@v2
+      # - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -176,7 +179,7 @@ jobs:
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
           )
-          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs || 'true' }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -260,7 +263,7 @@ jobs:
       - uses: compact-orb/optimize-runner-network@v1
 
       # Not compatible with Avrea
-      - uses: compact-orb/maximize-runner-storage@v2
+      # - uses: compact-orb/maximize-runner-storage@v2
 
       - name: Install Host Dependencies
         run: |
@@ -317,7 +320,7 @@ jobs:
             --resume-id="${{ github.run_id }}"
             --resume
           )
-          if [[ "${{ inputs.jobs }}" == "true" ]]; then
+          if [[ "${{ inputs.jobs || 'true' }}" == "true" ]]; then
             args+=(--jobs)
           fi
           sudo --preserve-env=${SUDO_PRESERVE_ENV} \
@@ -326,7 +329,7 @@ jobs:
   check-attempt-2:
     name: Check Resumes (After Attempt 2)
     needs: [setup, build-attempt-2]
-    if: "!cancelled() && needs.build-attempt-2.result == 'failure'"
+    if: "false"
     runs-on: ubuntu-26.04
     # runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
