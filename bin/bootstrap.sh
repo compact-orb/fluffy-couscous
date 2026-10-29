@@ -103,6 +103,7 @@ if [[ "${resume_phase}" != "stage3" && \
     else
         remove_portage_configuration "${SEED_DIR}"
         configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
+        install_secureboot_keys "${SEED_DIR}"
 
         if [[ -z "${SEED_STAGE}" ]]; then
             chroot_run "${SEED_DIR}" '
@@ -119,6 +120,7 @@ if [[ "${resume_phase}" != "stage3" && \
 
     if [[ "${resume_phase}" == "stage1" ]]; then
         fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage1"
+        create_directory "${STAGE_DIR}/etc/portage"
         create_directory "${SEED_STAGE_BIND_DIR}"
         managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
             "${SEED_STAGE_BIND_DIR}"
@@ -130,6 +132,7 @@ if [[ "${resume_phase}" != "stage3" && \
             ' || stage1_exit="${?}"
     else
         create_directory "${STAGE_DIR}"
+        create_directory "${STAGE_DIR}/etc/portage"
         create_directory "${SEED_STAGE_BIND_DIR}"
         managed_mount "_active_bootstrap_mounts" --bind "${STAGE_DIR}" \
             "${SEED_STAGE_BIND_DIR}"

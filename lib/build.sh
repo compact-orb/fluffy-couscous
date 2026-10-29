@@ -192,6 +192,17 @@ install_secureboot_keys() {
 
     create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
     chmod 0644 "${secureboot_dir}/db.pem"
+
+    if [[ -f "${target_root}/etc/portage/make.conf" ]] && \
+        ! grep -q "SECUREBOOT_SIGN_KEY" \
+            "${target_root}/etc/portage/make.conf"; then
+        printf "%s\n" \
+            "SECUREBOOT_SIGN_KEY=\"${PORTAGE_SECUREBOOT_DIR}/db.key\"" \
+            "SECUREBOOT_SIGN_CERT=\"${PORTAGE_SECUREBOOT_DIR}/db.pem\"" \
+            "MODULES_SIGN_KEY=\"${PORTAGE_SECUREBOOT_DIR}/db.key\"" \
+            "MODULES_SIGN_CERT=\"${PORTAGE_SECUREBOOT_DIR}/db.pem\"" \
+            >> "${target_root}/etc/portage/make.conf"
+    fi
 }
 
 # === Stage Downloading and Extraction ===

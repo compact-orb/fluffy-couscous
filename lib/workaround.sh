@@ -51,6 +51,7 @@ chroot_run "${SEED_DIR}" \
 remove_portage_configuration "${SEED_DIR}"
 
 configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
+install_secureboot_keys "${SEED_DIR}"
 
 # Perl might hardcode the compiler, and since the seed was built with GCC,
 # Perl deps within a package will use GCC even though the rest of the package
