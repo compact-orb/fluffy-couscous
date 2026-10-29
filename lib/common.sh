@@ -1161,6 +1161,7 @@ chroot_run_criu() {
     fi
 
     local ns_init_pid=""
+    local unshare_pid=""
 
     if [[ -d "${criu_dir}" ]]; then
         log_info "Restoring CRIU checkpoint for ${real_target_root}"
@@ -1211,7 +1212,7 @@ exit "\${rc}"
 EOF
         chmod 0755 "${cmd_file}"
 
-        unshare --mount --pid --uts --ipc --fork setsid /bin/bash -c "
+        unshare --pid --fork setsid unshare --mount --uts --ipc /bin/bash -c "
             set -e
             mount --make-rprivate /
             mount --rbind '${real_target_root}' '${real_target_root}'
@@ -1223,7 +1224,29 @@ EOF
             umount --lazy /.oldroot
             exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
         " < /dev/null > /dev/null 2>&1 &
-        ns_init_pid="${!}"
+        unshare_pid="${!}"
+
+        local attempt
+        for (( attempt=0; attempt<100; attempt++ )); do
+            ns_init_pid="$(awk '{print $1; exit}' \
+                "/proc/${unshare_pid}/task/${unshare_pid}/children" \
+                2> /dev/null || true)"
+            if [[ -n "${ns_init_pid}" ]] && \
+                is_chroot_process "/proc/${ns_init_pid}" \
+                    "${real_target_root}"; then
+                break
+            fi
+            if ! kill -0 "${unshare_pid}" 2> /dev/null; then
+                break
+            fi
+            sleep 0.05
+        done
+
+        if [[ -z "${ns_init_pid}" && ! -f "${exit_file}" ]]; then
+            wait "${unshare_pid}" 2> /dev/null || true
+            log_error "Failed to start CRIU namespace for ${real_target_root}"
+            return 1
+        fi
     fi
 
     tail --follow=name --retry -n +1 "${log_file}" 2> /dev/null &
@@ -1232,7 +1255,8 @@ EOF
     local start_secs="${SECONDS}"
     local timed_out=0
 
-    while kill -0 "${ns_init_pid}" 2> /dev/null; do
+    while [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; do
         if (( timeout_secs > 0 && \
             (SECONDS - start_secs) >= timeout_secs )); then
             timed_out=1
@@ -1241,7 +1265,8 @@ EOF
         sleep 1
     done
 
-    if (( timed_out == 1 )) && kill -0 "${ns_init_pid}" 2> /dev/null; then
+    if (( timed_out == 1 )) && [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; then
         kill "${tail_pid}" 2> /dev/null || true
         wait "${tail_pid}" 2> /dev/null || true
 
@@ -1265,17 +1290,24 @@ EOF
             fi
             force_remove "${criu_dir}"
             kill_chroot_processes "${real_target_root}"
+            if [[ -n "${unshare_pid}" ]]; then
+                wait "${unshare_pid}" 2> /dev/null || true
+            fi
             log_error "CRIU dump failed for ${real_target_root}"
             return 1
         fi
 
         log_info "CRIU checkpoint saved to ${criu_dir}"
-        wait "${ns_init_pid}" 2> /dev/null || true
+        if [[ -n "${unshare_pid}" ]]; then
+            wait "${unshare_pid}" 2> /dev/null || true
+        fi
         kill_chroot_processes "${real_target_root}"
         return 124
     fi
 
-    wait "${ns_init_pid}" 2> /dev/null || true
+    if [[ -n "${unshare_pid}" ]]; then
+        wait "${unshare_pid}" 2> /dev/null || true
+    fi
     sleep 0.2
     kill "${tail_pid}" 2> /dev/null || true
     wait "${tail_pid}" 2> /dev/null || true
