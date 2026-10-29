@@ -1041,7 +1041,7 @@ collect_criu_ext_mount_maps() {
     restore_args_ref=()
 
     local m_dev m_point m_rest
-    while read -r m_dev m_point m_rest; do
+    while IFS=" " read -r m_dev m_point m_rest; do
         if [[ "${m_point}" == "${real_target_root}/"* ]]; then
             local rel_mount="${m_point#"${real_target_root}"}"
             case "${rel_mount}" in
@@ -1080,7 +1080,7 @@ wait_for_criu_safe_point() {
                 gpg-agent|scdaemon|dirmngr)
                     continue
                     ;;
-                gpg|gpgsm|wget|curl)
+                gpg|gpgsm|wget|curl|aria2c)
                     unsafe=1
                     break
                     ;;
@@ -1089,6 +1089,7 @@ wait_for_criu_safe_point() {
             for fd in "${p}/fd/"*; do
                 fd_target="$(readlink "${fd}" 2> /dev/null || true)"
                 if [[ "${fd_target}" == *"/var/cache/binpkgs"* || \
+                    "${fd_target}" == *"/build/binpkgs/"* || \
                     "${fd_target}" == *"${PORTAGE_GPG_DIR}"* || \
                     "${fd_target}" == *"${PORTAGE_SECUREBOOT_DIR}"* ]]; then
                     unsafe=1
