@@ -333,7 +333,7 @@ create_file() {
 
 create_symbolic_link() {
     log_debug "Creating symbolic link from ${1} to ${2}"
-    ln --force --symbolic "${1}" "${2}"
+    ln --force --no-dereference --symbolic "${1}" "${2}"
 }
 
 # === Archive Helpers ===
@@ -1179,7 +1179,7 @@ chroot_run_criu() {
             --file-locks \
             --link-remap \
             --tcp-close \
-            --cpu-cap "none" \
+            --cpu-cap="none" \
             "${ext_restore_args[@]}" \
             -v4 -o "restore.log"; then
             rm --force "${pidfile}"
