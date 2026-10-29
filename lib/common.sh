@@ -1282,6 +1282,7 @@ EOF
             --link-remap \
             --ghost-limit "1G" \
             --tcp-close \
+            --network-lock "skip" \
             "${ext_dump_args[@]}" \
             -v4 -o "dump.log"; then
             if [[ -f "${criu_dir}/dump.log" ]]; then
