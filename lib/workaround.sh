@@ -17,7 +17,9 @@ create_file "${SEED_DIR}/etc/portage/package.use/clang-runtime" \
     "llvm-runtimes/clang-runtime default-lld polly"
 
 chroot_run "${SEED_DIR}" '
-    emerge --getbinpkg --jobs="$(nproc)" --quiet-build \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --getbinpkg --quiet-build \
+        --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         llvm-core/clang llvm-core/clang-common llvm-core/clang-linker-config \
         llvm-core/lld llvm-runtimes/clang-runtime
     '
@@ -35,10 +37,15 @@ chroot_run "${SEED_DIR}" '
 
 # Author's profile needs extra packages to be merged.
 chroot_run "${SEED_DIR}" \
-    'emerge --getbinpkg --jobs="$(nproc)" --quiet-build net-misc/aria2'
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --getbinpkg --quiet-build --jobs='"${emerge_jobs}"' \
+        --load-average='"${cpus}"' \
+        net-misc/aria2'
 
 chroot_run "${SEED_DIR}" '
-    emerge --deep --getbinpkg --jobs="$(nproc)" --newuse --quiet-build \
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --deep --getbinpkg --newuse --quiet-build \
+        --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --update @world
     '
 
@@ -57,8 +64,13 @@ install_secureboot_keys "${SEED_DIR}"
 # Perl deps within a package will use GCC even though the rest of the package
 # is using Clang. This will result in LLVM flags being passed to GCC, resulting
 # in a build failure. To avoid this, Perl is rebuilt.
-chroot_run "${SEED_DIR}" 'emerge --jobs="$(nproc)" dev-lang/perl'
+chroot_run "${SEED_DIR}" \
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
+        dev-lang/perl'
 
 # Update everything with the new profile to reduce the chance of issues.
 chroot_run "${SEED_DIR}" \
-    'emerge --deep --jobs="$(nproc)" --newuse --update @world'
+    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --deep --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
+        --newuse --update @world'
