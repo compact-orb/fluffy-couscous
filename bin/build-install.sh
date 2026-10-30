@@ -72,7 +72,7 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 chroot_run "${STAGE_DIR}" '
     emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
-        dev-vcs/git net-misc/networkmanager sys-boot/shim \
+        dev-vcs/git net-misc/networkmanager net-misc/rclone sys-boot/shim \
         sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
         sys-kernel/gentoo-kernel sys-kernel/installkernel \
@@ -156,8 +156,9 @@ create_directory "${STAGE_DIR}/usr/local/bin"
 create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
     "${STAGE_DIR}/usr/local/bin/install.sh"
 
-# Write sanitized .env containing only public repo and verification keys;
-# secrets (SIGNING_KEY, SECUREBOOT_KEY, S3 credentials) are strictly omitted.
+# Write sanitized .env containing only public repo, verification, and
+# read-only S3 keys; write-capable secrets (SIGNING_KEY, SECUREBOOT_KEY,
+# S3_SECRET_ACCESS_KEY) are strictly omitted.
 IFS= read -d "" -r installer_env << EOF || true
 GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
 REPOS="${REPOS}"
@@ -165,6 +166,11 @@ BINPKG_REPOS="${BINPKG_REPOS}"
 ANSIBLE_PULL_URL="${ANSIBLE_PULL_URL}"
 BINPKG_PUBLIC_KEY="${BINPKG_PUBLIC_KEY:-}"
 REPO_PUBLIC_KEYS="${REPO_PUBLIC_KEYS:-}"
+S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+S3_RO_SECRET_ACCESS_KEY="${S3_RO_SECRET_ACCESS_KEY:-}"
+S3_REGION="${S3_REGION}"
+S3_ENDPOINT="${S3_ENDPOINT}"
+S3_BUCKET_NAME="${S3_BUCKET_NAME}"
 EOF
 printf "%s" "${installer_env}" > "${INSTALLER_TARGET_DIR}/.env"
 unset installer_env

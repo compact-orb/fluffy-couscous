@@ -13,29 +13,13 @@ required_commands+=(
     "date"
     "fusermount3" # Required by rclone mount
     "mktemp"
-    "rclone"
     "sed"
     "sleep"
     "storageto"
-    "tar"
     "xz" # Required by tar for .tar.xz archives
-    "zstd"
 )
 
-# === S3 & Cloud Storage ===
-
-s3_rclone() {
-    rclone \
-        --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
-        --s3-endpoint "${S3_ENDPOINT}" \
-        --s3-no-check-bucket \
-        --s3-provider "Other" \
-        --s3-region "${S3_REGION}" \
-        --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}" \
-        --transfers "16" \
-        --verbose \
-        "${@}"
-}
+# === Cloud Storage & Failure Logs ===
 
 upload_to_storageto() {
     log_info "Uploading ${*} to storage.to"
@@ -255,50 +239,6 @@ fetch_seed_stage() {
     tar_extract "${seed_tarball}" "${output_dir}"
 
     remove_file "${seed_tarball}"
-    force_remove "${download_dir}"
-}
-
-fetch_project_stage() {
-    local target_root="${1}"
-    local profile="${2}"
-    local stage_type="${3}"
-    log_info "Downloading and extracting Gentoo ${stage_type} to ${target_root}"
-
-    import_bundled_keys
-    import_public_keys
-
-    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
-        declare -F import_signing_key > /dev/null; then
-        import_signing_key
-    fi
-
-    create_directory "${target_root}"
-
-    local repo repo_profile
-    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local profile_name="${repo_profile//\//-}"
-    local stage_filename="${stage_type}-${profile_name}.tar.zst"
-    local sig_filename="${stage_filename}.sig"
-    local download_dir
-    download_dir="$(mktemp --directory)"
-    local stage_file="${download_dir}/${stage_filename}"
-    local sig_file="${download_dir}/${sig_filename}"
-    log_info "Downloading stage archive ${stage_file}"
-    s3_rclone copy ":s3:${S3_BUCKET_NAME}/${stage_filename}" \
-        "${download_dir}"
-
-    log_info "Downloading stage archive signature ${sig_file}"
-    s3_rclone copy ":s3:${S3_BUCKET_NAME}/${sig_filename}" \
-        "${download_dir}"
-
-    log_info "Verifying stage archive ${stage_file}"
-    gpg --verify "${sig_file}" "${stage_file}"
-
-    log_info "Extracting stage archive ${stage_file} to ${target_root}"
-    tar_extract "${stage_file}" "${target_root}"
-
-    force_remove "${stage_file}"
-    force_remove "${sig_file}"
     force_remove "${download_dir}"
 }
 

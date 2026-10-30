@@ -10,12 +10,8 @@ required_commands=(
     "chattr"
     "chown"
     "dirname"
-    "emerge"
-    "getuto"
-    "locale-gen"
     "mkfs.btrfs"
     "mkfs.fat"
-    "python3"
     "realpath"
     "sfdisk"
     "shred"
@@ -310,72 +306,13 @@ managed_mount "_active_install_mounts" \
 btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
     "${INSTALL_MOUNT_DIR}/swap/swapfile"
 
-# Bind mount /var/tmp/portage and /var/cache to install drive to avoid
-# exhausting live environment tmpfs/ramdisk space during package builds.
-create_directory "/var/tmp/portage"
-managed_mount "_active_install_mounts" --bind \
-    "${INSTALL_MOUNT_DIR}/var/tmp/portage" "/var/tmp/portage"
-create_directory "${INSTALL_MOUNT_DIR}/var/cache"
-chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache"
-managed_mount "_active_install_mounts" --bind \
-    "${INSTALL_MOUNT_DIR}/var/cache" "/var/cache"
-create_directory "/var/cache/binpkgs"
-managed_mount "_active_install_mounts" --bind \
-    "${INSTALL_MOUNT_DIR}/var/cache/binpkgs" "/var/cache/binpkgs"
-create_directory "/var/cache/binhost"
-managed_mount "_active_install_mounts" --bind \
-    "${INSTALL_MOUNT_DIR}/var/cache/binhost" "/var/cache/binhost"
-
-# === Configure Host Environment ===
-
-create_directory "/etc/portage"
-managed_mount "_active_install_mounts" --types "tmpfs" "tmpfs" "/etc/portage"
-
-configure_ebuild_repositories "/"
-
-mount_repos "/"
-
-configure_portage "/" "${PROFILE}" "install"
-
-configure_portage_binary_packages "/" "${PROFILE}"
-
-# === Install Stage 1 ===
-
-# sys-apps/baselayout defaults to merged-usr (split-usr is unset), but
-# when extracted from a binary package into a fresh root, it skips the
-# merge setup and installs as split-usr. We pre-create the UsrMerge symlinks
-# so it installs into a merged-usr layout.
-create_directory "${INSTALL_MOUNT_DIR}/usr/bin"
-create_directory "${INSTALL_MOUNT_DIR}/usr/lib"
-create_directory "${INSTALL_MOUNT_DIR}/usr/lib64"
-create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/bin"
-create_symbolic_link "usr/bin" "${INSTALL_MOUNT_DIR}/sbin"
-create_symbolic_link "bin" "${INSTALL_MOUNT_DIR}/usr/sbin"
-create_symbolic_link "usr/lib" "${INSTALL_MOUNT_DIR}/lib"
-create_symbolic_link "usr/lib64" "${INSTALL_MOUNT_DIR}/lib64"
-
-USE="build" emerge --nodeps --oneshot --root="${INSTALL_MOUNT_DIR}" \
-    sys-apps/baselayout
-
-IFS=" " read -r -a buildpkgs <<< "$("${WORK_DIR}/bin/build.py")"
-emerge --implicit-system-deps=n --jobs="$(nproc)" --oneshot \
-    --root="${INSTALL_MOUNT_DIR}" "${buildpkgs[@]}"
-unset buildpkgs
-locale-gen --prefix "${INSTALL_MOUNT_DIR}"
-
-# === Clean Up Host Environment ===
-
-unmount_repos
-
-remove_portage_configuration "/"
-
 # === Install and Configure Gentoo ===
+
+fetch_project_stage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "stage3"
 
 configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
 
 mount_repos "${INSTALL_MOUNT_DIR}"
-
-configure_ebuild_repositories "${INSTALL_MOUNT_DIR}"
 
 configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
@@ -402,7 +339,8 @@ install_packages=(
 
 IFS=" "
 chroot_run "${INSTALL_MOUNT_DIR}" '
-    emerge --emptytree --jobs="$(nproc)" @system '"${install_packages[*]}"'
+    emerge --deep --jobs="$(nproc)" --newuse --update @world \
+        '"${install_packages[*]}"'
     emerge --depclean
     '
 IFS=$'\n\t'
