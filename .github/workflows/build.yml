@@ -173,6 +173,10 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          # Strip comments and normalize whitespace so BUILD_PACKAGES supports
+          # newline-separated lists with inline # comments (shell word-splitting
+          # doesn't treat # as special inside a variable expansion).
+          BUILD_PACKAGES="$(sed 's/#.*//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
@@ -320,6 +324,10 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          # Strip comments and normalize whitespace so BUILD_PACKAGES supports
+          # newline-separated lists with inline # comments (shell word-splitting
+          # doesn't treat # as special inside a variable expansion).
+          BUILD_PACKAGES="$(sed 's/#.*//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
@@ -467,6 +475,10 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          # Strip comments and normalize whitespace so BUILD_PACKAGES supports
+          # newline-separated lists with inline # comments (shell word-splitting
+          # doesn't treat # as special inside a variable expansion).
+          BUILD_PACKAGES="$(sed 's/#.*//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
@@ -614,6 +626,10 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          # Strip comments and normalize whitespace so BUILD_PACKAGES supports
+          # newline-separated lists with inline # comments (shell word-splitting
+          # doesn't treat # as special inside a variable expansion).
+          BUILD_PACKAGES="$(sed 's/#.*//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"

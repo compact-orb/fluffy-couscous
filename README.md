@@ -95,7 +95,8 @@ workflows run on GitHub-hosted runners using repository variables:
 
 - **`PROFILES`**: Newline-separated list of target profiles executed in
   parallel via matrix.
-- **`BUILD_PACKAGES`**: Space-separated list of package atoms for `build.yml`.
+- **`BUILD_PACKAGES`**: Newline- or space-separated list of package atoms for
+  `build.yml`. Inline `#` comments are supported and stripped at runtime.
 
 Workflows enforce a 5.5-hour execution timer (`--timeout="330m"`), automatically
 checkpointing live `emerge` process trees mid-build via CRIU (`criu dump` /
