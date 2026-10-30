@@ -95,6 +95,9 @@ workflows run on GitHub-hosted runners using repository variables:
 
 - **`PROFILES`**: Newline-separated list of target profiles executed in
   parallel via matrix.
+- **`BUILD_PRE_PACKAGES`**: Optional. Same format as `BUILD_PACKAGES`. When set,
+  these atoms are emerged first in a separate `emerge` call before `BUILD_PACKAGES`.
+  Useful for toolchain components that must be installed before dependents are built.
 - **`BUILD_PACKAGES`**: Newline- or space-separated list of package atoms for
   `build.yml`. Inline `#` comments are supported and stripped at runtime.
 

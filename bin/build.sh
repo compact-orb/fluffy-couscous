@@ -22,6 +22,8 @@ cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
 cli_define_option "PACKAGES" "-P|--packages" \
     "Space-separated package atoms" 1
+cli_define_option "PRE_PACKAGES" "-Q|--pre-packages" \
+    "Package atoms to emerge before --packages" 0 ""
 cli_define_option "USEPKG_EXCLUDE" "-e|--exclude" \
     "Binary packages to exclude" 0 ""
 cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
@@ -36,7 +38,7 @@ cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
-readonly PROFILE PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
+readonly PROFILE PACKAGES PRE_PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
     TIMEOUT RESUME_ID RESUME JOBS
 
 emerge_jobs=1
@@ -69,7 +71,17 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
     emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
-        app-portage/gentoolkit '"${PACKAGES}"'
+        app-portage/gentoolkit
+    if [[ -n '"${PRE_PACKAGES}"' ]]; then
+        MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
+            --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
+            '"${PRE_PACKAGES}"'
+    fi
+    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+    emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
+        --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
+        '"${PACKAGES}"'
     MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         revdep-rebuild.sh -- \
         --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' --usepkg=n
