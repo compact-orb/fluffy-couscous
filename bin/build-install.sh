@@ -219,11 +219,7 @@ force_remove "${STAGE_DIR}"
 
 # === Upload ISO Image and Signature ===
 
-import_signing_key
-
-log_info "Signing ISO image ${ISO_FILE}"
-gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
-    "${ISO_FILE}"
+sign_file "${ISO_FILE}" "${ISO_SIG_FILE}"
 
 upload_to_storageto "${ISO_FILE}"
 upload_to_storageto "${ISO_SIG_FILE}"

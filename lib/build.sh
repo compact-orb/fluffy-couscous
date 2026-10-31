@@ -184,6 +184,18 @@ install_portage_gpg_key() {
     fi
 }
 
+sign_file() {
+    local file="${1}"
+    local sig_file="${2:-${file}.sig}"
+
+    import_signing_key
+
+    log_info "Signing ${file}"
+    gpg --batch --yes --detach-sign \
+        --local-user "${_signing_key_fingerprint}" \
+        --output "${sig_file}" "${file}"
+}
+
 install_secureboot_keys() {
     local target_root="${1}"
 
@@ -248,9 +260,7 @@ fetch_seed_stage() {
         --max-tries="3" --dir="${download_dir}" --quiet \
         "${latest_autobuild_path}" "${latest_autobuild_path}.asc"
 
-    log_info "Verifying ${seed_tarball}"
-    gpg --verify "${seed_tarball}.asc" \
-        "${seed_tarball}"
+    verify_file "${seed_tarball}.asc" "${seed_tarball}"
 
     remove_file "${seed_tarball}.asc"
 
@@ -318,8 +328,7 @@ fetch_resume_stage() {
     s3_rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
         "${download_dir}"
 
-    log_info "Verifying resume stage archive ${stage_file}"
-    gpg --verify "${sig_file}" "${stage_file}"
+    verify_file "${sig_file}" "${stage_file}"
 
     log_info "Extracting resume stage archive ${stage_file} to ${target_root}"
     tar_extract "${stage_file}" "${target_root}"
@@ -380,9 +389,7 @@ publish_stage_archive() {
         --exclude="./var/log/*" \
         --exclude="./var/tmp/*" \
         "."
-    log_info "Signing stage archive ${stage_file}"
-    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
-        "${stage_file}"
+    sign_file "${stage_file}" "${sig_file}"
 
     log_info "Uploading stage archive ${stage_file}"
     s3_rclone copy "${stage_file}" \
@@ -423,9 +430,7 @@ publish_resume_filesystem() {
     log_info "Creating resume filesystem image ${image_file}"
     zstd --sparse -f -T0 /btrfs.img -o "${image_file}"
 
-    log_info "Signing resume filesystem image ${image_file}"
-    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
-        "${image_file}"
+    sign_file "${image_file}" "${sig_file}"
 
     log_info "Uploading resume filesystem image ${image_file}"
     s3_rclone copy "${image_file}" \
@@ -477,9 +482,7 @@ publish_resume_stage() {
         --exclude="./var/db/repos/*" \
         --exclude="./var/lib/systemd/catalog/database" \
         "."
-    log_info "Signing resume stage archive ${stage_file}"
-    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
-        "${stage_file}"
+    sign_file "${stage_file}" "${sig_file}"
 
     log_info "Uploading resume archive ${stage_file}"
     s3_rclone copy "${stage_file}" \

@@ -346,6 +346,13 @@ create_symlink() {
     create_symbolic_link "${@}"
 }
 
+verify_file() {
+    local sig_file="${1}"
+    local file="${2}"
+    log_info "Verifying signature for ${file}"
+    gpg --verify "${sig_file}" "${file}"
+}
+
 # === Archive Helpers ===
 
 tar_extract() {
@@ -838,8 +845,7 @@ fetch_project_stage() {
     s3_rclone copy ":s3:${S3_BUCKET_NAME}/${sig_filename}" \
         "${download_dir}"
 
-    log_info "Verifying stage archive ${stage_file}"
-    gpg --verify "${sig_file}" "${stage_file}"
+    verify_file "${sig_file}" "${stage_file}"
 
     log_info "Extracting stage archive ${stage_file} to ${target_root}"
     tar_extract "${stage_file}" "${target_root}"
