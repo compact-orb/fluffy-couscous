@@ -736,13 +736,10 @@ fetch_project_stage() {
     local profile_name="${repo_profile//\//-}"
     local stage_filename="${stage_type}-${profile_name}.tar.zst"
     local sig_filename="${stage_filename}.sig"
+    local tmp_dir="${target_root}/var/tmp"
+    create_directory "${tmp_dir}"
     local download_dir
-    local tmp_base="${target_root}/var/tmp"
-    if [[ -d "${tmp_base}" ]]; then
-        download_dir="$(mktemp --directory --tmpdir="${tmp_base}")"
-    else
-        download_dir="$(mktemp --directory)"
-    fi
+    download_dir="$(mktemp --directory --tmpdir="${tmp_dir}")"
     local stage_file="${download_dir}/${stage_filename}"
     local sig_file="${download_dir}/${sig_filename}"
     log_info "Downloading stage archive ${stage_file}"
