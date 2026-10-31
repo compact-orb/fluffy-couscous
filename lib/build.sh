@@ -83,14 +83,30 @@ upload_portage_failure_logs() {
             # stores build.log and environment dumps for failed merges.
             while IFS= read -r -d '' temp_dir; do
                 log_files+=("${temp_dir}")
+                local build_log="${temp_dir}/build.log"
+                if [[ -f "${build_log}" ]]; then
+                    local rel_pkg="${temp_dir#"${portage_dir}/"}"
+                    rel_pkg="${rel_pkg%/temp}"
+                    log_warn "=== Failed package build.log (${rel_pkg}) ==="
+                    tail -n 100 "${build_log}" >&2 || true
+                fi
             done < <(find "${portage_dir}" -mindepth 3 -maxdepth 3 \
                 -type d -name "temp" -print0 2>/dev/null)
         fi
         if [[ -f "${root}/var/log/emerge.log" ]]; then
             log_files+=("${root}/var/log/emerge.log")
+            log_warn "=== Last 50 lines of Portage emerge.log ==="
+            tail -n 50 "${root}/var/log/emerge.log" >&2 || true
+        fi
+        if [[ -f "${root}/var/tmp/.fluffy-chroot.exit" ]]; then
+            local chroot_rc
+            chroot_rc="$(<"${root}/var/tmp/.fluffy-chroot.exit")"
+            log_warn "=== Chroot exit code file: ${chroot_rc} ==="
         fi
         if [[ -f "${root}/var/tmp/.fluffy-chroot.log" ]]; then
             log_files+=("${root}/var/tmp/.fluffy-chroot.log")
+            log_warn "=== Last 100 lines of chroot log ==="
+            tail -n 100 "${root}/var/tmp/.fluffy-chroot.log" >&2 || true
         fi
         if [[ -f "${root}/.criu/restore.log" ]]; then
             log_files+=("${root}/.criu/restore.log")
@@ -101,11 +117,6 @@ upload_portage_failure_logs() {
     done
 
     if (( ${#log_files[@]} == 0 )); then
-        return 0
-    fi
-
-    if ! command -v storageto >/dev/null 2>&1; then
-        log_warn "storageto not found; skipping failure log upload"
         return 0
     fi
 
@@ -121,7 +132,15 @@ upload_portage_failure_logs() {
         "${log_files[@]#/}" 2>/dev/null || true
 
     if [[ -f "${archive}" && -s "${archive}" ]]; then
-        upload_to_storageto "${archive}"
+        if [[ -v S3_BUCKET_NAME && -n "${S3_BUCKET_NAME}" ]] && \
+            type -t s3_rclone >/dev/null 2>&1; then
+            log_info "Uploading failure logs to S3..."
+            s3_rclone copy "${archive}" \
+                ":s3:${S3_BUCKET_NAME}/logs" || true
+        fi
+        if command -v storageto >/dev/null 2>&1; then
+            upload_to_storageto "${archive}" || true
+        fi
     fi
 
     force_remove "${archive_dir}"

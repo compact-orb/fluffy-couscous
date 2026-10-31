@@ -1249,6 +1249,22 @@ wait_for_criu_safe_point() {
                     unsafe=1
                     break
                     ;;
+                bash|sh)
+                    local cmdline
+                    cmdline="$(tr '\0' ' ' < "${p}/cmdline" 2> /dev/null \
+                        || true)"
+                    if [[ "${cmdline}" == *"ebuild.sh"* && ( \
+                        "${cmdline}" == *"pretend"* || \
+                        "${cmdline}" == *"setup"* || \
+                        "${cmdline}" == *"qmerge"* || \
+                        "${cmdline}" == *"preinst"* || \
+                        "${cmdline}" == *"postinst"* || \
+                        "${cmdline}" == *"prerm"* || \
+                        "${cmdline}" == *"postrm"* ) ]]; then
+                        unsafe=1
+                        break
+                    fi
+                    ;;
             esac
             local fd fd_target
             for fd in "${p}/fd/"*; do
@@ -1302,6 +1318,12 @@ wait_for_criu_safe_point() {
         fi
         sleep 0.2
     done
+
+    # Clean up any lingering agent sockets so future invocations after restore
+    # never encounter stale sockets.
+    rm --force \
+        "${real_target_root}/root/.gnupg/S."* \
+        "${real_target_root}${PORTAGE_GPG_DIR}/S."* 2> /dev/null || true
 }
 
 chroot_run_criu() {
@@ -1336,6 +1358,9 @@ chroot_run_criu() {
     if [[ -d "${criu_dir}" ]]; then
         log_info "Restoring CRIU checkpoint for ${real_target_root}"
         rm --force "${exit_file}"
+        rm --force \
+            "${real_target_root}/root/.gnupg/S."* \
+            "${real_target_root}${PORTAGE_GPG_DIR}/S."* 2> /dev/null || true
 
         local pidfile="${criu_dir}/restore.pid"
         rm --force "${pidfile}"
@@ -1415,7 +1440,11 @@ EOF
         fi
     fi
 
-    tail --follow=name --retry -n +1 "${log_file}" 2> /dev/null &
+    local tail_start_arg="-n +1"
+    if [[ -f "${criu_dir}/restore.log" ]]; then
+        tail_start_arg="-n 0"
+    fi
+    tail --follow=name --retry "${tail_start_arg}" "${log_file}" 2> /dev/null &
     local tail_pid="${!}"
 
     local start_secs="${SECONDS}"
@@ -1485,13 +1514,21 @@ EOF
     fi
 
     if (( exit_code != 0 )); then
+        log_warn "Chroot execution failed with exit code ${exit_code}"
+        if [[ -f "${exit_file}" ]]; then
+            log_warn "Exit code file (${exit_file}): $(<"${exit_file}")"
+        else
+            log_warn "Exit code file (${exit_file}) NOT FOUND"
+        fi
+        log_warn "Kernel dmesg (last 30 lines):"
+        dmesg -T 2> /dev/null | tail -n 30 >&2 || true
         if [[ -f "${criu_dir}/restore.log" ]]; then
             log_warn "CRIU restore log output:"
             tail -n 100 "${criu_dir}/restore.log" >&2 || true
         fi
         if [[ -f "${log_file}" ]]; then
             log_warn "Chroot command log output:"
-            tail -n 100 "${log_file}" >&2 || true
+            tail -n 200 "${log_file}" >&2 || true
         fi
     else
         rm --force "${cmd_file}" "${exit_file}" "${log_file}"
