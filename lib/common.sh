@@ -33,446 +33,449 @@ if [[ -f "${env_file}" ]]; then
     # Preserve environment variables already set before sourcing .env so
     # caller/CI overrides take precedence over values in the .env file.
     declare -A _preserved_env=()
-    for var in \
-        GENTOO_MIRROR_URL \
-        REPOS \
-        BINPKG_REPOS \
-        ANSIBLE_PULL_URL \
-        SIGNING_KEY \
-        BINPKG_PUBLIC_KEY \
-        REPO_PUBLIC_KEYS \
-        S3_ACCESS_KEY_ID \
-        S3_SECRET_ACCESS_KEY \
-        S3_RO_SECRET_ACCESS_KEY \
-        S3_REGION \
-        S3_ENDPOINT \
-        S3_BUCKET_NAME \
-        SECUREBOOT_KEY \
-        SECUREBOOT_CERT \
-        STORAGETO_KEY; do
-        if [[ -v "${var}" ]]; then
-            _preserved_env["${var}"]="${!var}"
+    while IFS= read -r _var_name; do
+        if [[ -n "${_var_name}" && -n "${!_var_name}" ]]; then
+            _preserved_env["${_var_name}"]="${!_var_name}"
         fi
-    done
+    done < <(compgen -e)
 
-    # shellcheck source=/dev/null
     source "${env_file}"
 
-    for var in "${!_preserved_env[@]}"; do
-        printf -v "${var}" "%s" "${_preserved_env[${var}]}"
+    for _var_name in "${!_preserved_env[@]}"; do
+        printf -v "${_var_name}" '%s' "${_preserved_env[${_var_name}]}"
+        export "${_var_name}"
     done
-    unset _preserved_env
+    unset _preserved_env _var_name
 fi
 unset env_file
+readonly BUILD_DIR="${WORK_DIR}/build"
+readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
+readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-http://distfiles.gentoo.org}"
+readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
+readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
 
 # === Logging Helpers ===
 
-log_debug() {
-    printf "[DEBUG] %s\n" "${*}"
-}
+if [[ -t 1 ]]; then
+    _C_RESET='\033[0m'
+    _C_GREEN='\033[1;32m'
+    _C_YELLOW='\033[1;33m'
+    _C_RED='\033[1;31m'
+    _C_GRAY='\033[1;30m'
+else
+    _C_RESET='' _C_GREEN='' _C_YELLOW='' _C_RED='' _C_GRAY=''
+fi
 
 log_info() {
-    printf "[INFO] %s\n" "${*}"
+    printf "${_C_GREEN}[%s]${_C_RESET} %s\n" "${0##*/}" "${*}"
 }
-
 log_warn() {
-    printf "[WARN] %s\n" "${*}" >&2
+    printf "${_C_YELLOW}[%s] WARNING:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2
 }
-
 log_error() {
-    printf "[ERROR] %s\n" "${*}" >&2
+    printf "${_C_RED}[%s] ERROR:${_C_RESET} %s\n" "${0##*/}" "${*}" >&2
+}
+log_debug() {
+    if (( ${DEBUG:-${FLUFFY_DEBUG:-0}} )); then
+        printf "${_C_GRAY}[%s] DEBUG:${_C_RESET} %s\n" "${0##*/}" "${*}"
+    fi
 }
 
 # === Command Requirements ===
 
 check_root() {
     if (( EUID != 0 )); then
-        log_error "This script must be run as root."
+        printf "%s\n" "You must be root to run this script." >&2
         exit 1
+    fi
+    if [[ "$(</proc/mounts)" == *" ${WORK_DIR} "* ]]; then
+        mount --make-rprivate "${WORK_DIR}" 2> /dev/null || true
     fi
 }
 
 check_required_commands() {
     local missing_commands=()
-    local cmd
-    local seen_commands=()
-    for cmd in "${required_commands[@]}"; do
-        local already_seen=0
-        local seen
-        for seen in "${seen_commands[@]}"; do
-            if [[ "${seen}" == "${cmd}" ]]; then
-                already_seen=1
-                break
-            fi
-        done
-        if (( already_seen )); then
+    local -A seen=()
+    for command in "${required_commands[@]}"; do
+        if [[ -v seen["${command}"] ]]; then
             continue
         fi
-        seen_commands+=("${cmd}")
-        if ! command -v "${cmd}" > /dev/null 2>&1; then
-            missing_commands+=("${cmd}")
+        seen["${command}"]=1
+
+        if ! command -v "${command}" > /dev/null 2>&1; then
+            missing_commands+=("${command}")
         fi
     done
+
     if (( ${#missing_commands[@]} > 0 )); then
-        log_error "Missing required commands: ${missing_commands[*]}"
+        local missing_str
+        missing_str="$(printf " %s" "${missing_commands[@]}")"
+        log_error "Missing required commands:${missing_str}"
         exit 1
     fi
 }
 
 # === CLI Argument Parsing ===
 
-declare -A _cli_options
-declare -A _cli_option_descriptions
-declare -A _cli_option_defaults
-declare -A _cli_option_patterns
-declare -A _cli_flags
-declare -A _cli_flag_descriptions
-declare -a _cli_flag_patterns
+declare -a _cli_keys=()
+declare -A _cli_opt_map=()
+declare -A _cli_short_map=()
+declare -A _cli_long_map=()
+declare -A _cli_desc_map=()
+declare -A _cli_req_map=()
+declare -A _cli_def_map=()
+declare -A _cli_flag_map=()
+
+cli_init() {
+    _cli_keys=()
+    _cli_opt_map=()
+    _cli_short_map=()
+    _cli_long_map=()
+    _cli_desc_map=()
+    _cli_req_map=()
+    _cli_def_map=()
+    _cli_flag_map=()
+}
 
 cli_define_option() {
     local var_name="${1}"
-    local patterns="${2}"
-    local description="${3}"
+    local switches="${2}"
+    local desc="${3}"
     local required="${4:-0}"
-    local default_value="${5:-}"
+    local default="${5:-}"
 
-    _cli_options["${var_name}"]="${required}"
-    _cli_option_descriptions["${var_name}"]="${description}"
-    _cli_option_defaults["${var_name}"]="${default_value}"
-    _cli_option_patterns["${var_name}"]="${patterns}"
+    _cli_keys+=("${var_name}")
+    _cli_desc_map["${var_name}"]="${desc}"
+    _cli_req_map["${var_name}"]="${required}"
+    _cli_def_map["${var_name}"]="${default}"
+    _cli_flag_map["${var_name}"]=0
+
+    local switch
+    local -a parts=()
+    IFS="|" read -ra parts <<< "${switches}"
+    for switch in "${parts[@]}"; do
+        _cli_opt_map["${switch}"]="${var_name}"
+        if [[ "${switch}" =~ ^-- ]]; then
+            _cli_long_map["${var_name}"]="${switch}"
+        elif [[ "${switch}" =~ ^-[a-zA-Z0-9]$ ]]; then
+            _cli_short_map["${var_name}"]="${switch}"
+        fi
+    done
 }
 
 cli_define_flag() {
     local var_name="${1}"
-    local patterns="${2}"
-    local description="${3}"
-    local default_value="${4:-0}"
+    local switches="${2}"
+    local desc="${3}"
+    local default="${4:-0}"
 
-    _cli_flags["${var_name}"]="${default_value}"
-    _cli_flag_descriptions["${var_name}"]="${description}"
-    _cli_flag_patterns+=("${patterns}:${var_name}")
+    cli_define_option "${var_name}" "${switches}" "${desc}" 0 "${default}"
+    _cli_flag_map["${var_name}"]=1
 }
 
 cli_help() {
-    printf "Usage: %s [options]\n\n" "${0}"
-    printf "Options:\n"
-    local var_name pattern default_val desc
-    for var_name in "${!_cli_options[@]}"; do
-        pattern="${_cli_option_patterns[${var_name}]}"
-        pattern="${pattern//|/, }"
-        default_val="${_cli_option_defaults[${var_name}]}"
-        desc="${_cli_option_descriptions[${var_name}]}"
-        if [[ -n "${default_val}" ]]; then
-            printf "  %-30s %s (default: %s)\n" \
-                "${pattern} <val>" "${desc}" "${default_val}"
-        else
-            printf "  %-30s %s\n" "${pattern} <val>" "${desc}"
+    cli_show_help "${@}"
+}
+
+cli_show_help() {
+    local script_name
+    script_name="$(basename "${0}")"
+    printf "Usage: %s [options]\n\nOptions:\n" "${script_name}"
+    local key
+    for key in "${_cli_keys[@]}"; do
+        local sw_short="${_cli_short_map[${key}]:-}"
+        local sw_long="${_cli_long_map[${key}]:-}"
+        local sw_comb="${sw_long:-${sw_short}}"
+        if [[ -n "${sw_short}" && -n "${sw_long}" ]]; then
+            sw_comb="${sw_short}, ${sw_long}"
         fi
+        if (( _cli_flag_map[${key}] == 0 )); then
+            sw_comb="${sw_comb} <val>"
+        fi
+
+        local suffix=""
+        if (( _cli_flag_map[${key}] == 1 )); then
+            if [[ -n "${_cli_def_map[${key}]}" && \
+                  "${_cli_def_map[${key}]}" != "0" ]]; then
+                suffix=" (default: ${_cli_def_map[${key}]})"
+            fi
+        elif (( _cli_req_map[${key}] == 1 )); then
+            suffix=" (required)"
+        elif [[ -n "${_cli_def_map[${key}]}" ]]; then
+            suffix=" (default: ${_cli_def_map[${key}]})"
+        fi
+
+        printf "  %-24s %s%s\n" "${sw_comb}" \
+            "${_cli_desc_map[${key}]}" "${suffix}"
     done
-    local flag_entry flag_pattern
-    for flag_entry in "${_cli_flag_patterns[@]}"; do
-        flag_pattern="${flag_entry%%:*}"
-        var_name="${flag_entry##*:}"
-        flag_pattern="${flag_pattern//|/, }"
-        desc="${_cli_flag_descriptions[${var_name}]}"
-        printf "  %-30s %s\n" "${flag_pattern}" "${desc}"
-    done
-    printf "  %-30s %s\n" "-h, --help" "Show this help message"
+    printf "  %-24s %s\n" "-h, --help" "Show this help message and exit"
 }
 
 cli_parse() {
-    local -A opt_lookup=()
-    local -A flag_lookup=()
-    local var_name patterns p
-
-    for var_name in "${!_cli_option_patterns[@]}"; do
-        patterns="${_cli_option_patterns[${var_name}]}"
-        while [[ "${patterns}" =~ ([^|]+) ]]; do
-            opt_lookup["${BASH_REMATCH[1]}"]="${var_name}"
-            patterns="${patterns#*"${BASH_REMATCH[1]}"}"
-            patterns="${patterns#|}"
-        done
+    local key
+    for key in "${_cli_keys[@]}"; do
+        printf -v "${key}" "%s" "${_cli_def_map[${key}]}"
     done
 
-    local flag_entry flag_pattern
-    for flag_entry in "${_cli_flag_patterns[@]}"; do
-        flag_pattern="${flag_entry%%:*}"
-        var_name="${flag_entry##*:}"
-        while [[ "${flag_pattern}" =~ ([^|]+) ]]; do
-            flag_lookup["${BASH_REMATCH[1]}"]="${var_name}"
-            flag_pattern="${flag_pattern#*"${BASH_REMATCH[1]}"}"
-            flag_pattern="${flag_pattern#|}"
-        done
-    done
+    local -A _cli_seen=()
 
-    for var_name in "${!_cli_options[@]}"; do
-        printf -v "${var_name}" "%s" "${_cli_option_defaults[${var_name}]}"
-    done
-
-    for var_name in "${!_cli_flags[@]}"; do
-        printf -v "${var_name}" "%s" "${_cli_flags[${var_name}]}"
-    done
-
-    while (( ${#} > 0 )); do
-        case "${1}" in
+    while (( $# > 0 )); do
+        local opt="${1}"
+        case "${opt}" in
             -h|--help)
-                cli_help
+                cli_show_help
                 exit 0
                 ;;
-            *)
-                local matched=0
-                if [[ -n "${opt_lookup[${1}]:-}" ]]; then
-                    var_name="${opt_lookup[${1}]}"
-                    if (( ${#} < 2 )); then
-                        log_error "Option ${1} requires an argument."
-                        cli_help
+            --)
+                shift
+                break
+                ;;
+            --*=* | -[a-zA-Z0-9]=*)
+                local opt_name="${opt%%=*}"
+                local var_name="${_cli_opt_map[${opt_name}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf "Error: Option '%s' is a flag and takes no value\n" \
+                        "${opt_name}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                printf -v "${var_name}" "%s" "${opt#*=}"
+                _cli_seen["${var_name}"]=1
+                shift
+                ;;
+            --* | -[a-zA-Z0-9])
+                local var_name="${_cli_opt_map[${opt}]:-}"
+                if [[ -z "${var_name}" ]]; then
+                    printf "Error: Unknown option '%s'\n" "${opt}" >&2
+                    cli_show_help >&2
+                    exit 1
+                fi
+                if (( _cli_flag_map[${var_name}] == 1 )); then
+                    printf -v "${var_name}" "%s" 1
+                    _cli_seen["${var_name}"]=1
+                    shift
+                else
+                    if (( $# < 2 )); then
+                        printf "Error: Option '%s' requires an argument\n" \
+                            "${opt}" >&2
+                        cli_show_help >&2
                         exit 1
                     fi
                     printf -v "${var_name}" "%s" "${2}"
+                    _cli_seen["${var_name}"]=1
                     shift 2
-                    matched=1
-                    continue
                 fi
-
-                for p in "${!opt_lookup[@]}"; do
-                    if [[ "${1}" == "${p}="* ]]; then
-                        var_name="${opt_lookup[${p}]}"
-                        printf -v "${var_name}" "%s" "${1#*=}"
-                        shift
-                        matched=1
-                        break
-                    fi
-                done
-                if (( matched )); then
-                    continue
-                fi
-
-                if [[ -n "${flag_lookup[${1}]:-}" ]]; then
-                    var_name="${flag_lookup[${1}]}"
-                    printf -v "${var_name}" "1"
-                    shift
-                    matched=1
-                    continue
-                fi
-
-                log_error "Unknown argument: ${1}"
-                cli_help
+                ;;
+            *)
+                printf "Error: Unexpected argument '%s'\n" "${opt}" >&2
+                cli_show_help >&2
                 exit 1
                 ;;
         esac
     done
 
-    local missing_required=0
-    for var_name in "${!_cli_options[@]}"; do
-        if (( _cli_options["${var_name}"] )) && \
-            [[ -z "${!var_name}" ]]; then
-            log_error "Missing required option: ${_cli_option_patterns[${var_name}]}"
-            missing_required=1
+    for key in "${_cli_keys[@]}"; do
+        if (( _cli_req_map[${key}] == 1 )) && \
+           [[ -z "${_cli_seen[${key}]:-}" ]]; then
+            local sw_display="${_cli_long_map[${key}]:-}"
+            sw_display="${sw_display:-${_cli_short_map[${key}]:-${key}}}"
+            printf "Error: Missing required option '%s'\n" \
+                "${sw_display}" >&2
+            cli_show_help >&2
+            exit 1
         fi
     done
-
-    if (( missing_required )); then
-        cli_help
-        exit 1
-    fi
-}
-
-parse_profile() {
-    local profile="${1}"
-    if [[ "${profile}" =~ ^([a-zA-Z0-9_-]+):([a-zA-Z0-9_/-]+)$ ]]; then
-        printf "%s %s\n" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-    else
-        log_error "Invalid profile format: ${profile} (expected repo:profile)"
-        return 1
-    fi
 }
 
 # === File and Directory Helpers ===
 
-# Base build directory. Cleaned up on script exit via the EXIT trap when set.
-readonly BUILD_DIR="$(mktemp --directory)"
-chmod 0755 "${BUILD_DIR}"
-
-managed_build_dir_cleanup() {
-    local exit_code="${?}"
-    if [[ -d "${BUILD_DIR}" ]]; then
-        log_debug "Removing build directory ${BUILD_DIR}"
-        rm -rf "${BUILD_DIR}"
-    fi
-    exit "${exit_code}"
-}
-trap managed_build_dir_cleanup "EXIT"
-
 create_directory() {
-    local dir="${1}"
-    if [[ ! -d "${dir}" ]]; then
-        log_debug "Creating directory ${dir}"
-        mkdir --parents "${dir}"
+    if [[ -d "${1}" ]]; then
+        return
     fi
+    log_debug "Creating ${1}"
+    mkdir --parents "${1}"
+}
+
+remove_file() {
+    log_debug "Removing ${1}"
+    rm "${1}"
 }
 
 remove_directory() {
-    local dir="${1}"
-    if [[ -d "${dir}" ]]; then
-        log_debug "Removing directory ${dir}"
-        rmdir "${dir}"
-    fi
-}
-
-create_file() {
-    local file="${1}"
-    local content="${2:-}"
-    log_debug "Creating file ${file}"
-    printf "%s\n" "${content}" > "${file}"
-}
-
-create_empty_file() {
-    local file="${1}"
-    log_debug "Creating empty file ${file}"
-    : > "${file}"
-}
-
-copy_file() {
-    local src="${1}"
-    local dst="${2}"
-    log_debug "Copying ${src} to ${dst}"
-    cp "${src}" "${dst}"
+    log_debug "Removing directory ${1}"
+    rmdir "${1}"
 }
 
 force_remove() {
-    local path="${1}"
-    if [[ -e "${path}" ]]; then
-        log_debug "Force removing ${path}"
-        rm -rf "${path}"
-    fi
+    log_debug "Force removing ${1}"
+    rm --force --recursive "${1}"
+}
+
+copy_file() {
+    log_debug "Copying ${1} to ${2}"
+    cp --dereference "${1}" "${2}"
+}
+
+recursive_copy() {
+    log_debug "Recursively copying ${1} to ${2}"
+    cp --dereference --recursive "${1}" "${2}"
+}
+
+create_empty_file() {
+    log_debug "Creating empty file ${1}"
+    > "${1}"
+}
+
+create_file() {
+    log_debug "Creating file ${1}"
+    printf "%s\n" "${2}" > "${1}"
+}
+
+create_symbolic_link() {
+    log_debug "Creating symbolic link from ${1} to ${2}"
+    ln --force --no-dereference --symbolic "${1}" "${2}"
 }
 
 create_symlink() {
-    local target="${1}"
-    local link_name="${2}"
-    log_debug "Creating symlink ${link_name} -> ${target}"
-    ln -sf "${target}" "${link_name}"
+    create_symbolic_link "${@}"
 }
 
 # === Archive Helpers ===
 
-tar_create() {
-    local archive="${1}"
-    local src_dir="${2}"
-    shift 2
-
-    log_debug "Creating tar archive ${archive} from ${src_dir}"
-    tar --create \
-        --directory="${src_dir}" \
-        --file="${archive}" \
-        --numeric-owner \
-        --use-compress-program="zstd -19 --threads=0" \
-        "${@}"
-}
-
 tar_extract() {
     local archive="${1}"
-    local dst_dir="${2}"
+    local target_dir="${2}"
     shift 2
 
-    log_debug "Extracting tar archive ${archive} to ${dst_dir}"
-    tar --extract \
-        --directory="${dst_dir}" \
+    local -a compress_opts=()
+    if [[ "${archive}" == *.tar.zst || "${archive}" == *.zst ]]; then
+        compress_opts=(--use-compress-program="zstd --long=31")
+    fi
+
+    tar --directory="${target_dir}" \
+        --extract \
         --file="${archive}" \
+        --no-overwrite-dir \
         --numeric-owner \
-        --use-compress-program="zstd -d" \
+        --preserve-permissions \
+        "${compress_opts[@]}" \
+        --xattrs-include="*.*" \
         "${@}"
 }
 
-tar_append() {
+tar_create() {
     local archive="${1}"
-    local src_dir="${2}"
+    local source_dir="${2}"
     shift 2
 
-    log_debug "Appending to tar archive ${archive} from ${src_dir}"
-    tar --append \
-        --directory="${src_dir}" \
+    tar --create \
+        --directory="${source_dir}" \
         --file="${archive}" \
         --numeric-owner \
+        --preserve-permissions \
+        --use-compress-program="zstd --long=31 --threads=0 -9" \
+        --xattrs-include="*.*" \
         "${@}"
 }
 
 # === Configuration Parsing ===
 
-parse_env_list() {
-    local content="${1}"
-    local -a result=()
-    local line
-    while IFS= read -r line || [[ -n "${line}" ]]; do
-        line="${line#"${line%%[![:space:]]*}"}"
-        line="${line%"${line##*[![:space:]]}"}"
-        if [[ -n "${line}" && ! "${line}" =~ ^# ]]; then
-            result+=("${line}")
-        fi
-    done <<< "${content}"
-    printf "%s\n" "${result[@]}"
+# Splits "repo:profile/path" into "repo profile/path", defaulting to "gentoo"
+# when no repository prefix is specified.
+parse_profile() {
+    local target_profile="${1//$'\r'/}"
+    local repo repo_profile
+    IFS=":" read -r repo repo_profile <<< "${target_profile}"
+    if [[ -z "${repo_profile}" ]]; then
+        repo_profile="${repo}"
+        repo="gentoo"
+    fi
+    printf "%s %s\n" "${repo}" "${repo_profile}"
 }
 
 # === Mount Management ===
 
 _registered_mount_arrays=()
-
-register_mount_array() {
-    local array_name="${1}"
-    local existing
-    for existing in "${_registered_mount_arrays[@]}"; do
-        if [[ "${existing}" == "${array_name}" ]]; then
-            return 0
-        fi
-    done
-    _registered_mount_arrays+=("${array_name}")
-}
+declare -A _registered_mount_arrays_seen=()
 
 managed_mount() {
     local array_name="${1}"
-    register_mount_array "${array_name}"
-    declare -n mount_ref="${array_name}"
+    declare -n mounts_array_name="${array_name}"
     shift
 
+    # The mount target is always the last argument in standard mount syntax
     local target="${*: -1}"
+
     log_debug "Mounting ${target}"
     mount "${@}"
-    mount_ref+=("${target}")
+
+    mounts_array_name+=("${target}")
+    if [[ ! -v _registered_mount_arrays_seen["${array_name}"] ]]; then
+        _registered_mount_arrays_seen["${array_name}"]=1
+        _registered_mount_arrays+=("${array_name}")
+    fi
+}
+
+register_mount_array() {
+    local array_name="${1}"
+    if [[ ! -v _registered_mount_arrays_seen["${array_name}"] ]]; then
+        _registered_mount_arrays_seen["${array_name}"]=1
+        _registered_mount_arrays+=("${array_name}")
+    fi
 }
 
 managed_unmount() {
     local array_name="${1}"
-    declare -n mount_ref="${array_name}"
+    declare -n mounts_array_name="${array_name}"
     local target="${2}"
 
-    if findmnt --mountpoint "${target}" > /dev/null 2>&1; then
+    if [[ "$(</proc/mounts)" == *" ${target} "* ]]; then
         log_debug "Unmounting ${target}"
         umount --recursive "${target}"
     fi
 
     local remaining_mounts=()
     local m
-    for m in "${mount_ref[@]}"; do
+    for m in "${mounts_array_name[@]}"; do
         if [[ "${m}" != "${target}" ]]; then
             remaining_mounts+=("${m}")
         fi
     done
-    mount_ref=("${remaining_mounts[@]}")
+    mounts_array_name=("${remaining_mounts[@]}")
 }
 
-managed_unmount_all() {
-    local array_name="${1}"
-    declare -n mount_ref="${array_name}"
 
+managed_unmount_all() {
+    declare -n mounts_array_name="${1}"
+
+    local exit_code="0"
+    local remaining_mounts=()
     local i
-    for (( i=${#mount_ref[@]}-1; i>=0; i-- )); do
-        local target="${mount_ref[$i]}"
-        if findmnt --mountpoint "${target}" > /dev/null 2>&1; then
-            log_debug "Unmounting ${target}"
-            umount --recursive "${target}"
+    # Unmount in reverse order so nested child mounts detach before parents.
+    for (( i=${#mounts_array_name[@]}-1; i>=0; i-- )); do
+        local m="${mounts_array_name[$i]}"
+        # Check space-delimited target in /proc/mounts directly to avoid
+        # requiring util-linux mountpoint(1).
+        if [[ "$(</proc/mounts)" == *" ${m} "* ]]; then
+            log_debug "Unmounting ${m}"
+            if ! umount --recursive "${m}"; then
+                exit_code="${?}"
+                remaining_mounts+=("${m}")
+            fi
         fi
     done
-    mount_ref=()
+
+    mounts_array_name=("${remaining_mounts[@]}")
+    if (( exit_code != 0 )); then
+        log_error "Error unmounting one or more filesystems"
+        return "${exit_code}"
+    fi
 }
 
 # === Cryptsetup Management ===
@@ -556,7 +559,7 @@ managed_losetup() {
             _active_loop_devices=("${remaining_devices[@]}")
             ;;
         *)
-            losetup "${action}" "${@}"
+            losetup "${action}" "${@:2}"
             ;;
     esac
 }
@@ -573,6 +576,7 @@ managed_losetup_detach_all() {
     done
     _active_loop_devices=()
 }
+
 
 _failure_hooks=()
 register_failure_hook() {
@@ -608,120 +612,121 @@ load_ebuild_repositories() {
     fi
 
     local repo_entry
-    while IFS= read -r repo_entry || [[ -n "${repo_entry}" ]]; do
-        if [[ -n "${repo_entry}" ]]; then
-            _repo_entries+=("${repo_entry}")
-        fi
-    done < <(parse_env_list "${REPOS:-}")
+    while IFS= read -r repo_entry; do
+        if [[ -z "${repo_entry}" ]]; then continue; fi
 
-    _ebuild_repositories_loaded=1
+        _repo_entries+=("${repo_entry}")
+    done <<< "${REPOS}"
+
+    readonly _ebuild_repositories_loaded=1
 }
 
-readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
-
 download_ebuild_repositories() {
-    local target_root="${1}"
-    log_info "Downloading ebuild repositories to ${LOCAL_REPOS_DIR}"
+    if [[ -v _ebuild_repositories_downloaded ]]; then
+        return
+    fi
+
+    log_info "Downloading ebuild repositories"
+
+    import_bundled_keys
+    import_public_keys
 
     load_ebuild_repositories
 
-    create_directory "${LOCAL_REPOS_DIR}"
-
-    local repo_entry repo_name repo_url repo_branch
     for repo_entry in "${_repo_entries[@]}"; do
-        read -r repo_name repo_url repo_branch <<< "${repo_entry}"
+        local repo_name repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+
         local repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
 
-        if [[ ! -d "${repo_dir}/.git" ]]; then
-            log_info "Cloning repository ${repo_name} from ${repo_url}"
-            local clone_args=(
-                "--filter=blob:none"
-                "--no-checkout"
-            )
-            if [[ -n "${repo_branch}" ]]; then
-                clone_args+=("--branch=${repo_branch}")
-            fi
-            git clone "${clone_args[@]}" "${repo_url}" "${repo_dir}"
+        if [[ -d "${repo_dir}" ]]; then
+            log_info "Updating ${repo_name} in ${repo_dir}"
+            git -C "${repo_dir}" fetch --depth 1 origin
+            git -C "${repo_dir}" reset --hard FETCH_HEAD
+        else
+            log_info "Cloning ${repo_url} into ${repo_dir}"
+            git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
-
-        log_info "Verifying HEAD commit signature of ${repo_name}"
-        git -C "${repo_dir}" verify-commit "HEAD"
-        git -C "${repo_dir}" checkout --detach "HEAD"
+        # Enforce GPG commit signature verification on all ebuild repositories
+        # using bundled keys (keys/*.asc) and REPO_PUBLIC_KEYS.
+        log_info "Verifying latest commit signature for ${repo_name}" \
+            "in ${repo_dir}"
+        git -C "${repo_dir}" verify-commit HEAD
     done
+
+    readonly _ebuild_repositories_downloaded=1
+}
+
+# Normalizes "/" or empty root to "" so path concatenations like
+# "${target_root}/etc/portage" do not produce leading "//".
+normalize_target_root() {
+    local raw_root="${1:-/}"
+    local -n out_root="${2}"
+    local -n out_display="${3}"
+
+    if [[ "${raw_root}" == "/" || -z "${raw_root}" ]]; then
+        out_root=""
+        out_display="host system (/)"
+    else
+        out_root="${raw_root%/}"
+        out_display="${out_root}"
+    fi
 }
 
 configure_ebuild_repositories() {
-    local target_root="${1}"
-    log_info "Configuring ebuild repositories in ${target_root}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Configuring ebuild repositories for ${target_display}"
+
+    download_ebuild_repositories
 
     load_ebuild_repositories
 
     local repos_conf_dir="${target_root}/etc/portage/repos.conf"
     create_directory "${repos_conf_dir}"
 
-    local gentoo_repo_conf="${repos_conf_dir}/gentoo.conf"
-    local gentoo_sync_uri="${GENTOO_MIRROR_URL:-rsync://rsync.gentoo.org/gentoo-portage}"
-
-    log_debug "Creating ${gentoo_repo_conf}"
-    cat << EOF > "${gentoo_repo_conf}"
-[DEFAULT]
-main-repo = gentoo
-
-[gentoo]
-location = /var/db/repos/gentoo
-sync-type = rsync
-sync-uri = ${gentoo_sync_uri}
-auto-sync = yes
-sync-rsync-verify-metamanifest = yes
-sync-rsync-verify-max-age = 24
-sync-openpgp-key-path = /usr/share/openpgp-keys/gentoo-release.asc
-sync-openpgp-keyserver = hkps://keys.gentoo.org
-sync-openpgp-key-refresh-retry-count = 40
-sync-openpgp-key-refresh-retry-overall-timeout = 1200
-sync-openpgp-key-refresh-retry-delay-exp-base = 2
-sync-openpgp-key-refresh-retry-delay-max = 60
-sync-openpgp-key-refresh-retry-delay-mult = 4
-EOF
-
-    local repo_entry repo_name repo_url repo_branch
     for repo_entry in "${_repo_entries[@]}"; do
-        read -r repo_name repo_url repo_branch <<< "${repo_entry}"
-        local repo_conf="${repos_conf_dir}/${repo_name}.conf"
-        log_debug "Creating ${repo_conf}"
-        cat << EOF > "${repo_conf}"
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+
+        local repo_conf_file="${repos_conf_dir}/${repo_name}.conf"
+        log_debug "Creating ${repo_conf_file}"
+        local repo_conf_content
+        IFS= read -d "" -r repo_conf_content << EOF || true
 [${repo_name}]
 location = /var/db/repos/${repo_name}
 sync-type = git
 sync-uri = ${repo_url}
-auto-sync = yes
-sync-git-verify-commit-signature = yes
-sync-openpgp-key-path = /etc/portage/gnupg
 EOF
+        printf "%s" "${repo_conf_content}" > "${repo_conf_file}"
     done
 }
 
 _active_repo_mounts=()
-
 mount_repos() {
-    local target_root="${1}"
-    log_info "Mounting ebuild repositories into ${target_root}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Mounting ebuild repositories for ${target_display}"
 
     load_ebuild_repositories
 
-    download_ebuild_repositories "${target_root}"
+    local repos_dir="${target_root}/var/db/repos"
+    create_directory "${repos_dir}"
 
-    local target_repos_dir="${target_root}/var/db/repos"
-    create_directory "${target_repos_dir}"
-
-    local repo_entry repo_name
     for repo_entry in "${_repo_entries[@]}"; do
-        repo_name="${repo_entry%% *}"
-        local repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
-        local target_repo_dir="${target_repos_dir}/${repo_name}"
+        local repo_name
+        local repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+
+        local source_repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
+        local target_repo_dir="${repos_dir}/${repo_name}"
 
         create_directory "${target_repo_dir}"
-        managed_mount "_active_repo_mounts" --bind "${repo_dir}" \
-            "${target_repo_dir}"
+
+        log_debug "Mounting ${source_repo_dir} to ${target_repo_dir}"
+        managed_mount "_active_repo_mounts" --bind --options "ro" \
+            "${source_repo_dir}" "${target_repo_dir}"
     done
 }
 
@@ -732,56 +737,33 @@ unmount_repos() {
 
 # === GPG and Security ===
 
-_signing_key_fingerprint=""
-
-import_signing_key() {
-    if [[ -n "${_signing_key_fingerprint}" ]]; then
+import_bundled_keys() {
+    if [[ -v _BUNDLED_KEYS_IMPORTED ]]; then
         return
     fi
 
-    if [[ -z "${SIGNING_KEY:-}" ]]; then
-        log_error "SIGNING_KEY environment variable is not set."
-        exit 1
-    fi
+    local key_file
+    for key_file in "${WORK_DIR}"/keys/*.asc; do
+        if [[ -f "${key_file}" ]]; then
+            log_info "Importing bundled key $(basename "${key_file}")"
+            gpg --quiet --import "${key_file}"
 
-    log_info "Importing repository signing key into host GPG keyring"
+            gpg --with-colons --show-keys "${key_file}" | \
+                awk -F: '/^fpr/ {print $10 ":6:"}' | \
+                gpg --batch --import-ownertrust --quiet
+        fi
+    done
 
-    local import_output
-    import_output="$(gpg --batch --import <<< "${SIGNING_KEY}" 2>&1)"
-
-    # Prefer a secret subkey with signing capability ([s]), falling back to the
-    # primary secret key ([u]).
-    local fingerprint
-    fingerprint="$(gpg --batch --with-colons --list-secret-keys 2> /dev/null | \
-        awk -F: '
-            $1 == "sec" { primary = "" }
-            $1 == "fpr" && primary == "" { primary = $10 }
-            $1 == "ssb" && $12 ~ /s/ { subkey = ""; next }
-            $1 == "fpr" && subkey == "" { print $10; exit }
-            END { if (primary != "") print primary }
-        ')"
-
-    if [[ -z "${fingerprint}" ]]; then
-        log_error "Failed to retrieve fingerprint of imported SIGNING_KEY."
-        log_error "${import_output}"
-        exit 1
-    fi
-
-    log_info "Using signing key with fingerprint: ${fingerprint}"
-    _signing_key_fingerprint="${fingerprint}"
-}
-
-import_bundled_keys() {
-    local bundled_key_file="${WORK_DIR}/etc/gentoo-release.asc"
-    if [[ -f "${bundled_key_file}" ]]; then
-        log_info "Importing bundled Gentoo release keys from ${bundled_key_file}"
-        gpg --import --quiet "${bundled_key_file}"
-    else
-        log_warn "Bundled release keys not found at ${bundled_key_file}"
-    fi
+    readonly _BUNDLED_KEYS_IMPORTED=1
 }
 
 import_public_keys() {
+    if [[ -v _public_keys_imported ]]; then
+        return
+    fi
+
+    log_info "Importing public keys"
+
     local all_keys=""
     if [[ -n "${REPO_PUBLIC_KEYS:-}" ]]; then
         all_keys+="${REPO_PUBLIC_KEYS}"$'\n'
@@ -795,66 +777,30 @@ import_public_keys() {
 
     if [[ -n "${all_keys//[[:space:]]/}" ]]; then
         gpg --import --quiet <<< "${all_keys}"
+
+        gpg --show-keys --with-colons <<< "${all_keys}" | \
+            awk -F: '/^fpr/ {print $10 ":6:"}' | \
+            gpg --batch --import-ownertrust --quiet
     fi
+
+    readonly _public_keys_imported=1
 }
 
 # === S3 & Stage Archives ===
 
 s3_rclone() {
-    local cmd="${1}"
-    shift
+    local secret_key="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
 
-    local secret_key="${S3_SECRET_ACCESS_KEY:-}"
-    if [[ -z "${secret_key}" ]]; then
-        secret_key="${S3_RO_SECRET_ACCESS_KEY:-}"
-    fi
-
-    local -a env_args=(
-        "RCLONE_CONFIG_S3_TYPE=s3"
-        "RCLONE_CONFIG_S3_PROVIDER=Other"
-        "RCLONE_CONFIG_S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}"
-        "RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=${secret_key}"
-        "RCLONE_CONFIG_S3_REGION=${S3_REGION}"
-        "RCLONE_CONFIG_S3_ENDPOINT=${S3_ENDPOINT}"
-    )
-
-    env "${env_args[@]}" rclone "${cmd}" --s3-no-check-bucket "${@}"
-}
-
-fetch_seed_stage() {
-    local target_root="${1}"
-    local arch="${2}"
-    local name="${3}"
-    log_info "Fetching seed stage for ${arch}/${name} into ${target_root}"
-
-    local stage_url="${GENTOO_MIRROR_URL:-https://distfiles.gentoo.org}/releases/${arch}/autobuilds/current-${name}/"
-    local stage_dir="${BUILD_DIR}/stage"
-    create_directory "${stage_dir}"
-
-    local latest_txt_url="${stage_url}latest-${name}.txt"
-    local latest_txt="${stage_dir}/latest-${name}.txt"
-    rclone copyto "${latest_txt_url}" "${latest_txt}"
-
-    import_bundled_keys
-    gpg --verify "${latest_txt}"
-
-    local tarball_path
-    tarball_path="$(awk '!/^#/ && NF {print $1; exit}' "${latest_txt}")"
-    local tarball_filename="${tarball_path##*/}"
-
-    local tarball_url="${GENTOO_MIRROR_URL:-https://distfiles.gentoo.org}/releases/${arch}/autobuilds/${tarball_path}"
-    local tarball_file="${stage_dir}/${tarball_filename}"
-    local dsig_url="${tarball_url}.asc"
-    local dsig_file="${stage_dir}/${tarball_filename}.asc"
-
-    rclone copyto "${tarball_url}" "${tarball_file}"
-    rclone copyto "${dsig_url}" "${dsig_file}"
-
-    gpg --verify "${dsig_file}" "${tarball_file}"
-
-    create_directory "${target_root}"
-    tar_extract "${tarball_file}" "${target_root}"
-    force_remove "${stage_dir}"
+    rclone \
+        --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+        --s3-endpoint "${S3_ENDPOINT}" \
+        --s3-no-check-bucket \
+        --s3-provider "Other" \
+        --s3-region "${S3_REGION}" \
+        --s3-secret-access-key "${secret_key}" \
+        --transfers "16" \
+        --verbose \
+        "${@}"
 }
 
 fetch_project_stage() {
@@ -866,7 +812,7 @@ fetch_project_stage() {
     import_bundled_keys
     import_public_keys
 
-    if [[ -n "${SIGNING_KEY:-}" ]] && \
+    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
         declare -F import_signing_key > /dev/null; then
         import_signing_key
     fi
@@ -878,39 +824,47 @@ fetch_project_stage() {
     local profile_name="${repo_profile//\//-}"
     local stage_filename="${stage_type}-${profile_name}.tar.zst"
     local sig_filename="${stage_filename}.sig"
+    local tmp_dir="${target_root}/var/tmp"
+    create_directory "${tmp_dir}"
+    local download_dir
+    download_dir="$(mktemp --directory --tmpdir="${tmp_dir}")"
+    local stage_file="${download_dir}/${stage_filename}"
+    local sig_file="${download_dir}/${sig_filename}"
+    log_info "Downloading stage archive ${stage_file}"
+    s3_rclone copy ":s3:${S3_BUCKET_NAME}/${stage_filename}" \
+        "${download_dir}"
 
-    local temp_dir="${BUILD_DIR}/stage"
-    create_directory "${temp_dir}"
+    log_info "Downloading stage archive signature ${sig_file}"
+    s3_rclone copy ":s3:${S3_BUCKET_NAME}/${sig_filename}" \
+        "${download_dir}"
 
-    local stage_file="${temp_dir}/${stage_filename}"
-    local sig_file="${temp_dir}/${sig_filename}"
+    log_info "Verifying stage archive ${stage_file}"
+    gpg --verify "${sig_file}" "${stage_file}"
 
-    log_info "Downloading ${stage_filename} from S3"
-    s3_rclone copyto ":s3:${S3_BUCKET_NAME}/${stage_filename}" "${stage_file}"
-    log_info "Downloading ${sig_filename} from S3"
-    s3_rclone copyto ":s3:${S3_BUCKET_NAME}/${sig_filename}" "${sig_file}"
-
-    log_info "Verifying signature for ${stage_filename}"
-    gpg --batch --verify "${sig_file}" "${stage_file}"
-
+    log_info "Extracting stage archive ${stage_file} to ${target_root}"
     tar_extract "${stage_file}" "${target_root}"
 
-    force_remove "${temp_dir}"
+    force_remove "${stage_file}"
+    force_remove "${sig_file}"
+    force_remove "${download_dir}"
 }
 
 # === Portage Configuration ===
 
 remove_portage_configuration() {
-    local target_root="${1}"
-    local portage_dir="${target_root}/etc/portage"
-    log_info "Removing portage configuration from ${portage_dir}"
-    force_remove "${portage_dir}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
+    log_info "Removing Portage configuration for ${target_display}"
+
+    find "${target_root}/etc/portage" -mindepth 1 -maxdepth 1 -exec rm --force \
+        --recursive {} +
 }
 
 configure_portage_profile() {
-    local target_root="${1}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
     local profile="${2}"
-    log_info "Configuring portage profile ${profile} in ${target_root}"
+    log_info "Configuring Portage profile for ${target_display}"
 
     local portage_conf_dir="${target_root}/etc/portage"
     create_directory "${portage_conf_dir}"
@@ -918,64 +872,66 @@ configure_portage_profile() {
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
-    local profile_dir=\
-"${target_root}/var/db/repos/${repo}/profiles/${repo_profile}"
-    if [[ -d "${target_root}/var/db/repos/${repo}" && \
-        ! -d "${profile_dir}" ]]; then
-        log_error \
-            "Profile '${repo_profile}' not found in repository '${repo}'"
-        return 1
-    fi
-
     local portage_conf_profile_dir="${portage_conf_dir}/make.profile"
     local relative_repo_profile_dir=\
 "../../var/db/repos/${repo}/profiles/${repo_profile}"
-
-    create_symlink "${relative_repo_profile_dir}" "${portage_conf_profile_dir}"
+    create_symbolic_link "${relative_repo_profile_dir}" \
+        "${portage_conf_profile_dir}"
 }
 
-readonly PORTAGE_GPG_DIR="/etc/portage/gnupg"
-readonly PORTAGE_SECUREBOOT_DIR="/etc/kernel/certs"
-
 configure_portage() {
-    local target_root="${1}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
     local profile="${2}"
-    local context="${3}"
-    log_info "Configuring portage in ${target_root} for profile ${profile}"
+    local portage_conf_name="${3}"
+    log_info "Applying Portage configuration for ${target_display}"
 
     configure_portage_profile "${target_root}" "${profile}"
 
+    local portage_conf_dir="${target_root}/etc/portage"
+    recursive_copy "${WORK_DIR}/portage/${portage_conf_name}/." \
+        "${portage_conf_dir}"
+
     configure_ebuild_repositories "${target_root}"
 
-    # Bootstrap contexts build with local toolchain flags and must omit
-    # binhost configs so packages are built from source with target USE flags.
-    if [[ "${context}" != "stage1" && "${context}" != "stage3" ]]; then
-        configure_portage_binary_packages "${target_root}" "${profile}"
-    fi
-
-    # Set up Portage's standalone GPG keyring for repository signature
-    # verification during emaint sync and git verification.
-    local portage_gnupg_dir="${target_root}${PORTAGE_GPG_DIR}"
-    create_directory "${portage_gnupg_dir}"
-    chmod 0755 "${portage_gnupg_dir}"
-
-    import_public_keys
-    gpg --export | gpg --homedir "${portage_gnupg_dir}" --import
-
-    local ownertrust_entries=()
-    local key_id
-    while IFS= read -r key_id || [[ -n "${key_id}" ]]; do
-        if [[ -n "${key_id}" ]]; then
-            ownertrust_entries+=("${key_id}:6:")
+    if [[ -z "${target_root}" ]]; then
+        if command -v getuto > /dev/null 2>&1; then
+            getuto
+        else
+            log_warn "getuto command not found on host, skipping..."
         fi
-    done < <(gpg --homedir "${portage_gnupg_dir}" --list-keys \
-        --with-colons 2> /dev/null | awk -F: '$1 == "pub" { print $5 }')
-
-    if (( ${#ownertrust_entries[@]} > 0 )); then
-        printf "%s\n" "${ownertrust_entries[@]}" | \
-            gpg --homedir "${portage_gnupg_dir}" --import-ownertrust
+    else
+        chroot_run "${target_root}" 'getuto'
     fi
 
+    local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
+    create_directory "${portage_gnupg_dir}"
+
+    # Build scripts derive the verification key from SIGNING_KEY; live
+    # installer environments have no private key and use BINPKG_PUBLIC_KEY.
+    if [[ -n "${SIGNING_KEY:-}" ]] && \
+        declare -F import_signing_key > /dev/null; then
+        import_signing_key
+        gpg --batch --export "${_signing_key_fingerprint}" | \
+            gpg --batch --homedir "${portage_gnupg_dir}" --import
+
+        printf "%s\n" "${_signing_key_fingerprint}:6:" | \
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+            --import-ownertrust --quiet
+    else
+        if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+                --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+            gpg --batch --homedir "${portage_gnupg_dir}" \
+                --list-keys --with-colons 2> /dev/null | \
+                awk -F: '/^fpr/ {print $10 ":6:"}' | \
+                gpg --batch --homedir "${portage_gnupg_dir}" \
+                    --import-ownertrust --quiet
+        fi
+    fi
+
+    gpg --batch --check-trustdb \
+        --homedir "${portage_gnupg_dir}" 2> /dev/null || true
     # Portage drops root privileges to the portage user during signature
     # verification, so trustdb.gpg must be world-readable.
     chmod ugo+r "${portage_gnupg_dir}/trustdb.gpg" 2> /dev/null || true
@@ -983,111 +939,90 @@ configure_portage() {
 
     # Mask check-chroot plugin to allow kernel-install in chroot
     create_directory "${target_root}/etc/kernel/install.d"
-    create_symlink "/dev/null" \
-        "${target_root}/etc/kernel/install.d/50-check-chroot.install"
+    create_symbolic_link "/dev/null" \
+        "${target_root}/etc/kernel/install.d/05-check-chroot.install"
+}
 
-    # Mask unified kernel image generation plugins
-    create_symlink "/dev/null" \
-        "${target_root}/etc/kernel/install.d/60-ukify.install"
-    create_symlink "/dev/null" \
-        "${target_root}/etc/kernel/install.d/92-systemd-boot-uki.install"
-
-    # Install Secure Boot signing keys and enrollment certificate for dracut
-    # module signing and UEFI validation.
-    if [[ -n "${SECUREBOOT_KEY:-}" ]]; then
-        local kernel_certs_dir="${target_root}${PORTAGE_SECUREBOOT_DIR}"
-        create_directory "${kernel_certs_dir}"
-        chmod 0700 "${kernel_certs_dir}"
-
-        create_file "${kernel_certs_dir}/secureboot.key" "${SECUREBOOT_KEY}"
-        chmod 0600 "${kernel_certs_dir}/secureboot.key"
-
-        create_file "${kernel_certs_dir}/secureboot.crt" "${SECUREBOOT_CERT}"
-        chmod 0644 "${kernel_certs_dir}/secureboot.crt"
-
-        create_directory "${target_root}/etc/kernel"
-        create_file "${target_root}/etc/kernel/install.conf" \
-            "secureboot_key=\"${PORTAGE_SECUREBOOT_DIR}/secureboot.key\"
-secureboot_certificate=\"${PORTAGE_SECUREBOOT_DIR}/secureboot.crt\""
+_binpkg_repo_entries=()
+load_binpkg_repositories() {
+    if [[ -v _binpkg_repositories_loaded ]]; then
+        return
     fi
+
+    local repo_entry
+    while IFS= read -r repo_entry; do
+        if [[ -z "${repo_entry}" ]]; then continue; fi
+
+        _binpkg_repo_entries+=("${repo_entry}")
+    done <<< "${BINPKG_REPOS}"
+
+    readonly _binpkg_repositories_loaded=1
 }
 
 configure_portage_binary_packages() {
-    local target_root="${1}"
+    local target_root target_display
+    normalize_target_root "${1-}" target_root target_display
     local profile="${2}"
-    log_info "Configuring binary packages in ${target_root}"
+    log_info "Configuring Portage binary packages for ${target_display}"
+
+    load_binpkg_repositories
+
+    local repo_dir="${target_root}/etc/portage/binrepos.conf"
+    create_directory "${repo_dir}"
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
 
-    local binrepos_conf_dir="${target_root}/etc/portage/binrepos.conf"
-    create_directory "${binrepos_conf_dir}"
+    local repo_entry
+    for repo_entry in "${_binpkg_repo_entries[@]}"; do
+        local repo_name repo_url
+        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
-    local default_binrepo_conf="${binrepos_conf_dir}/default.conf"
-    local default_binrepo_name="${repo_profile//\//-}"
-    local default_binrepo_url="${S3_ENDPOINT}/${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
-
-    log_debug "Creating ${default_binrepo_conf}"
-    cat << EOF > "${default_binrepo_conf}"
-[${default_binrepo_name}]
-sync-uri = ${default_binrepo_url}
-priority = 1
+        local binpkg_repo_conf_file="${repo_dir}/${repo_name}.conf"
+        log_debug "Creating ${binpkg_repo_conf_file}"
+        local binpkg_repo_conf_content
+        IFS= read -d "" -r binpkg_repo_conf_content << EOF || true
+[${repo_name}]
+sync-uri = ${repo_url}/${repo_profile}
 EOF
-
-    local binpkg_repo_entries=()
-    local binpkg_repo_entry
-    while IFS= read -r binpkg_repo_entry || [[ -n "${binpkg_repo_entry}" ]]; do
-        if [[ -n "${binpkg_repo_entry}" ]]; then
-            binpkg_repo_entries+=("${binpkg_repo_entry}")
-        fi
-    done < <(parse_env_list "${BINPKG_REPOS:-}")
-
-    local binpkg_repo_name binpkg_repo_url binpkg_repo_priority
-    for binpkg_repo_entry in "${binpkg_repo_entries[@]}"; do
-        read -r binpkg_repo_name binpkg_repo_url binpkg_repo_priority \
-            <<< "${binpkg_repo_entry}"
-        local binrepo_conf="${binrepos_conf_dir}/${binpkg_repo_name}.conf"
-        log_debug "Creating ${binrepo_conf}"
-        cat << EOF > "${binrepo_conf}"
-[${binpkg_repo_name}]
-sync-uri = ${binpkg_repo_url}
-priority = ${binpkg_repo_priority}
-EOF
+        printf "%s" "${binpkg_repo_conf_content}" > "${binpkg_repo_conf_file}"
     done
 }
 
 # === Chroot Environment ===
 
 _active_chroot_mounts=()
-
 mount_chroot_filesystems() {
     local target_root="${1}"
     log_info "Mounting chroot filesystems for ${target_root}"
 
     create_directory "${target_root}/etc"
+    # Avoid clobbering /etc/resolv.conf if it is already a symlink (e.g. to
+    # systemd-resolved's stub-resolv.conf).
     if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
-        copy_file "/etc/resolv.conf" "${target_root}/etc/resolv.conf"
+        cp --dereference --force "/etc/resolv.conf" \
+            "${target_root}/etc/resolv.conf"
     fi
 
-    create_directory "${target_root}/proc"
+    local target_proc_dir="${target_root}/proc"
+    create_directory "${target_proc_dir}"
     managed_mount "_active_chroot_mounts" --types "proc" "/proc" \
         "${target_root}/proc"
-
-    create_directory "${target_root}/sys"
-    managed_mount "_active_chroot_mounts" --rbind "/sys" "${target_root}/sys"
-    managed_mount "_active_chroot_mounts" --make-rslave "${target_root}/sys"
-
-    create_directory "${target_root}/run"
-    managed_mount "_active_chroot_mounts" --bind "/run" "${target_root}/run"
-    managed_mount "_active_chroot_mounts" --make-slave "${target_root}/run"
-
-    create_directory "${target_root}/dev"
-    managed_mount "_active_chroot_mounts" --rbind "/dev" "${target_root}/dev"
-    managed_mount "_active_chroot_mounts" --make-rslave "${target_root}/dev"
-
-    create_directory "${target_root}/dev/shm"
-    managed_mount "_active_chroot_mounts" --types "tmpfs" \
-        --options "nosuid,nodev,noexec" "shm" "${target_root}/dev/shm"
+    local target_sys_dir="${target_root}/sys"
+    create_directory "${target_sys_dir}"
+    managed_mount "_active_chroot_mounts" --rbind "/sys" \
+        "${target_root}/sys"
+    mount --make-rslave "${target_root}/sys"
+    local target_dev_dir="${target_root}/dev"
+    create_directory "${target_dev_dir}"
+    managed_mount "_active_chroot_mounts" --rbind "/dev" \
+        "${target_root}/dev"
+    mount --make-rslave "${target_root}/dev"
+    local target_run_dir="${target_root}/run"
+    create_directory "${target_run_dir}"
+    managed_mount "_active_chroot_mounts" --bind "/run" \
+        "${target_root}/run"
+    mount --make-slave "${target_root}/run"
 }
 
 unmount_chroot_filesystems() {
@@ -1120,8 +1055,8 @@ is_chroot_process() {
 kill_chroot_processes() {
     local target_root
     target_root="$(realpath "${1}")"
-    if [[ ! -d "${target_root}" ]]; then
-        return 0
+    if [[ -z "${target_root}" || "${target_root}" == "/" ]]; then
+        return
     fi
 
     local -a pids=()
@@ -1136,17 +1071,17 @@ kill_chroot_processes() {
         return 0
     fi
 
-    log_warn "Killing ${#pids[@]} lingering process(es) in chroot ${target_root}"
     local pid exe
     for pid in "${pids[@]}"; do
         exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
             2> /dev/null || true)"
-        log_warn "Sending SIGTERM to lingering chroot process ${pid} (${exe:-unknown})"
+        log_warn "Sending SIGTERM to lingering chroot process" \
+            "${pid} (${exe:-unknown})"
         kill -s "TERM" "${pid}" 2> /dev/null || true
     done
 
     local iteration
-    for (( iteration=0; iteration<5; iteration++ )); do
+    for (( iteration=0; iteration<300; iteration++ )); do
         sleep 1
         local has_lingering=0
         for p in /proc/[0-9]*; do
@@ -1186,7 +1121,7 @@ kill_chroot_processes() {
         fi
     done
 
-    log_warn "Some chroot processes could not be killed in ${target_root}"
+    log_error "Failed to terminate all chroot processes for ${target_root}"
     return 1
 }
 
@@ -1219,6 +1154,8 @@ prepare_criu_chroot_filesystem() {
     create_directory "${target_root}/proc"
     create_directory "${target_root}/sys"
     create_directory "${target_root}/run"
+    create_directory "${target_root}/run/lock"
+    chmod 1777 "${target_root}/run/lock"
     create_directory "${target_root}/dev"
     create_directory "${target_root}/dev/pts"
     create_directory "${target_root}/dev/shm"
@@ -1239,262 +1176,315 @@ prepare_criu_chroot_filesystem() {
         mknod -m 0666 "${target_root}/dev/urandom" c 1 9
     [[ -c "${target_root}/dev/tty" ]] || \
         mknod -m 0666 "${target_root}/dev/tty" c 5 0
+    [[ -c "${target_root}/dev/console" ]] || \
+        mknod -m 0600 "${target_root}/dev/console" c 5 1
 
-    [[ -L "${target_root}/dev/fd" ]] || \
-        ln -sf "/proc/self/fd" "${target_root}/dev/fd"
-    [[ -L "${target_root}/dev/stdin" ]] || \
-        ln -sf "/proc/self/fd/0" "${target_root}/dev/stdin"
-    [[ -L "${target_root}/dev/stdout" ]] || \
-        ln -sf "/proc/self/fd/1" "${target_root}/dev/stdout"
-    [[ -L "${target_root}/dev/stderr" ]] || \
-        ln -sf "/proc/self/fd/2" "${target_root}/dev/stderr"
+    create_symbolic_link "pts/ptmx" "${target_root}/dev/ptmx"
+    create_symbolic_link "/proc/self/fd" "${target_root}/dev/fd"
+    create_symbolic_link "/proc/self/fd/0" "${target_root}/dev/stdin"
+    create_symbolic_link "/proc/self/fd/1" "${target_root}/dev/stdout"
+    create_symbolic_link "/proc/self/fd/2" "${target_root}/dev/stderr"
+}
 
-    [[ -L "${target_root}/dev/ptmx" ]] || \
-        ln -sf "pts/ptmx" "${target_root}/dev/ptmx"
+collect_criu_ext_mount_maps() {
+    local real_target_root="${1}"
+    local -n dump_args_ref="${2}"
+    local -n restore_args_ref="${3}"
+
+    dump_args_ref=()
+    restore_args_ref=()
+
+    local m_dev m_point m_rest
+    while IFS=" " read -r m_dev m_point m_rest; do
+        if [[ "${m_point}" == "${real_target_root}/"* ]]; then
+            local rel_mount="${m_point#"${real_target_root}"}"
+            case "${rel_mount}" in
+                /proc|/proc/*|/dev|/dev/*|/sys|/sys/*|/run|/run/*|/.oldroot*)
+                    continue
+                    ;;
+            esac
+            local mount_key="${rel_mount#/}"
+            mount_key="${mount_key//\//_}"
+            dump_args_ref+=(--ext-mount-map "${rel_mount}:${mount_key}")
+            restore_args_ref+=(
+                --ext-mount-map "${mount_key}:${real_target_root}${rel_mount}"
+            )
+        fi
+    done < /proc/mounts
+}
+
+wait_for_criu_safe_point() {
+    local real_target_root="${1}"
+
+    # Wait up to 600 seconds if a package is actively writing to
+    # /var/cache/binpkgs, fetching distfiles, or invoking gpg/signing keys so
+    # no binary package or excluded key file is open during criu dump.
+    local attempt
+    for (( attempt=0; attempt<1200; attempt++ )); do
+        local unsafe=0
+        local p
+        for p in /proc/[0-9]*; do
+            if ! is_chroot_process "${p}" "${real_target_root}"; then
+                continue
+            fi
+            local exe
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    continue
+                    ;;
+                gpg|gpgsm|wget|curl|aria2c)
+                    unsafe=1
+                    break
+                    ;;
+            esac
+            local fd fd_target
+            for fd in "${p}/fd/"*; do
+                fd_target="$(readlink "${fd}" 2> /dev/null || true)"
+                if [[ "${fd_target}" == *"/var/cache/binpkgs"* || \
+                    "${fd_target}" == *"/build/binpkgs/"* || \
+                    "${fd_target}" == *"${PORTAGE_GPG_DIR}"* || \
+                    "${fd_target}" == *"${PORTAGE_SECUREBOOT_DIR}"* ]]; then
+                    unsafe=1
+                    break 2
+                fi
+            done
+        done
+        if (( unsafe == 0 )); then
+            break
+        fi
+        sleep 0.5
+    done
+
+    # Terminate any idle gpg-agent/scdaemon/dirmngr inside the namespace and
+    # wait for them to exit before dumping.
+    local p exe
+    for p in /proc/[0-9]*; do
+        if is_chroot_process "${p}" "${real_target_root}"; then
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    kill -s "TERM" "${p##*/}" 2> /dev/null || true
+                    ;;
+            esac
+        fi
+    done
+
+    for (( attempt=0; attempt<20; attempt++ )); do
+        local has_agent=0
+        for p in /proc/[0-9]*; do
+            if is_chroot_process "${p}" "${real_target_root}"; then
+                exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                    2> /dev/null || true)"
+                case "${exe}" in
+                    gpg-agent|scdaemon|dirmngr)
+                        has_agent=1
+                        break
+                        ;;
+                esac
+            fi
+        done
+        if (( has_agent == 0 )); then
+            break
+        fi
+        sleep 0.2
+    done
 }
 
 chroot_run_criu() {
-    local target_root="${1}"
-    local cmd="${2}"
-
     local real_target_root
-    real_target_root="$(realpath "${target_root}")"
+    real_target_root="$(realpath "${1}")"
+    shift
 
-    local criu_dir="${real_target_root}/.criu"
-    local is_resuming=0
-    if [[ -d "${criu_dir}" ]]; then
-        is_resuming=1
-        log_info "Found existing CRIU checkpoint in ${real_target_root}"
-    fi
-
-    local timeout_sec=0
-    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
-        timeout_sec="$(parse_duration_seconds "${CHROOT_TIMEOUT}")"
-    fi
-
-    log_info "Executing CRIU-managed namespace in ${real_target_root}" \
-        "(timeout: ${timeout_sec}s, resuming: ${is_resuming})"
+    modprobe --all \
+        af_packet_diag fuse inet_diag netlink_diag overlay raw_diag \
+        tcp_diag udp_diag unix_diag 2> /dev/null || true
 
     prepare_criu_chroot_filesystem "${real_target_root}"
 
-    local status_pipe="${BUILD_DIR}/criu_status.pipe"
-    rm -f "${status_pipe}"
-    mkfifo "${status_pipe}"
+    local criu_dir="${real_target_root}/.criu"
+    local log_file="${real_target_root}/var/tmp/.fluffy-chroot.log"
+    local exit_file="${real_target_root}/var/tmp/.fluffy-chroot.exit"
+    local cmd_file="${real_target_root}/var/tmp/.fluffy-chroot-cmd.sh"
 
-    # Generate a script that configures mounts and either launches a fresh
-    # build or restores a CRIU checkpoint.
-    local inner_runner="${BUILD_DIR}/criu_inner_runner.sh"
-    cat << 'EOF' > "${inner_runner}"
-#!/usr/bin/env bash
-set -e
-target_root="${1}"
-status_pipe="${2}"
-is_resuming="${3}"
-cmd="${4}"
+    local -a ext_dump_args=()
+    local -a ext_restore_args=()
+    collect_criu_ext_mount_maps "${real_target_root}" \
+        ext_dump_args ext_restore_args
 
-# Make mount hierarchy rprivate to satisfy pivot_root requirements
-mount --make-rprivate /
-
-# Bind-mount target_root to itself to ensure it is a mount point
-mount --bind "${target_root}" "${target_root}"
-
-mount -t proc proc "${target_root}/proc"
-mount -t sysfs sysfs "${target_root}/sys"
-mount -t devtmpfs udev "${target_root}/dev"
-mount -t devpts devpts "${target_root}/dev/pts" -o gid=5,mode=620
-mount -t tmpfs shm "${target_root}/dev/shm" -o nosuid,nodev,noexec
-mount -t tmpfs run "${target_root}/run" -o nosuid,nodev,mode=755
-mkdir -p "${target_root}/run/lock"
-chmod 1777 "${target_root}/run/lock"
-
-cd "${target_root}"
-pivot_root . .oldroot
-
-umount -l /.oldroot
-
-mkdir -p /var/tmp
-export HOME="/root"
-export TERM="${TERM:-dumb}"
-export LC_ALL="C.UTF-8"
-export LANG="C.UTF-8"
-export PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin"
-
-if (( is_resuming )); then
-    echo "READY_FOR_RESTORE" > "${status_pipe}"
-    exec tail -f /dev/null
-else
-    echo "READY_FOR_RUN" > "${status_pipe}"
-    exec /bin/bash --login -e -c "${cmd}"
-fi
-EOF
-    chmod +x "${inner_runner}"
-
-    local runner_log="${BUILD_DIR}/chroot_runner.log"
-    local chroot_log="${real_target_root}/var/tmp/.fluffy-chroot.log"
-    create_directory "${real_target_root}/var/tmp"
-
-    local unshare_pid
-    unshare --mount --pid --fork \
-        "${inner_runner}" "${real_target_root}" "${status_pipe}" \
-        "${is_resuming}" "${cmd}" > "${runner_log}" 2>&1 &
-    unshare_pid="${!}"
-
-    local ready_status
-    read -r ready_status < "${status_pipe}"
-    rm -f "${status_pipe}"
-
-    local init_pid
-    init_pid="$(pgrep -P "${unshare_pid}" | head -n 1)"
-    if [[ -z "${init_pid}" ]]; then
-        log_error "Failed to locate PID namespace init inside unshare"
-        wait "${unshare_pid}" || true
-        return 1
+    local timeout_secs=0
+    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
+        timeout_secs="$(parse_duration_seconds "${CHROOT_TIMEOUT}")"
     fi
 
-    log_info "Namespace initialized (unshare: ${unshare_pid}, init: ${init_pid})"
+    local ns_init_pid=""
+    local unshare_pid=""
 
-    local exit_code=0
-    if (( is_resuming )); then
-        log_info "Restoring live process tree from CRIU checkpoint"
-        local restore_log="${criu_dir}/restore.log"
-        local criu_restore_cmd=(
-            "criu" "restore"
-            "--images-dir" "${criu_dir}"
-            "--work-dir" "${criu_dir}"
-            "--shell-job"
-            "--tcp-established"
-            "--file-locks"
-            "--link-remap"
-            "--log-file" "${restore_log}"
-            "--verbose=4"
-            "--root" "${real_target_root}"
-            "--pidfile" "${criu_dir}/criu_restore.pid"
-        )
-        # Restore into the PID and mount namespaces of init_pid
-        nsenter --target "${init_pid}" --mount --pid \
-            "${criu_restore_cmd[@]}" >> "${runner_log}" 2>&1 || exit_code="${?}"
+    if [[ -d "${criu_dir}" ]]; then
+        log_info "Restoring CRIU checkpoint for ${real_target_root}"
+        rm --force "${exit_file}"
 
-        if (( exit_code != 0 )); then
-            log_error "CRIU restore failed with code ${exit_code}."
-            if [[ -f "${restore_log}" ]]; then
-                tail -n 100 "${restore_log}" >&2 || true
+        local pidfile="${criu_dir}/restore.pid"
+        rm --force "${pidfile}"
+        if ! criu restore \
+            --images-dir "${criu_dir}" \
+            --root "${real_target_root}" \
+            --restore-detached \
+            --pidfile "${pidfile}" \
+            --file-locks \
+            --link-remap \
+            --tcp-close \
+            --cpu-cap="none" \
+            "${ext_restore_args[@]}" \
+            -v4 -o "restore.log"; then
+            if [[ -f "${criu_dir}/restore.log" ]]; then
+                tail -n 50 "${criu_dir}/restore.log" >&2 || true
             fi
-            kill -9 "${unshare_pid}" 2> /dev/null || true
-            return "${exit_code}"
+            log_error "CRIU restore failed for ${real_target_root}"
+            return 1
         fi
-        log_info "CRIU restore succeeded; resumed process tree active"
-        force_remove "${criu_dir}"
-    fi
+        ns_init_pid="$(<"${pidfile}")"
+        log_info "Restored CRIU process tree (PID ${ns_init_pid})"
+    else
+        rm --force "${exit_file}" "${log_file}"
+        touch "${log_file}"
 
-    # Monitor loop
-    local start_time
-    start_time="$(date +%s)"
-    local timed_out=0
-    local target_dump_pid=""
+        cat > "${cmd_file}" << EOF
+#!/bin/bash
+export TERM="dumb"
+exec < /dev/null >> /var/tmp/.fluffy-chroot.log 2>&1
+set +e
+(
+    source /etc/profile 2> /dev/null || true
+    set -e
+    ${*}
+)
+rc=\$?
+printf "%s\n" "\${rc}" > /var/tmp/.fluffy-chroot.exit
+exit "\${rc}"
+EOF
+        chmod 0755 "${cmd_file}"
 
-    while kill -0 "${unshare_pid}" 2> /dev/null; do
-        if (( timeout_sec > 0 && timed_out == 0 )); then
-            local current_time
-            current_time="$(date +%s)"
-            local elapsed=$(( current_time - start_time ))
-            if (( elapsed >= timeout_sec )); then
-                log_warn "Chroot execution reached timeout (${timeout_sec}s)." \
-                    "Initiating CRIU live dump."
-                timed_out=1
+        unshare --pid --fork setsid unshare --mount --uts --ipc /bin/bash -c "
+            set -e
+            mount --make-rprivate /
+            mount --rbind '${real_target_root}' '${real_target_root}'
+            cd '${real_target_root}'
+            pivot_root . .oldroot
+            mount -t proc proc /proc
+            mount -t devpts -o newinstance,ptmxmode=0666,mode=0620 devpts \
+                /dev/pts
+            umount --lazy /.oldroot
+            exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
+        " < /dev/null > /dev/null 2>&1 &
+        unshare_pid="${!}"
 
-                # Locate the primary target process to dump
-                local candidate_pids=()
-                local p
-                for p in /proc/[0-9]*; do
-                    if is_chroot_process "${p}" "${real_target_root}"; then
-                        candidate_pids+=("${p##*/}")
-                    fi
-                done
-
-                # Target the highest-level child of init
-                for p in "${candidate_pids[@]}"; do
-                    local ppid
-                    ppid="$(awk '/PPid:/ {print $2}' "/proc/${p}/status" \
-                        2> /dev/null || true)"
-                    if [[ "${ppid}" == "${init_pid}" || \
-                        "${ppid}" == "${unshare_pid}" ]]; then
-                        target_dump_pid="${p}"
-                        break
-                    fi
-                done
-
-                if [[ -z "${target_dump_pid}" ]]; then
-                    target_dump_pid="${init_pid}"
-                fi
-
-                log_info "Checkpointing process tree at PID ${target_dump_pid}"
-                create_directory "${criu_dir}"
-                local dump_log="${criu_dir}/dump.log"
-
-                local -a ext_mount_args=()
-                while IFS=' ' read -r _ mnt_dest _; do
-                    if [[ "${mnt_dest}" == "${real_target_root}"* ]]; then
-                        local rel_dest="${mnt_dest#"${real_target_root}"}"
-                        [[ -z "${rel_dest}" ]] && rel_dest="/"
-                        ext_mount_args+=(
-                            "--ext-mount-map" "${rel_dest}:${mnt_dest}"
-                        )
-                    fi
-                done < /proc/mounts
-
-                local criu_dump_cmd=(
-                    "criu" "dump"
-                    "--tree" "${target_dump_pid}"
-                    "--images-dir" "${criu_dir}"
-                    "--work-dir" "${criu_dir}"
-                    "--shell-job"
-                    "--tcp-established"
-                    "--file-locks"
-                    "--link-remap"
-                    "--leave-stopped"
-                    "--track-mem"
-                    "--log-file" "${dump_log}"
-                    "--verbose=4"
-                    "${ext_mount_args[@]}"
-                )
-
-                local dump_exit=0
-                "${criu_dump_cmd[@]}" >> "${runner_log}" 2>&1 || \
-                    dump_exit="${?}"
-
-                if (( dump_exit == 0 )); then
-                    log_info "CRIU checkpoint dumped successfully."
-                    exit_code=124
-                else
-                    log_error "CRIU dump failed with code ${dump_exit}."
-                    if [[ -f "${dump_log}" ]]; then
-                        tail -n 100 "${dump_log}" >&2 || true
-                    fi
-                    exit_code=1
-                fi
-
-                kill -9 "${unshare_pid}" 2> /dev/null || true
+        local attempt
+        for (( attempt=0; attempt<100; attempt++ )); do
+            ns_init_pid="$(awk '{print $1; exit}' \
+                "/proc/${unshare_pid}/task/${unshare_pid}/children" \
+                2> /dev/null || true)"
+            if [[ -n "${ns_init_pid}" ]] && \
+                is_chroot_process "/proc/${ns_init_pid}" \
+                    "${real_target_root}"; then
                 break
             fi
+            if ! kill -0 "${unshare_pid}" 2> /dev/null; then
+                break
+            fi
+            sleep 0.05
+        done
+
+        if [[ -z "${ns_init_pid}" && ! -f "${exit_file}" ]]; then
+            wait "${unshare_pid}" 2> /dev/null || true
+            log_error "Failed to start CRIU namespace for ${real_target_root}"
+            return 1
+        fi
+    fi
+
+    tail --follow=name --retry -n +1 "${log_file}" 2> /dev/null &
+    local tail_pid="${!}"
+
+    local start_secs="${SECONDS}"
+    local timed_out=0
+
+    while [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; do
+        if (( timeout_secs > 0 && \
+            (SECONDS - start_secs) >= timeout_secs )); then
+            timed_out=1
+            break
         fi
         sleep 1
     done
 
-    if (( timed_out == 0 )); then
-        wait "${unshare_pid}" || exit_code="${?}"
+    if (( timed_out == 1 )) && [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; then
+        kill "${tail_pid}" 2> /dev/null || true
+        wait "${tail_pid}" 2> /dev/null || true
+
+        log_warn "Timeout (${CHROOT_TIMEOUT}) reached; checkpointing with CRIU"
+        wait_for_criu_safe_point "${real_target_root}"
+
+        force_remove "${criu_dir}"
+        create_directory "${criu_dir}"
+
+        if ! criu dump \
+            --tree "${ns_init_pid}" \
+            --images-dir "${criu_dir}" \
+            --file-locks \
+            --link-remap \
+            --ghost-limit "1G" \
+            --tcp-close \
+            --network-lock "skip" \
+            "${ext_dump_args[@]}" \
+            -v4 -o "dump.log"; then
+            if [[ -f "${criu_dir}/dump.log" ]]; then
+                tail -n 50 "${criu_dir}/dump.log" >&2 || true
+            fi
+            force_remove "${criu_dir}"
+            kill_chroot_processes "${real_target_root}"
+            if [[ -n "${unshare_pid}" ]]; then
+                wait "${unshare_pid}" 2> /dev/null || true
+            fi
+            log_error "CRIU dump failed for ${real_target_root}"
+            return 1
+        fi
+
+        log_info "CRIU checkpoint saved to ${criu_dir}"
+        if [[ -n "${unshare_pid}" ]]; then
+            wait "${unshare_pid}" 2> /dev/null || true
+        fi
+        kill_chroot_processes "${real_target_root}"
+        return 124
     fi
 
-    # Unmount inside real_target_root if anything was left behind
-    local mounted_entry
-    while IFS= read -r mounted_entry; do
-        if [[ -n "${mounted_entry}" ]]; then
-            umount -l "${mounted_entry}" 2> /dev/null || true
-        fi
-    done < <(awk -v root="${real_target_root}" \
-        '$2 ~ "^" root { print $2 }' /proc/mounts | sort -r)
+    if [[ -n "${unshare_pid}" ]]; then
+        wait "${unshare_pid}" 2> /dev/null || true
+    fi
+    sleep 0.2
+    kill "${tail_pid}" 2> /dev/null || true
+    wait "${tail_pid}" 2> /dev/null || true
 
-    if findmnt --mountpoint "${real_target_root}" > /dev/null 2>&1; then
-        umount -l "${real_target_root}" 2> /dev/null || true
+    local exit_code=1
+    if [[ -f "${exit_file}" ]]; then
+        exit_code="$(<"${exit_file}")"
+    fi
+
+    if (( exit_code != 0 )); then
+        if [[ -f "${criu_dir}/restore.log" ]]; then
+            log_warn "CRIU restore log output:"
+            tail -n 100 "${criu_dir}/restore.log" >&2 || true
+        fi
+        if [[ -f "${log_file}" ]]; then
+            log_warn "Chroot command log output:"
+            tail -n 100 "${log_file}" >&2 || true
+        fi
+    else
+        rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+        force_remove "${criu_dir}"
     fi
     rmdir "${real_target_root}/.oldroot" 2> /dev/null || true
     kill_chroot_processes "${real_target_root}"
@@ -1530,7 +1520,8 @@ chroot_run() {
 # === Target System Setup ===
 
 readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,umask=0077"
-readonly BTRFS_BASE_OPTS="defaults,noatime,compress-force=zstd:3,discard=async"
+readonly BTRFS_BASE_OPTS=\
+"defaults,noatime,compress-force=zstd:3,discard=async"
 readonly ROOT_MOUNT_OPTIONS="${BTRFS_BASE_OPTS}"
 readonly HOME_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
 readonly VAR_LOG_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"

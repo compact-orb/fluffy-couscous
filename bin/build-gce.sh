@@ -16,6 +16,7 @@ required_commands=(
     "mkfs.btrfs"
     "mkfs.fat"
     "openssl"
+    "partx"
     "passwd"
     "realpath"
     "sfdisk"
@@ -69,6 +70,7 @@ size=1GiB, type=U
 size=+, type="Linux root (x86-64)"
 EOF
 
+partx --update "${loop_dev}" 2> /dev/null || true
 udevadm settle
 
 readonly BOOT_PARTITION="${loop_dev}p1"
@@ -176,9 +178,13 @@ log_info "Resetting instance-specific identifiers for cloud-init generic image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
-force_remove "${TARGET_ROOT}/etc/ssh/ssh_host_*"
-force_remove "${TARGET_ROOT}/var/lib/cloud/*"
-force_remove "${TARGET_ROOT}/var/log/cloud-init*"
+for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_* \
+    "${TARGET_ROOT}"/var/lib/cloud/* \
+    "${TARGET_ROOT}"/var/log/cloud-init*; do
+    if [[ -e "${path}" || -L "${path}" ]]; then
+        force_remove "${path}"
+    fi
+done
 
 # Ensure resolv.conf points to systemd-resolved stub resolver
 create_symlink "../run/systemd/resolve/stub-resolv.conf" \

@@ -9,7 +9,6 @@ on:
         type: string
 
 env:
-  SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,ANSIBLE_PULL_URL,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_RO_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
   GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
   REPOS: ${{ vars.REPOS }}
   BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
@@ -43,25 +42,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo cp "${HOME}/.cache/tools/rclone" \
@@ -72,13 +76,32 @@ jobs:
 
       - name: Run build-gce.sh
         run: |
+          preserve_env=(
+            "GENTOO_MIRROR_URL"
+            "REPOS"
+            "BINPKG_REPOS"
+            "ANSIBLE_PULL_URL"
+            "SIGNING_KEY"
+            "BINPKG_PUBLIC_KEY"
+            "REPO_PUBLIC_KEYS"
+            "S3_ACCESS_KEY_ID"
+            "S3_SECRET_ACCESS_KEY"
+            "S3_RO_SECRET_ACCESS_KEY"
+            "S3_REGION"
+            "S3_ENDPOINT"
+            "S3_BUCKET_NAME"
+            "SECUREBOOT_KEY"
+            "SECUREBOOT_CERT"
+            "STORAGETO_KEY"
+          )
+          sudo_preserve="$(IFS=,; echo "${preserve_env[*]}")"
           # Workaround for stripping carriage return characters from GitHub
           # Actions environment variables set via the web interface.
-          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+          for var in "${preserve_env[@]}"; do
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build-gce.sh \
+          sudo --preserve-env="${sudo_preserve}" bin/build-gce.sh \
             --profile="${{ inputs.profile }}"
