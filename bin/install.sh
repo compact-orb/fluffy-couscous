@@ -12,6 +12,7 @@ required_commands=(
     "dirname"
     "mkfs.btrfs"
     "mkfs.fat"
+    "openssl"
     "realpath"
     "sfdisk"
     "shred"
@@ -369,11 +370,30 @@ EOF
 printf "%s" "${fstab_content}" > "${fstab_file}"
 unset fstab_content fstab_file portage_opts binpkg_opts binhost_opts
 
+if [[ -n "${SECUREBOOT_CERT:-}" ]]; then
+    log_info "Exporting Secure Boot certificate to ESP"
+    openssl x509 -inform "PEM" -outform "DER" \
+        -out "${INSTALL_MOUNT_DIR}/boot/Secure Boot Certificate.der" \
+        <<< "${SECUREBOOT_CERT}"
+elif [[ -f "/boot/Secure Boot Certificate.der" ]]; then
+    log_info "Copying Secure Boot certificate to ESP"
+    copy_file "/boot/Secure Boot Certificate.der" \
+        "${INSTALL_MOUNT_DIR}/boot/Secure Boot Certificate.der"
+fi
+
 # Clean up installer Portage configuration and establish profile symlink
 remove_portage_configuration "${INSTALL_MOUNT_DIR}"
 configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 unmount_repos
+
+for repo_entry in "${_repo_entries[@]}"; do
+    repo_name="${repo_entry%% *}"
+    log_info "Copying ${repo_name} repository to target"
+    cp --archive "${LOCAL_REPOS_DIR}/${repo_name}/." \
+        "${INSTALL_MOUNT_DIR}/var/db/repos/${repo_name}"
+done
+unset repo_entry repo_name
 
 chown -R portage:portage "${INSTALL_MOUNT_DIR}/var/db/repos"
 
