@@ -187,6 +187,7 @@ for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_* \
 done
 
 # Ensure resolv.conf points to systemd-resolved stub resolver
+force_remove "${TARGET_ROOT}/etc/resolv.conf"
 create_symlink "../run/systemd/resolve/stub-resolv.conf" \
     "${TARGET_ROOT}/etc/resolv.conf"
 
@@ -211,5 +212,7 @@ upload_to_storageto "${image_file}"
 
 force_remove "${image_file}"
 force_remove "${RAW_IMAGE}"
+force_remove "${TARGET_ROOT}"
+force_remove "${GCE_DIR}"
 
 log_info "Google Cloud image build completed successfully."
