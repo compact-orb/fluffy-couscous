@@ -2,6 +2,11 @@ name: Build GCE Image
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile in repository:profile format"
+        required: true
+        type: string
 
 env:
   SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,ANSIBLE_PULL_URL,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_RO_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
@@ -21,72 +26,13 @@ env:
   SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
-  PROFILES: ${{ vars.PROFILES }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 
 jobs:
-  setup:
-    name: Setup Matrix
-    runs-on: ubuntu-26.04
-    outputs:
-      profiles: ${{ steps.matrix.outputs.profiles }}
-    steps:
-      - uses: compact-orb/optimize-runner-network@v1
-
-      - uses: actions/checkout@v7
-
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
-
-      - name: Install Dependencies
-        run: |
-          mkdir --parents "${HOME}/.cache/tools"
-          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
-              "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            chmod 0755 "${HOME}/.cache/tools/rclone"
-          fi
-          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
-            aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
-            tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
-            chmod 0755 "${HOME}/.cache/tools/storageto"
-          fi
-          sudo cp "${HOME}/.cache/tools/rclone" \
-            "${HOME}/.cache/tools/storageto" /usr/local/bin/
-          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-
-      - name: Generate Profile Matrix
-        id: matrix
-        run: |
-          matrix_json=$(echo "${PROFILES}" | awk 'NF {
-            if (n++) printf ", ";
-            else printf "[";
-            printf "\"%s\"", $0;
-          } END {
-            if (n) print "]";
-            else print "[]";
-          }')
-          echo "profiles=${matrix_json}" >> "$GITHUB_OUTPUT"
-
   build-gce:
     name: Build GCE Image
-    needs: setup
     runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
@@ -135,4 +81,4 @@ jobs:
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           sudo --preserve-env=${SUDO_PRESERVE_ENV} bin/build-gce.sh \
-            --profile="${{ matrix.profile }}"
+            --profile="${{ inputs.profile }}"
