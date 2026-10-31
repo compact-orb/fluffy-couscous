@@ -67,10 +67,10 @@ upload_portage_failure_logs() {
     _portage_failure_logs_uploaded=1
 
     local -a search_roots=()
-    if [[ -v STAGE_DIR && -d "${STAGE_DIR}/var/tmp/portage" ]]; then
+    if [[ -v STAGE_DIR && -d "${STAGE_DIR}" ]]; then
         search_roots+=("${STAGE_DIR}")
     fi
-    if [[ -v SEED_DIR && -d "${SEED_DIR}/var/tmp/portage" ]]; then
+    if [[ -v SEED_DIR && -d "${SEED_DIR}" ]]; then
         search_roots+=("${SEED_DIR}")
     fi
 
@@ -88,6 +88,15 @@ upload_portage_failure_logs() {
         fi
         if [[ -f "${root}/var/log/emerge.log" ]]; then
             log_files+=("${root}/var/log/emerge.log")
+        fi
+        if [[ -f "${root}/var/tmp/.fluffy-chroot.log" ]]; then
+            log_files+=("${root}/var/tmp/.fluffy-chroot.log")
+        fi
+        if [[ -f "${root}/.criu/restore.log" ]]; then
+            log_files+=("${root}/.criu/restore.log")
+        fi
+        if [[ -f "${root}/.criu/dump.log" ]]; then
+            log_files+=("${root}/.criu/dump.log")
         fi
     done
 
@@ -397,11 +406,12 @@ publish_resume_filesystem() {
     local sig_file="${archive_dir}/${sig_filename}"
 
     fstrim /mnt/btrfs 2> /dev/null || true
-    btrfs filesystem sync /mnt/btrfs 2> /dev/null || sync
+    btrfs filesystem sync /mnt/btrfs 2> /dev/null || true
+    sync
     mount -o remount,ro /mnt/btrfs 2> /dev/null || true
 
     log_info "Creating resume filesystem image ${image_file}"
-    zstd --sparse -T0 /btrfs.img -o "${image_file}"
+    zstd --sparse -f -T0 /btrfs.img -o "${image_file}"
 
     log_info "Signing resume filesystem image ${image_file}"
     gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
@@ -629,11 +639,11 @@ handle_build_timeout() {
     log_warn "Build timed out after ${timeout}"
     upload_mounted_binary_packages "${stage_dir}" "${profile}"
     unmount_binary_packages
+    unmount_repos
     if [[ -n "${resume_id}" ]]; then
         publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
             "stage3"
     fi
-    unmount_repos
     if [[ ! -f "/btrfs.img" ]]; then
         remove_portage_configuration "${stage_dir}"
         force_remove "${stage_dir}"
