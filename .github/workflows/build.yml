@@ -138,7 +138,6 @@ jobs:
 
       - name: Initialize Runner Filesystem
         run: |
-          sudo modprobe btrfs
           free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
           image_size=$(( free_bytes - 1073741824 ))
 
