@@ -376,17 +376,16 @@ jobs:
             --transfers "16" \
             --verbose \
             ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
-            /tmp/resume/ || true
+            /tmp/resume/
 
           if [[ -n "${SIGNING_KEY:-}" ]]; then
             gpg --batch --import --quiet <<< "${SIGNING_KEY}"
-          elif [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
             gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
           fi
-          if [[ -f "/tmp/resume/${sig_filename}" ]]; then
-            gpg --batch --verify "/tmp/resume/${sig_filename}" \
-              "/tmp/resume/${image_filename}"
-          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
 
           sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
             -o /btrfs.img
@@ -591,17 +590,16 @@ jobs:
             --transfers "16" \
             --verbose \
             ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
-            /tmp/resume/ || true
+            /tmp/resume/
 
           if [[ -n "${SIGNING_KEY:-}" ]]; then
             gpg --batch --import --quiet <<< "${SIGNING_KEY}"
-          elif [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
             gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
           fi
-          if [[ -f "/tmp/resume/${sig_filename}" ]]; then
-            gpg --batch --verify "/tmp/resume/${sig_filename}" \
-              "/tmp/resume/${image_filename}"
-          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
 
           sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
             -o /btrfs.img
@@ -806,17 +804,16 @@ jobs:
             --transfers "16" \
             --verbose \
             ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
-            /tmp/resume/ || true
+            /tmp/resume/
 
           if [[ -n "${SIGNING_KEY:-}" ]]; then
             gpg --batch --import --quiet <<< "${SIGNING_KEY}"
-          elif [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
             gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
           fi
-          if [[ -f "/tmp/resume/${sig_filename}" ]]; then
-            gpg --batch --verify "/tmp/resume/${sig_filename}" \
-              "/tmp/resume/${image_filename}"
-          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
 
           sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
             -o /btrfs.img
