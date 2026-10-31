@@ -35,6 +35,7 @@ IFS=" " read -r _ repo_profile < <(parse_profile "${PROFILE}")
 readonly ISO_DATE="$(date +%Y%m%d)"
 readonly ISO_FILE=\
 "${BUILD_DIR}/install-${repo_profile//\//-}-${ISO_DATE}.iso"
+readonly ISO_SIG_FILE="${ISO_FILE}.sig"
 unset repo_profile ISO_DATE
 
 # === Environment Preparation ===
@@ -216,8 +217,16 @@ force_remove "${ESP_IMG}"
 force_remove "${ISO_DIR}"
 force_remove "${STAGE_DIR}"
 
-# === Upload ISO Image ===
+# === Upload ISO Image and Signature ===
+
+import_signing_key
+
+log_info "Signing ISO image ${ISO_FILE}"
+gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
+    "${ISO_FILE}"
 
 upload_to_storageto "${ISO_FILE}"
+upload_to_storageto "${ISO_SIG_FILE}"
 
 force_remove "${ISO_FILE}"
+force_remove "${ISO_SIG_FILE}"

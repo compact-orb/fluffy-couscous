@@ -136,11 +136,21 @@ import_signing_key() {
         return
     fi
 
+    if [[ -z "${SIGNING_KEY:-}" ]]; then
+        log_error "SIGNING_KEY is not set or empty"
+        return 1
+    fi
+
     log_info "Importing PGP signing key"
 
     _signing_key_fingerprint=$(gpg --show-keys --with-colons \
         <<< "${SIGNING_KEY}" | \
         awk -F: '/^fpr/ {print $10; exit}')
+
+    if [[ -z "${_signing_key_fingerprint}" ]]; then
+        log_error "Failed to determine PGP signing key fingerprint"
+        return 1
+    fi
 
     gpg --import --quiet <<< "${SIGNING_KEY}"
 

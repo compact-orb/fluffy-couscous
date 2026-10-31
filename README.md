@@ -24,7 +24,7 @@ The pipeline integrates with four external components:
 1. **Custom Ebuild Overlay**: Supplies target profiles, package masks, and custom ebuilds (HEAD commits must be GPG-signed).
 2. **Ansible Repository**: Executed via `ansible-pull` by `bin/install.sh` for post-installation system configuration.
 3. **S3 Object Storage**: Hosts binary packages (`binpkgs/<profile>/`) and published `stage3` archives.
-4. **storage.to**: Used for transient (7-day) uploads of live installer ISOs and automatic Portage build failure logs.
+4. **storage.to**: Used for transient (7-day) uploads of live installer ISOs, Google Cloud custom disk images, their detached PGP signatures (`.sig`), and automatic Portage build failure logs.
 
 ## Quick Start
 

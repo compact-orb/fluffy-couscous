@@ -208,9 +208,18 @@ log_info "Compressing raw disk image into ${image_file} (GNU oldgnu format)"
 tar --create --directory="${RAW_DIR}" --file="${image_file}" \
     --format=oldgnu --gzip --sparse "disk.raw"
 
+import_signing_key
+
+readonly sig_file="${image_file}.sig"
+log_info "Signing raw disk image archive ${image_file}"
+gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
+    "${image_file}"
+
 upload_to_storageto "${image_file}"
+upload_to_storageto "${sig_file}"
 
 force_remove "${image_file}"
+force_remove "${sig_file}"
 force_remove "${RAW_IMAGE}"
 force_remove "${TARGET_ROOT}"
 force_remove "${GCE_DIR}"
