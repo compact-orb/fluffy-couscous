@@ -12,6 +12,9 @@ This project provides a standalone toolchain that builds, updates, and installs 
 - **System Updates (`bin/update.sh`)**: Updates `@system` packages, rebuilds preserved libraries, and refreshes the base `stage3` archive on S3.
 - **Package Builds (`bin/build.sh`)**: Compiles target packages against the profile's `stage3` and syncs new binary packages to S3.
 - **Live Installer ISO (`bin/build-install.sh`)**: Builds a bootable UEFI Secure Boot live installer ISO bundled with the installer and binary repository configs.
+- **Google Cloud Image (`bin/build-gce.sh`)**: Builds a Google Compute Engine
+  (GCE) custom raw disk image (`disk.raw`) packaged for import, with UEFI
+  direct systemd-boot and cloud-init.
 - **System Installer (`bin/install.sh`)**: Installs Gentoo onto target storage using binary packages, with automatic GPT partitioning (DPS), LUKS2 encryption, TPM2 unlock, and Btrfs subvolumes.
 
 ## External Components
@@ -63,6 +66,9 @@ sudo ./bin/build.sh \
 # Build live installer ISO
 sudo ./bin/build-install.sh --profile "custom-overlay:amd64/x86-64-v3/base"
 
+# Build Google Cloud custom image
+sudo ./bin/build-gce.sh --profile "custom-overlay:amd64/x86-64-v3/base"
+
 # Install target system from booted live media
 sudo install.sh \
   --drive /dev/nvme0n1 \
@@ -106,6 +112,42 @@ checkpointing live `emerge` process trees mid-build via CRIU (`criu dump` /
 `criu restore`), uploading the intermediate state to S3, and resuming timed-out
 profiles across up to 4 attempts. Stale snapshots are pruned automatically;
 setting a 1–2 day expiration lifecycle rule on `resumes/` in S3 is recommended.
+
+## Google Cloud Custom Images (Secure Boot)
+
+The `Build GCE Image` workflow
+([`.github/workflows/build-gce.yml`](.github/workflows/build-gce.yml)) and
+`bin/build-gce.sh` produce compressed raw disk archives (`disk.raw` in
+`.tar.gz`) configured with direct `systemd-boot` and `cloud-init`.
+
+To import the image into Google Cloud and run it with Shielded VM Secure Boot:
+
+1. Upload the built `.tar.gz` archive to a Google Cloud Storage bucket:
+   ```bash
+   gcloud storage cp gce-<profile>-<date>.tar.gz gs://<bucket-name>/
+   ```
+2. Create the custom image with UEFI and Shielded VM custom Secure Boot:
+   ```bash
+   gcloud compute images create <image-name> \
+     --source-uri="gs://<bucket-name>/gce-<profile>-<date>.tar.gz" \
+     --guest-os-features="UEFI_COMPATIBLE,GVNIC,VIRTIO_SCSI_MULTIQUEUE" \
+     --signature-database-file="Secure Boot Certificate.der"
+   ```
+3. Launch a VM instance with Shielded VM Secure Boot enabled:
+   ```bash
+   gcloud compute instances create <instance-name> \
+     --image=<image-name> \
+     --shielded-secure-boot \
+     --shielded-vtpm \
+     --shielded-integrity-monitoring
+   ```
+
+Because the bootloader uses direct `systemd-boot` signed by `SECUREBOOT_KEY`,
+the UEFI firmware validates `BOOTX64.EFI` directly against your custom signature
+database without requiring Microsoft 3rd-party UEFI CA certificates. On first
+boot, `cloud-init` automatically expands the root partition, resizes Btrfs to
+the full disk capacity, generates SSH host keys, and configures instance
+metadata.
 
 ## Attribution
 

@@ -101,19 +101,6 @@ fi
 
 readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
-readonly BOOT_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,umask=0077"
-readonly BTRFS_BASE_OPTS="defaults,noatime,compress-force=zstd:3,discard=async"
-readonly ROOT_MOUNT_OPTIONS="${BTRFS_BASE_OPTS}"
-readonly HOME_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
-readonly VAR_LOG_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
-readonly VAR_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
-readonly PORTAGE_TMP_MOUNT_OPTIONS="${BTRFS_BASE_OPTS},nodev,nosuid"
-readonly VAR_CACHE_BINPKGS_MOUNT_OPTIONS=\
-"${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
-readonly VAR_CACHE_BINHOST_MOUNT_OPTIONS=\
-"${BTRFS_BASE_OPTS},nodev,nosuid,noexec"
-readonly SWAP_MOUNT_OPTIONS="defaults,noatime,nodev,nosuid,noexec"
-
 # === Prepare Drive ===
 
 wipefs --all --force "${INSTALL_DRIVE}"
@@ -208,104 +195,11 @@ readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" \
 readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" \
     "${ROOT_PARTITION}")"
 
-btrfs_tmp_dir="$(mktemp --directory)"
-mount --types "btrfs" "${ROOT_TARGET_DEV}" "${btrfs_tmp_dir}"
-# Create subvolumes for system isolation. Mark binpkgs and binhost with +C
-# (nodatacow) to avoid compression overhead on pre-compressed packages and
-# isolate high-churn package caches from root snapshots.
-btrfs subvolume create "${btrfs_tmp_dir}/@"
-btrfs subvolume create "${btrfs_tmp_dir}/@home"
-btrfs subvolume create "${btrfs_tmp_dir}/@var_log"
-btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp"
-btrfs subvolume create "${btrfs_tmp_dir}/@var_tmp_portage"
-btrfs subvolume create "${btrfs_tmp_dir}/@var_cache_binpkgs"
-chattr +C "${btrfs_tmp_dir}/@var_cache_binpkgs"
-btrfs subvolume create "${btrfs_tmp_dir}/@var_cache_binhost"
-chattr +C "${btrfs_tmp_dir}/@var_cache_binhost"
-btrfs subvolume create "${btrfs_tmp_dir}/@swap"
-
-root_subvol_id="$(btrfs subvolume list "${btrfs_tmp_dir}" | awk \
-    '$NF == "@" {print $2}')"
-btrfs subvolume set-default "${root_subvol_id}" "${btrfs_tmp_dir}"
-unset root_subvol_id
-
-umount "${btrfs_tmp_dir}"
-remove_directory "${btrfs_tmp_dir}"
-unset btrfs_tmp_dir
+prepare_target_subvolumes "${ROOT_TARGET_DEV}"
 
 _active_install_mounts=()
-
-create_directory "${INSTALL_MOUNT_DIR}"
-managed_mount "_active_install_mounts" \
-    --options "${ROOT_MOUNT_OPTIONS},subvol=@" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}"
-
-create_directory "${INSTALL_MOUNT_DIR}/boot"
-managed_mount "_active_install_mounts" \
-    --options "${BOOT_MOUNT_OPTIONS}" \
-    --types "vfat" \
-    "${BOOT_PARTITION}" \
-    "${INSTALL_MOUNT_DIR}/boot"
-
-create_directory "${INSTALL_MOUNT_DIR}/home"
-managed_mount "_active_install_mounts" \
-    --options "${HOME_MOUNT_OPTIONS},subvol=@home" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/home"
-
-create_directory "${INSTALL_MOUNT_DIR}/var/log"
-managed_mount "_active_install_mounts" \
-    --options "${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/var/log"
-
-create_directory "${INSTALL_MOUNT_DIR}/var/tmp"
-managed_mount "_active_install_mounts" \
-    --options "${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/var/tmp"
-chmod 1777 "${INSTALL_MOUNT_DIR}/var/tmp"
-
-create_directory "${INSTALL_MOUNT_DIR}/var/tmp/portage"
-managed_mount "_active_install_mounts" \
-    --options "${PORTAGE_TMP_MOUNT_OPTIONS},subvol=@var_tmp_portage" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/var/tmp/portage"
-chmod 0775 "${INSTALL_MOUNT_DIR}/var/tmp/portage"
-
-create_directory "${INSTALL_MOUNT_DIR}/var/cache/binpkgs"
-managed_mount "_active_install_mounts" \
-    --options \
-    "${VAR_CACHE_BINPKGS_MOUNT_OPTIONS},subvol=@var_cache_binpkgs" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/var/cache/binpkgs"
-chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache/binpkgs"
-
-create_directory "${INSTALL_MOUNT_DIR}/var/cache/binhost"
-managed_mount "_active_install_mounts" \
-    --options \
-    "${VAR_CACHE_BINHOST_MOUNT_OPTIONS},subvol=@var_cache_binhost" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/var/cache/binhost"
-chmod 0755 "${INSTALL_MOUNT_DIR}/var/cache/binhost"
-
-create_directory "${INSTALL_MOUNT_DIR}/swap"
-managed_mount "_active_install_mounts" \
-    --options "${SWAP_MOUNT_OPTIONS},subvol=@swap" \
-    --types "btrfs" \
-    "${ROOT_TARGET_DEV}" \
-    "${INSTALL_MOUNT_DIR}/swap"
-
-btrfs filesystem mkswapfile --size "${SWAP_SIZE_GIB}g" \
-    "${INSTALL_MOUNT_DIR}/swap/swapfile"
+mount_target_subvolumes "_active_install_mounts" "${ROOT_TARGET_DEV}" \
+    "${BOOT_PARTITION}" "${INSTALL_MOUNT_DIR}" "${SWAP_SIZE_GIB}"
 
 # === Install and Configure Gentoo ===
 
@@ -346,61 +240,15 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     '
 IFS=$'\n\t'
 
-log_info "Generating fstab for ${INSTALL_MOUNT_DIR}"
-fstab_file="${INSTALL_MOUNT_DIR}/etc/fstab"
-log_debug "Creating ${fstab_file}"
-portage_opts="${PORTAGE_TMP_MOUNT_OPTIONS},subvol=@var_tmp_portage"
-binpkg_opts="${VAR_CACHE_BINPKGS_MOUNT_OPTIONS},subvol=@var_cache_binpkgs"
-binhost_opts="${VAR_CACHE_BINHOST_MOUNT_OPTIONS},subvol=@var_cache_binhost"
-declare fstab_content
-IFS= read -d "" -r fstab_content << EOF || true
-UUID=${ROOT_UUID} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
-UUID=${BOOT_UUID} /boot vfat ${BOOT_MOUNT_OPTIONS} 0 2
-UUID=${ROOT_UUID} /home btrfs ${HOME_MOUNT_OPTIONS},subvol=@home 0 0
-UUID=${ROOT_UUID} /var/log btrfs ${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log 0 0
-UUID=${ROOT_UUID} /var/tmp btrfs ${VAR_TMP_MOUNT_OPTIONS},subvol=@var_tmp 0 0
-UUID=${ROOT_UUID} /var/tmp/portage btrfs ${portage_opts} 0 0
-UUID=${ROOT_UUID} /var/cache/binpkgs btrfs ${binpkg_opts} 0 0
-UUID=${ROOT_UUID} /var/cache/binhost btrfs ${binhost_opts} 0 0
-UUID=${ROOT_UUID} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
-/swap/swapfile none swap defaults 0 0
-tmpfs /tmp tmpfs defaults,noatime,nodev,nosuid,noexec,mode=1777 0 0
-tmpfs /dev/shm tmpfs defaults,noatime,nodev,nosuid,noexec 0 0
-EOF
-printf "%s" "${fstab_content}" > "${fstab_file}"
-unset fstab_content fstab_file portage_opts binpkg_opts binhost_opts
+generate_target_fstab "${INSTALL_MOUNT_DIR}" "${ROOT_UUID}" "${BOOT_UUID}"
 
-if [[ -n "${SECUREBOOT_CERT:-}" ]]; then
-    log_info "Exporting Secure Boot certificate to ESP"
-    openssl x509 -inform "PEM" -outform "DER" \
-        -out "${INSTALL_MOUNT_DIR}/boot/Secure Boot Certificate.der" \
-        <<< "${SECUREBOOT_CERT}"
-elif [[ -f "/boot/Secure Boot Certificate.der" ]]; then
-    log_info "Copying Secure Boot certificate to ESP"
-    copy_file "/boot/Secure Boot Certificate.der" \
-        "${INSTALL_MOUNT_DIR}/boot/Secure Boot Certificate.der"
-fi
+install_secureboot_cert "${INSTALL_MOUNT_DIR}"
 
-# Clean up installer Portage configuration and establish profile symlink
-remove_portage_configuration "${INSTALL_MOUNT_DIR}"
-configure_portage_profile "${INSTALL_MOUNT_DIR}" "${PROFILE}"
-
-unmount_repos
-
-for repo_entry in "${_repo_entries[@]}"; do
-    repo_name="${repo_entry%% *}"
-    log_info "Copying ${repo_name} repository to target"
-    cp --archive "${LOCAL_REPOS_DIR}/${repo_name}/." \
-        "${INSTALL_MOUNT_DIR}/var/db/repos/${repo_name}"
-done
-unset repo_entry repo_name
-
-chown -R portage:portage "${INSTALL_MOUNT_DIR}/var/db/repos"
+finalize_target_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 # Initialize machine-id, install systemd-boot to ESP (without writing NVRAM
 # variables from inside chroot), run Ansible pull for post-install setup,
 # lock root account, and create unprivileged admin user in wheel group.
-create_empty_file "${INSTALL_MOUNT_DIR}/etc/portage/make.conf"
 
 export USERNAME PASSWORD
 chroot_run "${INSTALL_MOUNT_DIR}" '
