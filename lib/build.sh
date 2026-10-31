@@ -250,9 +250,15 @@ has_resume_stage() {
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
     local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
 
     local output
+    output="$(s3_rclone lsf \
+        ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" 2> /dev/null || true)"
+    if [[ "${output//$'\r'/}" == "${image_filename}" ]]; then
+        return 0
+    fi
     output="$(s3_rclone lsf \
         ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" 2> /dev/null || true)"
     [[ "${output//$'\r'/}" == "${stage_filename}" ]]
@@ -372,11 +378,59 @@ publish_stage_archive() {
     force_remove "${archive_dir}"
 }
 
+publish_resume_filesystem() {
+    local profile="${1}"
+    local resume_id="${2}"
+    local stage_type="${3}"
+    log_info "Uploading ${stage_type} resume filesystem image for ${profile}"
+
+    import_signing_key
+
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
+    local sig_filename="${image_filename}.sig"
+    local archive_dir
+    archive_dir="$(mktemp --directory)"
+    local image_file="${archive_dir}/${image_filename}"
+    local sig_file="${archive_dir}/${sig_filename}"
+
+    fstrim /mnt/btrfs 2> /dev/null || true
+    btrfs filesystem sync /mnt/btrfs 2> /dev/null || sync
+    mount -o remount,ro /mnt/btrfs 2> /dev/null || true
+
+    log_info "Creating resume filesystem image ${image_file}"
+    zstd --sparse -T0 /btrfs.img -o "${image_file}"
+
+    log_info "Signing resume filesystem image ${image_file}"
+    gpg --batch --detach-sign --local-user "${_signing_key_fingerprint}" \
+        "${image_file}"
+
+    log_info "Uploading resume filesystem image ${image_file}"
+    s3_rclone copy "${image_file}" \
+        ":s3:${S3_BUCKET_NAME}/resumes"
+
+    log_info "Uploading resume image signature ${sig_file}"
+    s3_rclone copy "${sig_file}" \
+        ":s3:${S3_BUCKET_NAME}/resumes"
+
+    force_remove "${image_file}"
+    force_remove "${sig_file}"
+    force_remove "${archive_dir}"
+}
+
 publish_resume_stage() {
     local target_root="${1}"
     local profile="${2}"
     local resume_id="${3}"
     local stage_type="${4}"
+
+    if [[ -f "/btrfs.img" && -d "/mnt/btrfs" ]]; then
+        publish_resume_filesystem "${profile}" "${resume_id}" "${stage_type}"
+        return 0
+    fi
+
     log_info "Uploading ${stage_type} resume snapshot from ${target_root}"
 
     import_signing_key
@@ -429,12 +483,16 @@ clear_resume_stage() {
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local stage_prefix="${stage_type}-${repo_profile//\//-}"
+    local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
     local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
-    local sig_filename="${stage_filename}.sig"
 
+    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+        > /dev/null 2>&1 || true
+    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}.sig" \
+        > /dev/null 2>&1 || true
     s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
         > /dev/null 2>&1 || true
-    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}.sig" \
         > /dev/null 2>&1 || true
 }
 
@@ -540,13 +598,17 @@ prepare_stage_environment() {
             log_error "Resume snapshot for ${profile} (${resume_id}) not found"
             exit 1
         fi
-        fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
-            "stage3"
-        if [[ ! -d "${stage_dir}/.criu" ]]; then
-            log_error "CRIU checkpoint not found in ${stage_dir}"
-            exit 1
+        if [[ -f "/btrfs.img" && -d "${stage_dir}/.criu" ]]; then
+            log_info "Resuming on mounted filesystem for ${profile}"
+        else
+            fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
+                "stage3"
+            if [[ ! -d "${stage_dir}/.criu" ]]; then
+                log_error "CRIU checkpoint not found in ${stage_dir}"
+                exit 1
+            fi
+            download_ebuild_repositories "${stage_dir}"
         fi
-        download_ebuild_repositories "${stage_dir}"
     else
         fetch_project_stage "${stage_dir}" "${profile}" "stage3"
         configure_portage "${stage_dir}" "${profile}" "stage3"
@@ -572,8 +634,10 @@ handle_build_timeout() {
             "stage3"
     fi
     unmount_repos
-    remove_portage_configuration "${stage_dir}"
-    force_remove "${stage_dir}"
+    if [[ ! -f "/btrfs.img" ]]; then
+        remove_portage_configuration "${stage_dir}"
+        force_remove "${stage_dir}"
+    fi
     exit 124
 }
 

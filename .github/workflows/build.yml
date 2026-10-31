@@ -124,15 +124,39 @@ jobs:
 
       # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
-            util-linux-extra xz-utils zstd
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
           sudo apt clean
+
+      - name: Initialize Runner Filesystem
+        run: |
+          sudo modprobe btrfs
+          free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
+          image_size=$(( free_bytes - 1073741824 ))
+
+          sudo truncate --size="${image_size}" /btrfs.img
+          sudo mkfs.btrfs -m single /btrfs.img
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown --recursive "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
 
       - uses: actions/checkout@v7
 
@@ -278,17 +302,17 @@ jobs:
 
       # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
-            util-linux-extra xz-utils zstd
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
           sudo apt clean
-
-      - uses: actions/checkout@v7
 
       - name: Cache Tools
         id: cache-tools
@@ -319,6 +343,54 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          export RCLONE_CONFIG_S3_TYPE="s3"
+          export RCLONE_CONFIG_S3_PROVIDER="Other"
+          export RCLONE_CONFIG_S3_ENDPOINT="${S3_ENDPOINT}"
+          export RCLONE_CONFIG_S3_REGION="${S3_REGION}"
+          export RCLONE_CONFIG_S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          export RCLONE_CONFIG_S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+          if [[ "${S3_USE_PATH_STYLE}" == "true" ]]; then
+            export RCLONE_CONFIG_S3_FORCE_PATH_STYLE="true"
+          fi
+
+          mkdir --parents /tmp/resume
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+            gpg --batch --verify "/tmp/resume/${sig_filename}" \
+              "/tmp/resume/${image_filename}"
+          fi
+
+          sudo zstd -d --sparse "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown --recursive "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run build.sh (Resume)
         run: |
@@ -430,17 +502,17 @@ jobs:
 
       # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
-            util-linux-extra xz-utils zstd
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
           sudo apt clean
-
-      - uses: actions/checkout@v7
 
       - name: Cache Tools
         id: cache-tools
@@ -471,6 +543,54 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          export RCLONE_CONFIG_S3_TYPE="s3"
+          export RCLONE_CONFIG_S3_PROVIDER="Other"
+          export RCLONE_CONFIG_S3_ENDPOINT="${S3_ENDPOINT}"
+          export RCLONE_CONFIG_S3_REGION="${S3_REGION}"
+          export RCLONE_CONFIG_S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          export RCLONE_CONFIG_S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+          if [[ "${S3_USE_PATH_STYLE}" == "true" ]]; then
+            export RCLONE_CONFIG_S3_FORCE_PATH_STYLE="true"
+          fi
+
+          mkdir --parents /tmp/resume
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+            gpg --batch --verify "/tmp/resume/${sig_filename}" \
+              "/tmp/resume/${image_filename}"
+          fi
+
+          sudo zstd -d --sparse "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown --recursive "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run build.sh (Resume)
         run: |
@@ -582,17 +702,17 @@ jobs:
 
       # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
             --no-install-recommends \
-            aria2 criu cryptsetup curl fuse3 gawk git gnupg udev unzip \
-            util-linux-extra xz-utils zstd
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
           sudo apt clean
-
-      - uses: actions/checkout@v7
 
       - name: Cache Tools
         id: cache-tools
@@ -623,6 +743,54 @@ jobs:
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          export RCLONE_CONFIG_S3_TYPE="s3"
+          export RCLONE_CONFIG_S3_PROVIDER="Other"
+          export RCLONE_CONFIG_S3_ENDPOINT="${S3_ENDPOINT}"
+          export RCLONE_CONFIG_S3_REGION="${S3_REGION}"
+          export RCLONE_CONFIG_S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          export RCLONE_CONFIG_S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+          if [[ "${S3_USE_PATH_STYLE}" == "true" ]]; then
+            export RCLONE_CONFIG_S3_FORCE_PATH_STYLE="true"
+          fi
+
+          mkdir --parents /tmp/resume
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+            gpg --batch --verify "/tmp/resume/${sig_filename}" \
+              "/tmp/resume/${image_filename}"
+          fi
+
+          sudo zstd -d --sparse "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown --recursive "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run build.sh (Resume)
         run: |
@@ -695,4 +863,4 @@ jobs:
           source lib/common.sh
           source lib/build.sh
           s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
-            --include="stage3-*-resume-${{ github.run_id }}.tar.zst*" || true
+            --include="stage3-*-resume-${{ github.run_id }}.*" || true

@@ -1235,7 +1235,6 @@ chroot_run_criu() {
     if [[ -d "${criu_dir}" ]]; then
         log_info "Restoring CRIU checkpoint for ${real_target_root}"
         rm --force "${exit_file}"
-        : > "${log_file}"
 
         local pidfile="${criu_dir}/restore.pid"
         rm --force "${pidfile}"
@@ -1257,7 +1256,6 @@ chroot_run_criu() {
             return 1
         fi
         ns_init_pid="$(<"${pidfile}")"
-        force_remove "${criu_dir}"
         log_info "Restored CRIU process tree (PID ${ns_init_pid})"
     else
         rm --force "${exit_file}" "${log_file}"
@@ -1385,9 +1383,20 @@ EOF
         exit_code="$(<"${exit_file}")"
     fi
 
-    rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+    if (( exit_code != 0 )); then
+        if [[ -f "${criu_dir}/restore.log" ]]; then
+            log_warn "CRIU restore log output:"
+            tail -n 100 "${criu_dir}/restore.log" >&2 || true
+        fi
+        if [[ -f "${log_file}" ]]; then
+            log_warn "Chroot command log output:"
+            tail -n 100 "${log_file}" >&2 || true
+        fi
+    else
+        rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+        force_remove "${criu_dir}"
+    fi
     rmdir "${real_target_root}/.oldroot" 2> /dev/null || true
-    force_remove "${criu_dir}"
     kill_chroot_processes "${real_target_root}"
 
     return "${exit_code}"
