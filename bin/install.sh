@@ -400,6 +400,9 @@ chown -R portage:portage "${INSTALL_MOUNT_DIR}/var/db/repos"
 # Initialize machine-id, install systemd-boot to ESP (without writing NVRAM
 # variables from inside chroot), run Ansible pull for post-install setup,
 # lock root account, and create unprivileged admin user in wheel group.
+create_empty_file "${INSTALL_MOUNT_DIR}/etc/portage/make.conf"
+
+export USERNAME PASSWORD
 chroot_run "${INSTALL_MOUNT_DIR}" '
     systemd-machine-id-setup
     systemctl preset-all
@@ -407,8 +410,8 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
     useradd --create-home --user-group --groups wheel \
-        --shell /bin/bash "'"${USERNAME}"'"
-    printf "%s\n" "'"${PASSWORD}"'" | passwd --stdin "'"${USERNAME}"'"
+        --shell /bin/bash "${USERNAME}"
+    printf "%s\n" "${PASSWORD}" | passwd --stdin "${USERNAME}"
     '
 unset USERNAME PASSWORD
 
