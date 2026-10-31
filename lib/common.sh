@@ -1200,6 +1200,7 @@ collect_criu_ext_mount_maps() {
     dump_args_ref=()
     restore_args_ref=()
 
+    local -A seen_mounts=()
     local m_dev m_point m_rest
     while IFS=" " read -r m_dev m_point m_rest; do
         if [[ "${m_point}" == "${real_target_root}/"* ]]; then
@@ -1209,6 +1210,10 @@ collect_criu_ext_mount_maps() {
                     continue
                     ;;
             esac
+            if [[ -v seen_mounts["${rel_mount}"] ]]; then
+                continue
+            fi
+            seen_mounts["${rel_mount}"]=1
             local mount_key="${rel_mount#/}"
             mount_key="${mount_key//\//_}"
             dump_args_ref+=(--ext-mount-map "${rel_mount}:${mount_key}")

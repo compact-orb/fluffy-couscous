@@ -77,6 +77,7 @@ jobs:
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
@@ -185,6 +186,7 @@ jobs:
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
@@ -246,6 +248,7 @@ jobs:
             rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone
 
@@ -339,6 +342,7 @@ jobs:
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
@@ -397,6 +401,10 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
           sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
@@ -460,6 +468,7 @@ jobs:
             rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone
 
@@ -553,6 +562,7 @@ jobs:
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
@@ -611,6 +621,10 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
           sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
@@ -674,6 +688,7 @@ jobs:
             rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone
 
@@ -767,6 +782,7 @@ jobs:
             rm --force "/tmp/storageto-linux-amd64.tar.gz"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
@@ -825,6 +841,10 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
           sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
@@ -896,6 +916,7 @@ jobs:
             rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone
 

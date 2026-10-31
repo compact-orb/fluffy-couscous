@@ -68,6 +68,7 @@ jobs:
             rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
+          sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
