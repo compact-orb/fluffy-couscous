@@ -1751,7 +1751,7 @@ persist_ebuild_repositories() {
             "${target_root}/var/db/repos/${repo_name}"
     done
 
-    chown -R portage:portage "${target_root}/var/db/repos"
+    chown -R 250:250 "${target_root}/var/db/repos"
 }
 
 finalize_target_portage() {
