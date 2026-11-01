@@ -32,11 +32,10 @@ readonly ESP_IMG="${BUILD_DIR}/esp.img"
 readonly ISO_DIR="${BUILD_DIR}/iso"
 readonly ISO_VOLID="INSTALL"
 IFS=" " read -r _ repo_profile < <(parse_profile "${PROFILE}")
-readonly ISO_DATE="$(date +%Y%m%d)"
 readonly ISO_FILE=\
-"${BUILD_DIR}/install-${repo_profile//\//-}-${ISO_DATE}.iso"
+"${BUILD_DIR}/install-${repo_profile//\//-}-$(date -u +%Y%m%d).iso"
 readonly ISO_SIG_FILE="${ISO_FILE}.sig"
-unset repo_profile ISO_DATE
+unset repo_profile
 
 # === Environment Preparation ===
 
