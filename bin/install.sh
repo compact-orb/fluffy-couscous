@@ -254,6 +254,7 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     systemctl preset-all
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
+    /usr/local/bin/update-bootloader.sh
     passwd --lock "root"
     useradd --create-home --user-group --groups wheel \
         --shell /bin/bash "${USERNAME}"
