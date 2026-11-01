@@ -1019,6 +1019,10 @@ mount_chroot_filesystems() {
     managed_mount "_active_chroot_mounts" --rbind "/sys" \
         "${target_root}/sys"
     mount --make-rslave "${target_root}/sys"
+    # Isolate host security LSM interfaces from the chroot environment so
+    # guest package operations or security managers do not modify host LSMs.
+    umount "${target_root}/sys/kernel/security" 2> /dev/null || true
+    umount "${target_root}/sys/fs/selinux" 2> /dev/null || true
     local target_dev_dir="${target_root}/dev"
     create_directory "${target_dev_dir}"
     managed_mount "_active_chroot_mounts" --rbind "/dev" \
