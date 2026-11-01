@@ -152,10 +152,11 @@ chroot_run "${TARGET_ROOT}" '
     systemctl enable systemd-resolved.service
     systemctl enable sshd.service
     systemctl enable cloud-init-local.service
-    systemctl enable cloud-init.service
+    systemctl enable cloud-init-network.service
+    systemctl enable cloud-init-main.service
     systemctl enable cloud-config.service
     systemctl enable cloud-final.service
-    systemctl enable cloud-init.target
+    systemctl enable cloud-init-hotplugd.socket
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
