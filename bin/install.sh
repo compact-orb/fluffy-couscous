@@ -220,6 +220,7 @@ install_packages=(
     "app-editors/nano"
     "dev-vcs/git"
     "net-misc/networkmanager"
+    "sec-policy/apparmor-d"
     "sys-boot/shim"
     "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
@@ -228,6 +229,7 @@ install_packages=(
     "sys-kernel/gentoo-kernel"
     "sys-kernel/installkernel"
     "sys-kernel/linux-firmware"
+    "sys-process/audit"
 )
 
 IFS=" "

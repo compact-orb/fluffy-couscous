@@ -114,12 +114,14 @@ install_packages=(
     "app-emulation/cloud-init"
     "dev-vcs/git"
     "net-misc/networkmanager"
+    "sec-policy/apparmor-d"
     "sys-firmware/intel-microcode"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
     "sys-kernel/gentoo-kernel"
     "sys-kernel/installkernel"
     "sys-kernel/linux-firmware"
+    "sys-process/audit"
 )
 
 IFS=" "
