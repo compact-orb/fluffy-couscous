@@ -220,6 +220,7 @@ install_packages=(
     "app-editors/nano"
     "dev-vcs/git"
     "net-misc/networkmanager"
+    "sys-boot/shim"
     "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
     "sys-fs/btrfs-progs"
