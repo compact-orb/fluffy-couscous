@@ -472,7 +472,7 @@ publish_resume_stage() {
 
     if [[ -f "/btrfs.img" && -d "/mnt/btrfs" ]]; then
         publish_resume_filesystem "${profile}" "${resume_id}" "${stage_type}"
-        return 0
+        return "${?}"
     fi
 
     log_info "Uploading ${stage_type} resume snapshot from ${target_root}"
@@ -674,11 +674,14 @@ handle_build_timeout() {
     unmount_repos
     if [[ -n "${resume_id}" ]]; then
         publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
-            "stage3"
+            "stage3" || exit 1
     fi
     if [[ ! -f "/btrfs.img" ]]; then
         remove_portage_configuration "${stage_dir}"
         force_remove "${stage_dir}"
+    fi
+    if [[ -n "${resume_id}" ]]; then
+        exit 0
     fi
     exit 124
 }

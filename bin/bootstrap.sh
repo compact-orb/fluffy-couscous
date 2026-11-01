@@ -129,7 +129,8 @@ if [[ "${resume_phase}" != "stage3" && \
 
             if [[ -z "${SEED_STAGE}" ]]; then
                 chroot_run "${SEED_DIR}" '
-                    MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
+                    MAKEOPTS="--jobs=${make_jobs} \
+--load-average=${make_jobs}" \
                         emerge --deep --getbinpkg \
                         --jobs='"${emerge_jobs}"' \
                         --load-average='"${cpus}"' \
@@ -163,7 +164,9 @@ if [[ "${resume_phase}" != "stage3" && \
         unmount_repos
         if [[ -n "${RESUME_ID}" ]]; then
             publish_resume_stage "${SEED_DIR}" "${PROFILE}" \
-                "${RESUME_ID}" "stage1"
+                "${RESUME_ID}" "stage1" || exit 1
+            force_remove "${SEED_DIR}"
+            exit 0
         fi
         force_remove "${SEED_DIR}"
         exit 124
@@ -187,10 +190,10 @@ if [[ "${resume_phase}" != "stage3" && \
     if [[ -n "${RESUME_ID}" ]]; then
         log_info "Stage 1 complete. Publishing stage3-init and yielding."
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
-            "${RESUME_ID}" "stage3-init"
+            "${RESUME_ID}" "stage3-init" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
         force_remove "${STAGE_DIR}"
-        exit 124
+        exit 0
     fi
 fi
 
@@ -230,8 +233,12 @@ if (( stage3_exit == 124 )); then
     upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
     if [[ -n "${RESUME_ID}" ]]; then
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
-            "${RESUME_ID}" "stage3"
+            "${RESUME_ID}" "stage3" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
+        unmount_repos
+        remove_portage_configuration "${STAGE_DIR}"
+        force_remove "${STAGE_DIR}"
+        exit 0
     fi
     unmount_repos
     remove_portage_configuration "${STAGE_DIR}"
