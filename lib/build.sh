@@ -73,6 +73,12 @@ upload_portage_failure_logs() {
     if [[ -v SEED_DIR && -d "${SEED_DIR}" ]]; then
         search_roots+=("${SEED_DIR}")
     fi
+    if [[ -v TARGET_ROOT && -d "${TARGET_ROOT}" ]]; then
+        search_roots+=("${TARGET_ROOT}")
+    fi
+    if [[ -v INSTALL_MOUNT_DIR && -d "${INSTALL_MOUNT_DIR}" ]]; then
+        search_roots+=("${INSTALL_MOUNT_DIR}")
+    fi
 
     local -a log_files=()
     local root

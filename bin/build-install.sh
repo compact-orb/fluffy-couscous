@@ -117,10 +117,7 @@ copy_file "${STAGE_DIR}/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" \
 # systemd-boot loader entry paths are relative to the ESP root, not /boot.
 sed --in-place 's| /boot/| /|g' "${STAGE_DIR}"/boot/loader/entries/*.conf
 
-# Export Secure Boot certificate in DER format for MokManager key enrollment.
-openssl x509 -inform "PEM" -outform "DER" \
-     -out "${STAGE_DIR}/boot/Secure Boot Certificate.der" \
-     <<< "${SECUREBOOT_CERT}"
+install_secureboot_cert "${STAGE_DIR}"
 
 # Calculate required ESP FAT32 size with 3% headroom, enforcing 35MB minimum.
 esp_size_mb=$(du --summarize --block-size="1M" "${STAGE_DIR}/boot" | \

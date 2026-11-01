@@ -192,8 +192,6 @@ readonly BOOT_UUID="$(blkid --match-tag "UUID" --output "value" \
     "${BOOT_PARTITION}")"
 readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" \
     "${ROOT_TARGET_DEV}")"
-readonly ROOT_PARTUUID="$(blkid --match-tag "PARTUUID" --output "value" \
-    "${ROOT_PARTITION}")"
 
 prepare_target_subvolumes "${ROOT_TARGET_DEV}"
 
@@ -222,7 +220,6 @@ install_packages=(
     "app-editors/nano"
     "dev-vcs/git"
     "net-misc/networkmanager"
-    "sys-boot/shim"
     "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
     "sys-fs/btrfs-progs"

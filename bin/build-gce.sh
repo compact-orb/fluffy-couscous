@@ -161,18 +161,6 @@ chroot_run "${TARGET_ROOT}" '
     passwd --lock "root"
     '
 
-# Direct systemd-boot: copy signed systemd-boot directly as BOOTX64.EFI
-# to avoid needing Microsoft 3rd-party UEFI CA certificates on Google Cloud.
-bootloader_signed=\
-"${TARGET_ROOT}/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed"
-if [[ -f "${bootloader_signed}" ]]; then
-    log_info "Installing signed systemd-boot as default UEFI bootloader"
-    copy_file "${bootloader_signed}" "${TARGET_ROOT}/boot/EFI/BOOT/BOOTX64.EFI"
-    copy_file "${bootloader_signed}" \
-        "${TARGET_ROOT}/boot/EFI/systemd/systemd-bootx64.efi"
-fi
-unset bootloader_signed
-
 # Reset instance-specific state to produce a generic reusable base image
 log_info "Resetting instance-specific identifiers for cloud-init generic image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
