@@ -115,7 +115,6 @@ install_packages=(
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
-    "sys-boot/shim"
     "sys-firmware/intel-microcode"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
