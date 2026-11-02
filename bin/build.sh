@@ -72,7 +72,7 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
         app-portage/gentoolkit
-    if [[ -n '"${PRE_PACKAGES}"' ]]; then
+    if [[ -n "'"${PRE_PACKAGES}"'" ]]; then
         MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
             --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
