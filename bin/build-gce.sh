@@ -155,7 +155,7 @@ chroot_run "${TARGET_ROOT}" '
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
     useradd --create-home --groups wheel --shell /bin/bash "${IMAGE_USER}"
-    home_dir="$(getent passwd "${IMAGE_USER}" | cut --delimiter=: --fields=6)"
+    IFS=: read -r _ _ _ _ _ home_dir _ <<< "$(getent passwd "${IMAGE_USER}")"
     mkdir --parents "${home_dir}/.ssh"
     chmod 0700 "${home_dir}/.ssh"
     printf "%s\n" "${IMAGE_SSH_PUBLIC_KEY}" \
