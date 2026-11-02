@@ -97,6 +97,9 @@ jobs:
             "SECUREBOOT_KEY"
             "SECUREBOOT_CERT"
             "STORAGETO_KEY"
+            "IMAGE_USER"
+            "IMAGE_SSH_PUBLIC_KEY"
+            "IMAGE_USER_PASSWORD"
           )
           sudo_preserve="$(IFS=,; echo "${preserve_env[*]}")"
           # Workaround for stripping carriage return characters from GitHub
