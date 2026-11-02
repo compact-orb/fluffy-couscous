@@ -104,7 +104,7 @@ mount_binary_packages "${TARGET_ROOT}" "${PROFILE}"
 
 create_directory "${TARGET_ROOT}/etc/kernel"
 create_file "${TARGET_ROOT}/etc/kernel/cmdline" \
-    "rw console=ttyS0,38400n8d console=tty0 lsm=landlock,yama,apparmor,bpf"
+    "rw console=tty0 console=ttyS0,38400n8d lsm=landlock,yama,apparmor,bpf"
 
 install_packages=(
     "app-admin/ansible"
@@ -113,6 +113,7 @@ install_packages=(
     "app-editors/nano"
     "app-emulation/cloud-init"
     "dev-vcs/git"
+    "net-misc/curl"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
     "sys-firmware/intel-microcode"
@@ -140,25 +141,145 @@ finalize_target_portage "${TARGET_ROOT}" "${PROFILE}"
 
 unmount_binary_packages
 
-# === Systemd, Bootloader, and Cloud-Init Configuration ===
+# === Systemd, Bootloader, Networking, and Credentials ===
+
+readonly nm_conn_dir=\
+"${TARGET_ROOT}/etc/NetworkManager/system-connections"
+readonly nm_cloud_conn="${nm_conn_dir}/cloud-default.nmconnection"
+create_directory "${nm_conn_dir}"
+create_file "${nm_cloud_conn}" \
+    "[connection]
+id=cloud-default
+uuid=c0000000-0000-0000-0000-000000000001
+type=ethernet
+autoconnect=true
+
+[ethernet]
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto"
+chmod 0600 "${nm_cloud_conn}"
+
+create_directory "${TARGET_ROOT}/etc/sudoers.d"
+create_file "${TARGET_ROOT}/etc/sudoers.d/wheel" \
+    "%wheel ALL=(ALL:ALL) NOPASSWD: ALL"
+chmod 0440 "${TARGET_ROOT}/etc/sudoers.d/wheel"
+
+readonly serial_override_dir=\
+"${TARGET_ROOT}/etc/systemd/system/serial-getty@ttyS0.service.d"
+create_directory "${serial_override_dir}"
+create_file "${serial_override_dir}/override.conf" \
+    "[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -- \\u' \\
+    --keep-baud 115200,38400,9600 --noclear \\
+    --autologin root %I \$TERM"
+
+create_directory "${TARGET_ROOT}/usr/libexec"
+create_file "${TARGET_ROOT}/usr/libexec/gce-sync-ssh-keys" \
+    "#!/usr/bin/env bash
+set -euo pipefail
+
+metadata_url=\"http://metadata.google.internal/computeMetadata/v1\"
+hdr=\"Metadata-Flavor: Google\"
+
+get_md() {
+    curl -s -f -m 5 -H \"\${hdr}\" \\
+        \"\${metadata_url}/\${1}\" 2>/dev/null || true
+}
+
+keys=\"\"
+for path in \"instance/attributes/ssh-keys\" \\
+            \"instance/attributes/sshKeys\" \\
+            \"project/attributes/ssh-keys\" \\
+            \"project/attributes/sshKeys\"; do
+    val=\"\$(get_md \"\${path}\")\"
+    if [[ -n \"\${val}\" ]]; then
+        keys+=\"\${val}\"\$'\n'
+    fi
+done
+
+[[ -z \"\${keys}\" ]] && exit 0
+
+while IFS= read -r line; do
+    [[ -z \"\${line}\" ]] && continue
+    if [[ \"\${line}\" =~ ^([a-zA-Z0-9._-]+):(.*)\$ ]]; then
+        user=\"\${BASH_REMATCH[1]}\"
+        key=\"\${BASH_REMATCH[2]}\"
+        if ! id \"\${user}\" &>/dev/null; then
+            useradd -m -s /bin/bash \\
+                -G wheel,adm,systemd-journal \"\${user}\"
+        fi
+        home=\"\$(getent passwd \"\${user}\" | cut -d: -f6)\"
+        ssh_dir=\"\${home}/.ssh\"
+        auth_file=\"\${ssh_dir}/authorized_keys\"
+        mkdir -p \"\${ssh_dir}\"
+        chmod 700 \"\${ssh_dir}\"
+        touch \"\${auth_file}\"
+        chmod 600 \"\${auth_file}\"
+        if ! grep -qF \"\${key}\" \"\${auth_file}\"; then
+            echo \"\${key}\" >> \"\${auth_file}\"
+        fi
+        chown -R \"\${user}:\${user}\" \"\${ssh_dir}\"
+    fi
+done <<< \"\${keys}\""
+chmod 0755 "${TARGET_ROOT}/usr/libexec/gce-sync-ssh-keys"
+
+create_directory "${TARGET_ROOT}/etc/systemd/system"
+create_file "${TARGET_ROOT}/etc/systemd/system/gce-sync-ssh-keys.service" \
+    "[Unit]
+Description=Sync GCE metadata SSH keys
+After=network-online.target
+Wants=network-online.target
+Before=sshd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/gce-sync-ssh-keys
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target"
 
 # Cloud-init datasource configuration for GCE
 create_directory "${TARGET_ROOT}/etc/cloud/cloud.cfg.d"
 create_file "${TARGET_ROOT}/etc/cloud/cloud.cfg.d/90_gce.cfg" \
-    "datasource_list: [ GCE, None ]"
+    "datasource_list: [ GCE, None ]
+datasource:
+  GCE:
+    retries: 5
+    sec_between_retries: 2
+system_info:
+  default_user:
+    name: compact-orb
+    groups: [ wheel, adm, systemd-journal ]
+    sudo: [ \"ALL=(ALL) NOPASSWD:ALL\" ]
+    shell: /bin/bash"
 
 chroot_run "${TARGET_ROOT}" '
     systemctl preset-all
+    systemctl disable systemd-networkd.service \
+        systemd-networkd.socket \
+        systemd-networkd-varlink.socket \
+        systemd-networkd-varlink-metrics.socket
     systemctl enable NetworkManager.service
     systemctl enable NetworkManager-wait-online.service
     systemctl enable systemd-resolved.service
     systemctl enable sshd.service
+    systemctl enable gce-sync-ssh-keys.service
     systemctl enable cloud-init-local.service
     systemctl enable cloud-init-network.service
     systemctl enable cloud-init-main.service
     systemctl enable cloud-config.service
     systemctl enable cloud-final.service
     systemctl enable cloud-init-hotplugd.socket
+    if ! id "compact-orb" &>/dev/null; then
+        useradd -m -s /bin/bash \
+            -G wheel,adm,systemd-journal "compact-orb"
+    fi
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
@@ -169,6 +290,8 @@ log_info "Resetting instance-specific identifiers for cloud-init generic image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
+force_remove "${TARGET_ROOT}/home/compact-orb/.ssh"
+force_remove "${TARGET_ROOT}/root/.ssh"
 for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_* \
     "${TARGET_ROOT}"/var/lib/cloud/* \
     "${TARGET_ROOT}"/var/log/cloud-init*; do
