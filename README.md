@@ -14,7 +14,7 @@ This project provides a standalone toolchain that builds, updates, and installs 
 - **Live Installer ISO (`bin/build-install.sh`)**: Builds a bootable UEFI Secure Boot live installer ISO bundled with the installer and binary repository configs.
 - **Google Cloud Image (`bin/build-gce.sh`)**: Builds a Google Compute Engine
   (GCE) custom raw disk image (`disk.raw`) packaged for import, with UEFI
-  direct systemd-boot and cloud-init.
+  direct systemd-boot.
 - **System Installer (`bin/install.sh`)**: Installs Gentoo onto target storage using binary packages, with automatic GPT partitioning (DPS), LUKS2 encryption, TPM2 unlock, and Btrfs subvolumes.
 
 ## External Components
@@ -118,7 +118,7 @@ setting a 1–2 day expiration lifecycle rule on `resumes/` in S3 is recommended
 The `Build GCE Image` workflow
 ([`.github/workflows/build-gce.yml`](.github/workflows/build-gce.yml)) and
 `bin/build-gce.sh` produce compressed raw disk archives (`disk.raw` in
-`.tar.gz`) configured with direct `systemd-boot` and `cloud-init`.
+`.tar.gz`) configured with direct `systemd-boot`.
 
 To import the image into Google Cloud and run it with Shielded VM Secure Boot:
 
@@ -144,10 +144,7 @@ To import the image into Google Cloud and run it with Shielded VM Secure Boot:
 
 Because the bootloader uses direct `systemd-boot` signed by `SECUREBOOT_KEY`,
 the UEFI firmware validates `BOOTX64.EFI` directly against your custom signature
-database without requiring Microsoft 3rd-party UEFI CA certificates. On first
-boot, `cloud-init` automatically expands the root partition, resizes Btrfs to
-the full disk capacity, generates SSH host keys, and configures instance
-metadata.
+database without requiring Microsoft 3rd-party UEFI CA certificates.
 
 ## Attribution
 

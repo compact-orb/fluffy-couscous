@@ -118,7 +118,6 @@ install_packages=(
     "app-admin/sudo"
     "app-crypt/tpm2-tools"
     "app-editors/nano"
-    "app-emulation/cloud-init"
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
@@ -147,58 +146,36 @@ finalize_target_portage "${TARGET_ROOT}" "${PROFILE}"
 
 unmount_binary_packages
 
-# === Systemd, Bootloader, and Cloud-Init Configuration ===
-
-# Cloud-init datasource configuration for GCE
-create_directory "${TARGET_ROOT}/etc/cloud/cloud.cfg.d"
-create_file "${TARGET_ROOT}/etc/cloud/cloud.cfg.d/90_gce.cfg" \
-    "datasource_list: [ GCE, None ]"
+# === Systemd, Bootloader, and Provisioning ===
 
 export IMAGE_USER IMAGE_SSH_PUBLIC_KEY IMAGE_USER_PASSWORD
 chroot_run "${TARGET_ROOT}" '
     systemctl preset-all
-    systemctl enable NetworkManager.service
-    systemctl enable NetworkManager-wait-online.service
-    systemctl enable systemd-resolved.service
-    systemctl enable sshd.service
-    systemctl enable cloud-init-local.service
-    systemctl enable cloud-init-network.service
-    systemctl enable cloud-init-main.service
-    systemctl enable cloud-config.service
-    systemctl enable cloud-final.service
-    systemctl enable cloud-init-hotplugd.socket
-    useradd -m -s /bin/bash -G wheel "${IMAGE_USER}"
-    home_dir="$(getent passwd "${IMAGE_USER}" | cut -d: -f6)"
-    mkdir -p "${home_dir}/.ssh"
-    chmod 700 "${home_dir}/.ssh"
-    printf "%s\n" "${IMAGE_SSH_PUBLIC_KEY}" \
-        > "${home_dir}/.ssh/authorized_keys"
-    chmod 600 "${home_dir}/.ssh/authorized_keys"
-    chown -R "${IMAGE_USER}:${IMAGE_USER}" "${home_dir}/.ssh"
-    printf "%s:%s\n" "${IMAGE_USER}" "${IMAGE_USER_PASSWORD}" | chpasswd
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
+    useradd --create-home --groups wheel --shell /bin/bash "${IMAGE_USER}"
+    home_dir="$(getent passwd "${IMAGE_USER}" | cut --delimiter=: --fields=6)"
+    mkdir --parents "${home_dir}/.ssh"
+    chmod 0700 "${home_dir}/.ssh"
+    printf "%s\n" "${IMAGE_SSH_PUBLIC_KEY}" \
+        > "${home_dir}/.ssh/authorized_keys"
+    chmod 0600 "${home_dir}/.ssh/authorized_keys"
+    chown --recursive "${IMAGE_USER}:${IMAGE_USER}" "${home_dir}/.ssh"
+    printf "%s:%s\n" "${IMAGE_USER}" "${IMAGE_USER_PASSWORD}" | chpasswd
     '
 unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY IMAGE_USER_PASSWORD
 
 # Reset instance-specific state to produce a generic reusable base image
-log_info "Resetting instance-specific identifiers for cloud-init generic image"
+log_info "Resetting instance-specific identifiers for generic image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
-for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_* \
-    "${TARGET_ROOT}"/var/lib/cloud/* \
-    "${TARGET_ROOT}"/var/log/cloud-init*; do
+for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_*; do
     if [[ -e "${path}" || -L "${path}" ]]; then
         force_remove "${path}"
     fi
 done
-
-# Ensure resolv.conf points to systemd-resolved stub resolver
-force_remove "${TARGET_ROOT}/etc/resolv.conf"
-create_symlink "../run/systemd/resolve/stub-resolv.conf" \
-    "${TARGET_ROOT}/etc/resolv.conf"
 
 # === Unmount and Package Image Archive ===
 
