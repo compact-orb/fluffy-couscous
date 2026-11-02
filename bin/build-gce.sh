@@ -104,7 +104,7 @@ mount_binary_packages "${TARGET_ROOT}" "${PROFILE}"
 
 create_directory "${TARGET_ROOT}/etc/kernel"
 create_file "${TARGET_ROOT}/etc/kernel/cmdline" \
-    "rw console=ttyS0,38400n8d console=tty0 lsm=landlock,yama,apparmor,bpf"
+    "rw console=tty0 console=ttyS0,38400n8d lsm=landlock,yama,apparmor,bpf"
 
 install_packages=(
     "app-admin/ansible"
@@ -140,15 +140,50 @@ finalize_target_portage "${TARGET_ROOT}" "${PROFILE}"
 
 unmount_binary_packages
 
-# === Systemd, Bootloader, and Cloud-Init Configuration ===
+# === Systemd, Bootloader, Networking, and Credentials ===
+
+readonly nm_conn_dir=\
+"${TARGET_ROOT}/etc/NetworkManager/system-connections"
+readonly nm_cloud_conn="${nm_conn_dir}/cloud-default.nmconnection"
+create_directory "${nm_conn_dir}"
+create_file "${nm_cloud_conn}" \
+    "[connection]
+id=cloud-default
+uuid=c0000000-0000-0000-0000-000000000001
+type=ethernet
+autoconnect=true
+
+[ethernet]
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto"
+chmod 0600 "${nm_cloud_conn}"
 
 # Cloud-init datasource configuration for GCE
 create_directory "${TARGET_ROOT}/etc/cloud/cloud.cfg.d"
+cloud_cfg="datasource_list: [ GCE, None ]"
+if [[ -n "${IMAGE_USER:-}" ]]; then
+    cloud_cfg+="
+system_info:
+  default_user:
+    name: ${IMAGE_USER}"
+fi
 create_file "${TARGET_ROOT}/etc/cloud/cloud.cfg.d/90_gce.cfg" \
-    "datasource_list: [ GCE, None ]"
+    "${cloud_cfg}"
+
+export IMAGE_USER="${IMAGE_USER:-}"
+export IMAGE_SSH_PUBLIC_KEY="${IMAGE_SSH_PUBLIC_KEY:-}"
+export IMAGE_USER_PASSWORD="${IMAGE_USER_PASSWORD:-}"
 
 chroot_run "${TARGET_ROOT}" '
     systemctl preset-all
+    systemctl disable systemd-networkd.service \
+        systemd-networkd.socket \
+        systemd-networkd-varlink.socket \
+        systemd-networkd-varlink-metrics.socket
     systemctl enable NetworkManager.service
     systemctl enable NetworkManager-wait-online.service
     systemctl enable systemd-resolved.service
@@ -159,10 +194,31 @@ chroot_run "${TARGET_ROOT}" '
     systemctl enable cloud-config.service
     systemctl enable cloud-final.service
     systemctl enable cloud-init-hotplugd.socket
+    if [[ -n "${IMAGE_USER:-}" ]]; then
+        if ! id "${IMAGE_USER}" &>/dev/null; then
+            useradd -m -s /bin/bash \
+                -G wheel,adm,systemd-journal "${IMAGE_USER}"
+        fi
+        if [[ -n "${IMAGE_SSH_PUBLIC_KEY:-}" ]]; then
+            home_dir="$(getent passwd "${IMAGE_USER}" | cut -d: -f6)"
+            mkdir -p "${home_dir}/.ssh"
+            chmod 700 "${home_dir}/.ssh"
+            printf "%s\n" "${IMAGE_SSH_PUBLIC_KEY}" \
+                > "${home_dir}/.ssh/authorized_keys"
+            chmod 600 "${home_dir}/.ssh/authorized_keys"
+            chown -R "${IMAGE_USER}:${IMAGE_USER}" "${home_dir}/.ssh"
+        fi
+        if [[ -n "${IMAGE_USER_PASSWORD:-}" ]]; then
+            printf "%s:%s\n" "${IMAGE_USER}" "${IMAGE_USER_PASSWORD}" \
+                | chpasswd
+        fi
+    fi
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
     '
+
+unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY IMAGE_USER_PASSWORD
 
 # Reset instance-specific state to produce a generic reusable base image
 log_info "Resetting instance-specific identifiers for cloud-init generic image"
