@@ -27,7 +27,6 @@ env:
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
   IMAGE_USER: ${{ vars.IMAGE_USER }}
   IMAGE_SSH_PUBLIC_KEY: ${{ secrets.IMAGE_SSH_PUBLIC_KEY }}
-  IMAGE_USER_PASSWORD: ${{ secrets.IMAGE_USER_PASSWORD }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 
@@ -99,7 +98,6 @@ jobs:
             "STORAGETO_KEY"
             "IMAGE_USER"
             "IMAGE_SSH_PUBLIC_KEY"
-            "IMAGE_USER_PASSWORD"
           )
           sudo_preserve="$(IFS=,; echo "${preserve_env[*]}")"
           # Workaround for stripping carriage return characters from GitHub

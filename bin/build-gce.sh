@@ -40,10 +40,8 @@ readonly PROFILE
 check_root
 check_required_commands
 
-if [[ -z "${IMAGE_USER:-}" || -z "${IMAGE_SSH_PUBLIC_KEY:-}" || \
-    -z "${IMAGE_USER_PASSWORD:-}" ]]; then
-    log_error "IMAGE_USER, IMAGE_SSH_PUBLIC_KEY, and IMAGE_USER_PASSWORD" \
-        "must all be set"
+if [[ -z "${IMAGE_USER:-}" || -z "${IMAGE_SSH_PUBLIC_KEY:-}" ]]; then
+    log_error "IMAGE_USER and IMAGE_SSH_PUBLIC_KEY must both be set"
     exit 1
 fi
 
@@ -148,7 +146,7 @@ unmount_binary_packages
 
 # === Systemd, Bootloader, and Provisioning ===
 
-export IMAGE_USER IMAGE_SSH_PUBLIC_KEY IMAGE_USER_PASSWORD
+export IMAGE_USER IMAGE_SSH_PUBLIC_KEY
 chroot_run "${TARGET_ROOT}" '
     systemctl preset-all
     bootctl --no-variables install
@@ -162,9 +160,8 @@ chroot_run "${TARGET_ROOT}" '
         > "${home_dir}/.ssh/authorized_keys"
     chmod 0600 "${home_dir}/.ssh/authorized_keys"
     chown --recursive "${IMAGE_USER}:${IMAGE_USER}" "${home_dir}/.ssh"
-    printf "%s:%s\n" "${IMAGE_USER}" "${IMAGE_USER_PASSWORD}" | chpasswd
     '
-unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY IMAGE_USER_PASSWORD
+unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY
 
 # Reset instance-specific state to produce a generic reusable base image
 log_info "Resetting instance-specific identifiers for generic image"
