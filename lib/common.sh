@@ -3,26 +3,44 @@
 # caller's array. The caller can then add its own specifics.
 required_commands+=(
     "awk"
+    "basename"
+    "btrfs"
+    "chattr"
     "chmod"
+    "chown"
     "chroot"
     "cp"
+    "criu"
     "cryptsetup"
     "dirname"
+    "dmesg"
     "find"
     "git"
     "gpg"
+    "gpgconf"
     "ln"
+    "losetup"
     "mkdir"
+    "mknod"
     "mktemp"
+    "modprobe"
     "mount"
+    "openssl"
+    "pivot_root"
     "rclone"
     "readlink"
     "realpath"
     "rm"
     "rmdir"
+    "setsid"
+    "sleep"
+    "tail"
     "tar"
+    "touch"
+    "tr"
     "udevadm"
     "umount"
+    "unshare"
     "zstd"
 )
 
@@ -85,7 +103,7 @@ log_debug() {
 
 check_root() {
     if (( EUID != 0 )); then
-        printf "%s\n" "You must be root to run this script." >&2
+        log_error "You must be root to run this script."
         exit 1
     fi
     if [[ "$(</proc/mounts)" == *" ${WORK_DIR} "* ]]; then
@@ -126,17 +144,6 @@ declare -A _cli_req_map=()
 declare -A _cli_def_map=()
 declare -A _cli_flag_map=()
 
-cli_init() {
-    _cli_keys=()
-    _cli_opt_map=()
-    _cli_short_map=()
-    _cli_long_map=()
-    _cli_desc_map=()
-    _cli_req_map=()
-    _cli_def_map=()
-    _cli_flag_map=()
-}
-
 cli_define_option() {
     local var_name="${1}"
     local switches="${2}"
@@ -171,10 +178,6 @@ cli_define_flag() {
 
     cli_define_option "${var_name}" "${switches}" "${desc}" 0 "${default}"
     _cli_flag_map["${var_name}"]=1
-}
-
-cli_help() {
-    cli_show_help "${@}"
 }
 
 cli_show_help() {
@@ -342,10 +345,6 @@ create_symbolic_link() {
     ln --force --no-dereference --symbolic "${1}" "${2}"
 }
 
-create_symlink() {
-    create_symbolic_link "${@}"
-}
-
 verify_file() {
     local sig_file="${1}"
     local file="${2}"
@@ -428,35 +427,6 @@ managed_mount() {
         _registered_mount_arrays+=("${array_name}")
     fi
 }
-
-register_mount_array() {
-    local array_name="${1}"
-    if [[ ! -v _registered_mount_arrays_seen["${array_name}"] ]]; then
-        _registered_mount_arrays_seen["${array_name}"]=1
-        _registered_mount_arrays+=("${array_name}")
-    fi
-}
-
-managed_unmount() {
-    local array_name="${1}"
-    declare -n mounts_array_name="${array_name}"
-    local target="${2}"
-
-    if [[ "$(</proc/mounts)" == *" ${target} "* ]]; then
-        log_debug "Unmounting ${target}"
-        umount --recursive "${target}"
-    fi
-
-    local remaining_mounts=()
-    local m
-    for m in "${mounts_array_name[@]}"; do
-        if [[ "${m}" != "${target}" ]]; then
-            remaining_mounts+=("${m}")
-        fi
-    done
-    mounts_array_name=("${remaining_mounts[@]}")
-}
-
 
 managed_unmount_all() {
     declare -n mounts_array_name="${1}"
@@ -544,10 +514,9 @@ managed_losetup() {
     case "${action}" in
         attach)
             local file="${2}"
-            local loop_dev
-            loop_dev="$(losetup --find --partscan --show "${file}")"
-            _active_loop_devices+=("${loop_dev}")
-            printf "%s\n" "${loop_dev}"
+            local -n out_loop_dev="${3}"
+            out_loop_dev="$(losetup --find --partscan --show "${file}")"
+            _active_loop_devices+=("${out_loop_dev}")
             ;;
         detach)
             local loop_dev="${2}"
@@ -687,26 +656,17 @@ configure_ebuild_repositories() {
 
     download_ebuild_repositories
 
-    load_ebuild_repositories
-
     local repos_conf_dir="${target_root}/etc/portage/repos.conf"
     create_directory "${repos_conf_dir}"
 
     for repo_entry in "${_repo_entries[@]}"; do
-        local repo_name
-        local repo_url
+        local repo_name repo_url
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
-        local repo_conf_file="${repos_conf_dir}/${repo_name}.conf"
-        log_debug "Creating ${repo_conf_file}"
-        local repo_conf_content
-        IFS= read -d "" -r repo_conf_content << EOF || true
-[${repo_name}]
+        create_file "${repos_conf_dir}/${repo_name}.conf" "[${repo_name}]
 location = /var/db/repos/${repo_name}
 sync-type = git
-sync-uri = ${repo_url}
-EOF
-        printf "%s" "${repo_conf_content}" > "${repo_conf_file}"
+sync-uri = ${repo_url}"
     done
 }
 
@@ -985,13 +945,8 @@ configure_portage_binary_packages() {
         IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
 
         local binpkg_repo_conf_file="${repo_dir}/${repo_name}.conf"
-        log_debug "Creating ${binpkg_repo_conf_file}"
-        local binpkg_repo_conf_content
-        IFS= read -d "" -r binpkg_repo_conf_content << EOF || true
-[${repo_name}]
-sync-uri = ${repo_url}/${repo_profile}
-EOF
-        printf "%s" "${binpkg_repo_conf_content}" > "${binpkg_repo_conf_file}"
+        create_file "${binpkg_repo_conf_file}" "[${repo_name}]
+sync-uri = ${repo_url}/${repo_profile}"
     done
 }
 
@@ -1087,8 +1042,8 @@ kill_chroot_processes() {
     done
 
     local iteration
-    for (( iteration=0; iteration<300; iteration++ )); do
-        sleep 1
+    for (( iteration=0; iteration<30; iteration++ )); do
+        sleep 0.5
         local has_lingering=0
         for p in /proc/[0-9]*; do
             if is_chroot_process "${p}" "${target_root}"; then
@@ -1171,19 +1126,19 @@ prepare_criu_chroot_filesystem() {
     create_directory "${target_root}/.oldroot"
 
     [[ -c "${target_root}/dev/null" ]] || \
-        mknod -m 0666 "${target_root}/dev/null" c 1 3
+        mknod --mode="0666" "${target_root}/dev/null" c 1 3
     [[ -c "${target_root}/dev/zero" ]] || \
-        mknod -m 0666 "${target_root}/dev/zero" c 1 5
+        mknod --mode="0666" "${target_root}/dev/zero" c 1 5
     [[ -c "${target_root}/dev/full" ]] || \
-        mknod -m 0666 "${target_root}/dev/full" c 1 7
+        mknod --mode="0666" "${target_root}/dev/full" c 1 7
     [[ -c "${target_root}/dev/random" ]] || \
-        mknod -m 0666 "${target_root}/dev/random" c 1 8
+        mknod --mode="0666" "${target_root}/dev/random" c 1 8
     [[ -c "${target_root}/dev/urandom" ]] || \
-        mknod -m 0666 "${target_root}/dev/urandom" c 1 9
+        mknod --mode="0666" "${target_root}/dev/urandom" c 1 9
     [[ -c "${target_root}/dev/tty" ]] || \
-        mknod -m 0666 "${target_root}/dev/tty" c 5 0
+        mknod --mode="0666" "${target_root}/dev/tty" c 5 0
     [[ -c "${target_root}/dev/console" ]] || \
-        mknod -m 0600 "${target_root}/dev/console" c 5 1
+        mknod --mode="0600" "${target_root}/dev/console" c 5 1
 
     create_symbolic_link "pts/ptmx" "${target_root}/dev/ptmx"
     create_symbolic_link "/proc/self/fd" "${target_root}/dev/fd"
@@ -1374,9 +1329,9 @@ chroot_run_criu() {
             --tcp-close \
             --cpu-cap="none" \
             "${ext_restore_args[@]}" \
-            -v4 -o "restore.log"; then
+            --verbosity=4 --log-file="restore.log"; then
             if [[ -f "${criu_dir}/restore.log" ]]; then
-                tail -n 50 "${criu_dir}/restore.log" >&2 || true
+                tail --lines=50 "${criu_dir}/restore.log" >&2 || true
             fi
             log_error "CRIU restore failed for ${real_target_root}"
             return 1
@@ -1387,9 +1342,8 @@ chroot_run_criu() {
         rm --force "${exit_file}" "${log_file}"
         touch "${log_file}"
 
-        cat > "${cmd_file}" << EOF
-#!/bin/bash
-export TERM="dumb"
+        create_file "${cmd_file}" "#!/bin/bash
+export TERM=\"dumb\"
 exec < /dev/null >> /var/tmp/.fluffy-chroot.log 2>&1
 set +e
 (
@@ -1398,9 +1352,8 @@ set +e
     ${*}
 )
 rc=\$?
-printf "%s\n" "\${rc}" > /var/tmp/.fluffy-chroot.exit
-exit "\${rc}"
-EOF
+printf \"%s\n\" \"\${rc}\" > /var/tmp/.fluffy-chroot.exit
+exit \"\${rc}\""
         chmod 0755 "${cmd_file}"
 
         unshare --pid --fork setsid unshare --mount --uts --ipc /bin/bash -c "
@@ -1409,9 +1362,9 @@ EOF
             mount --rbind '${real_target_root}' '${real_target_root}'
             cd '${real_target_root}'
             pivot_root . .oldroot
-            mount -t proc proc /proc
-            mount -t devpts -o newinstance,ptmxmode=0666,mode=0620 devpts \
-                /dev/pts
+            mount --types proc proc /proc
+            mount --types devpts \
+                --options newinstance,ptmxmode=0666,mode=0620 devpts /dev/pts
             umount --lazy /.oldroot
             exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
         " < /dev/null > /dev/null 2>&1 &
@@ -1440,9 +1393,9 @@ EOF
         fi
     fi
 
-    local tail_start_arg="-n +1"
+    local tail_start_arg="--lines=+1"
     if [[ -f "${criu_dir}/restore.log" ]]; then
-        tail_start_arg="-n 0"
+        tail_start_arg="--lines=0"
     fi
     tail --follow=name --retry "${tail_start_arg}" "${log_file}" 2> /dev/null &
     local tail_pid="${!}"
@@ -1462,43 +1415,46 @@ EOF
 
     if (( timed_out == 1 )) && [[ -n "${ns_init_pid}" ]] && \
         kill -0 "${ns_init_pid}" 2> /dev/null; then
-        kill "${tail_pid}" 2> /dev/null || true
-        wait "${tail_pid}" 2> /dev/null || true
-
         log_warn "Timeout (${CHROOT_TIMEOUT}) reached; checkpointing with CRIU"
         wait_for_criu_safe_point "${real_target_root}"
 
-        force_remove "${criu_dir}"
-        create_directory "${criu_dir}"
+        if kill -0 "${ns_init_pid}" 2> /dev/null; then
+            kill "${tail_pid}" 2> /dev/null || true
+            wait "${tail_pid}" 2> /dev/null || true
 
-        if ! criu dump \
-            --tree "${ns_init_pid}" \
-            --images-dir "${criu_dir}" \
-            --file-locks \
-            --link-remap \
-            --ghost-limit "1G" \
-            --tcp-close \
-            --network-lock "skip" \
-            "${ext_dump_args[@]}" \
-            -v4 -o "dump.log"; then
-            if [[ -f "${criu_dir}/dump.log" ]]; then
-                tail -n 50 "${criu_dir}/dump.log" >&2 || true
-            fi
             force_remove "${criu_dir}"
-            kill_chroot_processes "${real_target_root}"
+            create_directory "${criu_dir}"
+
+            if ! criu dump \
+                --tree "${ns_init_pid}" \
+                --images-dir "${criu_dir}" \
+                --file-locks \
+                --link-remap \
+                --ghost-limit "1G" \
+                --tcp-close \
+                --network-lock "skip" \
+                "${ext_dump_args[@]}" \
+                --verbosity=4 --log-file="dump.log"; then
+                if [[ -f "${criu_dir}/dump.log" ]]; then
+                    tail --lines=50 "${criu_dir}/dump.log" >&2 || true
+                fi
+                force_remove "${criu_dir}"
+                kill_chroot_processes "${real_target_root}"
+                if [[ -n "${unshare_pid}" ]]; then
+                    wait "${unshare_pid}" 2> /dev/null || true
+                fi
+                log_error "CRIU dump failed for ${real_target_root}"
+                return 1
+            fi
+
+            log_info "CRIU checkpoint saved to ${criu_dir}"
             if [[ -n "${unshare_pid}" ]]; then
                 wait "${unshare_pid}" 2> /dev/null || true
             fi
-            log_error "CRIU dump failed for ${real_target_root}"
-            return 1
+            kill_chroot_processes "${real_target_root}"
+            return 124
         fi
-
-        log_info "CRIU checkpoint saved to ${criu_dir}"
-        if [[ -n "${unshare_pid}" ]]; then
-            wait "${unshare_pid}" 2> /dev/null || true
-        fi
-        kill_chroot_processes "${real_target_root}"
-        return 124
+        log_info "Chroot process finished while waiting for CRIU safe point"
     fi
 
     if [[ -n "${unshare_pid}" ]]; then
@@ -1515,20 +1471,18 @@ EOF
 
     if (( exit_code != 0 )); then
         log_warn "Chroot execution failed with exit code ${exit_code}"
-        if [[ -f "${exit_file}" ]]; then
-            log_warn "Exit code file (${exit_file}): $(<"${exit_file}")"
-        else
+        if [[ ! -f "${exit_file}" ]]; then
             log_warn "Exit code file (${exit_file}) NOT FOUND"
         fi
         log_warn "Kernel dmesg (last 30 lines):"
-        dmesg -T 2> /dev/null | tail -n 30 >&2 || true
+        dmesg --ctime 2> /dev/null | tail --lines=30 >&2 || true
         if [[ -f "${criu_dir}/restore.log" ]]; then
             log_warn "CRIU restore log output:"
-            tail -n 100 "${criu_dir}/restore.log" >&2 || true
+            tail --lines=100 "${criu_dir}/restore.log" >&2 || true
         fi
         if [[ -f "${log_file}" ]]; then
             log_warn "Chroot command log output:"
-            tail -n 200 "${log_file}" >&2 || true
+            tail --lines=200 "${log_file}" >&2 || true
         fi
     else
         rm --force "${cmd_file}" "${exit_file}" "${log_file}"
@@ -1707,9 +1661,8 @@ generate_target_fstab() {
     local binhost_opts=\
 "${VAR_CACHE_BINHOST_MOUNT_OPTIONS},subvol=@var_cache_binhost"
 
-    local fstab_content
-    IFS= read -d "" -r fstab_content << EOF || true
-UUID=${root_uuid} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
+    create_file "${fstab_file}" \
+"UUID=${root_uuid} / btrfs ${ROOT_MOUNT_OPTIONS},subvol=@ 0 0
 UUID=${boot_uuid} /boot vfat ${BOOT_MOUNT_OPTIONS} 0 2
 UUID=${root_uuid} /home btrfs ${HOME_MOUNT_OPTIONS},subvol=@home 0 0
 UUID=${root_uuid} /var/log btrfs ${VAR_LOG_MOUNT_OPTIONS},subvol=@var_log 0 0
@@ -1720,9 +1673,7 @@ UUID=${root_uuid} /var/cache/binhost btrfs ${binhost_opts} 0 0
 UUID=${root_uuid} /swap btrfs ${SWAP_MOUNT_OPTIONS},subvol=@swap 0 0
 /swap/swapfile none swap defaults 0 0
 tmpfs /tmp tmpfs defaults,noatime,nodev,nosuid,noexec,mode=1777 0 0
-tmpfs /dev/shm tmpfs defaults,noatime,nodev,nosuid,noexec 0 0
-EOF
-    printf "%s" "${fstab_content}" > "${fstab_file}"
+tmpfs /dev/shm tmpfs defaults,noatime,nodev,nosuid,noexec 0 0"
 }
 
 install_secureboot_cert() {
@@ -1751,7 +1702,7 @@ persist_ebuild_repositories() {
             "${target_root}/var/db/repos/${repo_name}"
     done
 
-    chown -R 250:250 "${target_root}/var/db/repos"
+    chown --recursive 250:250 "${target_root}/var/db/repos"
 }
 
 finalize_target_portage() {

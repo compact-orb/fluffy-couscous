@@ -13,10 +13,12 @@ on:
         required: false
         type: string
         default: "330m"
-        # default: "1380m" # Avrea does not document timeout
 
 env:
-  SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
+  SUDO_PRESERVE_ENV: "\
+GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,\
+REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,\
+S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY"
   GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
   REPOS: ${{ vars.REPOS }}
   BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
@@ -42,11 +44,9 @@ jobs:
   setup:
     name: Setup Matrix
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       profiles: ${{ steps.matrix.outputs.profiles }}
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
@@ -56,25 +56,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -108,13 +113,11 @@ jobs:
     name: Build (Attempt 1)
     needs: setup
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.setup.outputs.profiles) }}
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - name: Load Kernel Modules
@@ -123,7 +126,6 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
         with:
           create-filesystem: 'false'
@@ -143,7 +145,7 @@ jobs:
           image_size=$(( free_bytes - 1073741824 ))
 
           sudo truncate --size="${image_size}" /btrfs.img
-          sudo mkfs.btrfs -m single /btrfs.img
+          sudo mkfs.btrfs --metadata single /btrfs.img
 
           sudo mkdir --parents /mnt/btrfs
           sudo mount \
@@ -156,7 +158,7 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo chown "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
       - uses: actions/checkout@v7
 
@@ -165,25 +167,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -201,8 +208,12 @@ jobs:
           done
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
-          BUILD_PRE_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' ')"
-          BUILD_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
+          BUILD_PRE_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
@@ -225,7 +236,6 @@ jobs:
       always() && !cancelled() &&
       needs.build-attempt-1.result != 'skipped'
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -237,17 +247,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -289,13 +302,11 @@ jobs:
     needs: [setup, check-attempt-1]
     if: "!cancelled() && needs.check-attempt-1.outputs.has_resumes == 'true'"
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-1.outputs.profiles) }}
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - name: Load Kernel Modules
@@ -304,7 +315,6 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
         with:
           create-filesystem: 'false'
@@ -323,25 +333,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -392,8 +407,8 @@ jobs:
           gpg --batch --verify "/tmp/resume/${sig_filename}" \
             "/tmp/resume/${image_filename}"
 
-          sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
-            -o /btrfs.img
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
           rm --recursive --force /tmp/resume
 
           sudo mkdir --parents /mnt/btrfs
@@ -410,7 +425,7 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo chown "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -423,8 +438,12 @@ jobs:
           done
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
-          BUILD_PRE_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' ')"
-          BUILD_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
+          BUILD_PRE_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
@@ -447,7 +466,6 @@ jobs:
       always() && !cancelled() &&
       needs.build-attempt-2.result != 'skipped'
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -459,17 +477,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -511,13 +532,11 @@ jobs:
     needs: [setup, check-attempt-2]
     if: "!cancelled() && needs.check-attempt-2.outputs.has_resumes == 'true'"
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-2.outputs.profiles) }}
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - name: Load Kernel Modules
@@ -526,7 +545,6 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
         with:
           create-filesystem: 'false'
@@ -545,25 +563,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -614,8 +637,8 @@ jobs:
           gpg --batch --verify "/tmp/resume/${sig_filename}" \
             "/tmp/resume/${image_filename}"
 
-          sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
-            -o /btrfs.img
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
           rm --recursive --force /tmp/resume
 
           sudo mkdir --parents /mnt/btrfs
@@ -632,7 +655,7 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo chown "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -645,8 +668,12 @@ jobs:
           done
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
-          BUILD_PRE_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' ')"
-          BUILD_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
+          BUILD_PRE_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
@@ -669,7 +696,6 @@ jobs:
       always() && !cancelled() &&
       needs.build-attempt-3.result != 'skipped'
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     outputs:
       has_resumes: ${{ steps.check.outputs.has_resumes }}
       profiles: ${{ steps.check.outputs.profiles }}
@@ -681,17 +707,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -733,13 +762,11 @@ jobs:
     needs: [setup, check-attempt-3]
     if: "!cancelled() && needs.check-attempt-3.outputs.has_resumes == 'true'"
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     strategy:
       fail-fast: false
       matrix:
         profile: ${{ fromJson(needs.check-attempt-3.outputs.profiles) }}
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - name: Load Kernel Modules
@@ -748,7 +775,6 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      # Not compatible with Avrea
       - uses: compact-orb/maximize-runner-storage@v2
         with:
           create-filesystem: 'false'
@@ -767,25 +793,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -836,8 +867,8 @@ jobs:
           gpg --batch --verify "/tmp/resume/${sig_filename}" \
             "/tmp/resume/${image_filename}"
 
-          sudo zstd -d --sparse -f "/tmp/resume/${image_filename}" \
-            -o /btrfs.img
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
           rm --recursive --force /tmp/resume
 
           sudo mkdir --parents /mnt/btrfs
@@ -854,7 +885,7 @@ jobs:
 
           sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo chown "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -867,8 +898,12 @@ jobs:
           done
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
-          BUILD_PRE_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' ')"
-          BUILD_PACKAGES="$(sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' ')"
+          BUILD_PRE_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PRE_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
@@ -887,7 +922,6 @@ jobs:
   cleanup:
     name: Cleanup Snapshots
     runs-on: ubuntu-26.04
-    # runs-on: avrea-ubuntu-26.04-32-vcpu
     needs:
       - setup
       - build-attempt-1
@@ -899,7 +933,6 @@ jobs:
       - build-attempt-4
     if: always()
     steps:
-      # Not compatible with Avrea
       - uses: compact-orb/optimize-runner-network@v1
 
       - uses: actions/checkout@v7
@@ -909,17 +942,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin

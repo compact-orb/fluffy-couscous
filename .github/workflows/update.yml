@@ -15,7 +15,10 @@ on:
         default: "330m"
 
 env:
-  SUDO_PRESERVE_ENV: GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY
+  SUDO_PRESERVE_ENV: "\
+GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,\
+REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,\
+S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY"
   GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
   REPOS: ${{ vars.REPOS }}
   BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
@@ -51,25 +54,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -110,6 +118,46 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
+      - name: Load Kernel Modules
+        run: |
+          sudo modprobe --all \
+            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
+            raw_diag tcp_diag udp_diag unix_diag
+
+      - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
+          sudo apt clean
+
+      - name: Initialize Runner Filesystem
+        run: |
+          free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
+          image_size=$(( free_bytes - 1073741824 ))
+
+          sudo truncate --size="${image_size}" /btrfs.img
+          sudo mkfs.btrfs --metadata single /btrfs.img
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
       - uses: actions/checkout@v7
 
       - name: Cache Tools
@@ -117,33 +165,36 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-          sudo apt update
-          sudo apt install --no-install-recommends --yes criu util-linux-extra
 
       - name: Run update.sh
         run: |
@@ -184,17 +235,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -243,40 +297,126 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - uses: actions/checkout@v7
+      - name: Load Kernel Modules
+        run: |
+          sudo modprobe --all \
+            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
+            raw_diag tcp_diag udp_diag unix_diag
+
+      - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
+          sudo apt clean
 
       - name: Cache Tools
         id: cache-tools
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-          sudo apt update
-          sudo apt install --no-install-recommends --yes criu util-linux-extra
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          secret_key="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+
+          mkdir --parents /tmp/resume
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${SIGNING_KEY:-}" ]]; then
+            gpg --batch --import --quiet <<< "${SIGNING_KEY}"
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
+
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run update.sh (Resume)
         run: |
@@ -315,17 +455,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -374,40 +517,126 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - uses: actions/checkout@v7
+      - name: Load Kernel Modules
+        run: |
+          sudo modprobe --all \
+            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
+            raw_diag tcp_diag udp_diag unix_diag
+
+      - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
+          sudo apt clean
 
       - name: Cache Tools
         id: cache-tools
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-          sudo apt update
-          sudo apt install --no-install-recommends --yes criu util-linux-extra
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          secret_key="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+
+          mkdir --parents /tmp/resume
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${SIGNING_KEY:-}" ]]; then
+            gpg --batch --import --quiet <<< "${SIGNING_KEY}"
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
+
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run update.sh (Resume)
         run: |
@@ -446,17 +675,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -505,40 +737,126 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - uses: actions/checkout@v7
+      - name: Load Kernel Modules
+        run: |
+          sudo modprobe --all \
+            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
+            raw_diag tcp_diag udp_diag unix_diag
+
+      - uses: compact-orb/maximize-runner-storage@v2
+        with:
+          create-filesystem: 'false'
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
+            --no-install-recommends \
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
+          sudo apt clean
 
       - name: Cache Tools
         id: cache-tools
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
             aria2c --dir="/tmp" \
-              "https://github.com/storageto/cli/releases/download/${TOOL_STORAGETO_VERSION}/storageto-linux-amd64.tar.gz"
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/storageto-linux-amd64.tar.gz"
-            rm --force "/tmp/storageto-linux-amd64.tar.gz"
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
             chmod 0755 "${HOME}/.cache/tools/storageto"
           fi
           sudo mkdir --parents /usr/local/bin
           sudo cp "${HOME}/.cache/tools/rclone" \
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
-          sudo apt update
-          sudo apt install --no-install-recommends --yes criu util-linux-extra
+
+      - name: Download & Mount Resume Filesystem
+        run: |
+          repo_profile="${{ matrix.profile }}"
+          repo_profile="${repo_profile#*:}"
+          stage_prefix="stage3-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          secret_key="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY}}"
+
+          mkdir --parents /tmp/resume
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            /tmp/resume/
+          rclone copy \
+            --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+            --s3-endpoint "${S3_ENDPOINT}" \
+            --s3-no-check-bucket \
+            --s3-provider "Other" \
+            --s3-region "${S3_REGION}" \
+            --s3-secret-access-key "${secret_key}" \
+            --transfers "16" \
+            --verbose \
+            ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
+            /tmp/resume/
+
+          if [[ -n "${SIGNING_KEY:-}" ]]; then
+            gpg --batch --import --quiet <<< "${SIGNING_KEY}"
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
+
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run update.sh (Resume)
         run: |
@@ -582,17 +900,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/tools
-          key: tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{ env.TOOL_STORAGETO_VERSION }}
+          key: >-
+            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
+            env.TOOL_STORAGETO_VERSION }}
 
       - name: Install Dependencies
         run: |
           mkdir --parents "${HOME}/.cache/tools"
           if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            aria2c --dir="/tmp" \
-              "https://downloads.rclone.org/${TOOL_RCLONE_VERSION}/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            unzip -j "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip" \
+            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+            unzip -j "/tmp/${rclone_pkg}" \
               "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+            rm --force "/tmp/${rclone_pkg}"
             chmod 0755 "${HOME}/.cache/tools/rclone"
           fi
           sudo mkdir --parents /usr/local/bin
@@ -604,4 +925,4 @@ jobs:
           source lib/common.sh
           source lib/build.sh
           s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
-            --include="stage3-*-resume-${{ github.run_id }}.tar.zst*" || true
+            --include="stage3-*-resume-${{ github.run_id }}.*" || true

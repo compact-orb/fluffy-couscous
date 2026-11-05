@@ -6,13 +6,10 @@ IFS=$'\n\t'
 
 required_commands=(
     "blkid"
-    "btrfs"
-    "chattr"
-    "chown"
     "dirname"
+    "env"
     "mkfs.btrfs"
     "mkfs.fat"
-    "openssl"
     "realpath"
     "sfdisk"
     "shred"
@@ -44,7 +41,12 @@ check_root
 if (( ENCRYPT )); then
     required_commands+=(
         "base32"
+        "chmod"
         "cryptsetup"
+        "fold"
+        "head"
+        "mktemp"
+        "paste"
         "systemd-cryptenroll"
     )
 fi

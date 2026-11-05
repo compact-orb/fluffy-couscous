@@ -5,12 +5,15 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
+    "awk"
+    "chmod"
+    "date"
     "dirname"
     "du"
     "mkfs.fat"
     "mksquashfs"
-    "openssl"
     "realpath"
+    "sed"
     "truncate"
     "xorriso"
 )
@@ -33,7 +36,7 @@ readonly ISO_DIR="${BUILD_DIR}/iso"
 readonly ISO_VOLID="INSTALL"
 IFS=" " read -r _ repo_profile < <(parse_profile "${PROFILE}")
 readonly ISO_FILE=\
-"${BUILD_DIR}/install-${repo_profile//\//-}-$(date -u +%Y%m%d).iso"
+"${BUILD_DIR}/install-${repo_profile//\//-}-$(date --utc +%Y%m%d).iso"
 readonly ISO_SIG_FILE="${ISO_FILE}.sig"
 unset repo_profile
 
@@ -156,22 +159,19 @@ create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
 # Write sanitized .env containing only public repo, verification, and
 # read-only S3 keys; write-capable secrets (SIGNING_KEY, SECUREBOOT_KEY,
 # S3_SECRET_ACCESS_KEY) are strictly omitted.
-IFS= read -d "" -r installer_env << EOF || true
-GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL}"
-REPOS="${REPOS}"
-BINPKG_REPOS="${BINPKG_REPOS}"
-ANSIBLE_PULL_URL="${ANSIBLE_PULL_URL}"
-BINPKG_PUBLIC_KEY="${BINPKG_PUBLIC_KEY:-}"
-REPO_PUBLIC_KEYS="${REPO_PUBLIC_KEYS:-}"
-SECUREBOOT_CERT="${SECUREBOOT_CERT:-}"
-S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
-S3_RO_SECRET_ACCESS_KEY="${S3_RO_SECRET_ACCESS_KEY:-}"
-S3_REGION="${S3_REGION}"
-S3_ENDPOINT="${S3_ENDPOINT}"
-S3_BUCKET_NAME="${S3_BUCKET_NAME}"
-EOF
-printf "%s" "${installer_env}" > "${INSTALLER_TARGET_DIR}/.env"
-unset installer_env
+create_file "${INSTALLER_TARGET_DIR}/.env" \
+"GENTOO_MIRROR_URL=\"${GENTOO_MIRROR_URL}\"
+REPOS=\"${REPOS}\"
+BINPKG_REPOS=\"${BINPKG_REPOS}\"
+ANSIBLE_PULL_URL=\"${ANSIBLE_PULL_URL}\"
+BINPKG_PUBLIC_KEY=\"${BINPKG_PUBLIC_KEY:-}\"
+REPO_PUBLIC_KEYS=\"${REPO_PUBLIC_KEYS:-}\"
+SECUREBOOT_CERT=\"${SECUREBOOT_CERT:-}\"
+S3_ACCESS_KEY_ID=\"${S3_ACCESS_KEY_ID}\"
+S3_RO_SECRET_ACCESS_KEY=\"${S3_RO_SECRET_ACCESS_KEY:-}\"
+S3_REGION=\"${S3_REGION}\"
+S3_ENDPOINT=\"${S3_ENDPOINT}\"
+S3_BUCKET_NAME=\"${S3_BUCKET_NAME}\""
 chmod 0644 "${INSTALLER_TARGET_DIR}/.env"
 
 # === Build SquashFS Image ===

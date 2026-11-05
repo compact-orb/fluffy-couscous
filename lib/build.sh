@@ -8,15 +8,32 @@ fi
 
 required_commands+=(
     "aria2c"
+    "awk"
     "basename"
+    "btrfs"
+    "chmod"
     "curl"
     "date"
+    "dirname"
+    "env"
+    "find"
+    "fstrim"
     "fusermount3" # Required by rclone mount
+    "gpg"
+    "gpgconf"
+    "grep"
     "mktemp"
+    "mount"
+    "rclone"
+    "realpath"
     "sed"
     "sleep"
     "storageto"
+    "sync"
+    "tail"
+    "tar"
     "xz" # Required by tar for .tar.xz archives
+    "zstd"
 )
 
 # === Cloud Storage & Failure Logs ===
@@ -94,7 +111,7 @@ upload_portage_failure_logs() {
                     local rel_pkg="${temp_dir#"${portage_dir}/"}"
                     rel_pkg="${rel_pkg%/temp}"
                     log_warn "=== Failed package build.log (${rel_pkg}) ==="
-                    tail -n 100 "${build_log}" >&2 || true
+                    tail --lines=100 "${build_log}" >&2 || true
                 fi
             done < <(find "${portage_dir}" -mindepth 3 -maxdepth 3 \
                 -type d -name "temp" -print0 2>/dev/null)
@@ -102,7 +119,7 @@ upload_portage_failure_logs() {
         if [[ -f "${root}/var/log/emerge.log" ]]; then
             log_files+=("${root}/var/log/emerge.log")
             log_warn "=== Last 50 lines of Portage emerge.log ==="
-            tail -n 50 "${root}/var/log/emerge.log" >&2 || true
+            tail --lines=50 "${root}/var/log/emerge.log" >&2 || true
         fi
         if [[ -f "${root}/var/tmp/.fluffy-chroot.exit" ]]; then
             local chroot_rc
@@ -112,7 +129,7 @@ upload_portage_failure_logs() {
         if [[ -f "${root}/var/tmp/.fluffy-chroot.log" ]]; then
             log_files+=("${root}/var/tmp/.fluffy-chroot.log")
             log_warn "=== Last 100 lines of chroot log ==="
-            tail -n 100 "${root}/var/tmp/.fluffy-chroot.log" >&2 || true
+            tail --lines=100 "${root}/var/tmp/.fluffy-chroot.log" >&2 || true
         fi
         if [[ -f "${root}/.criu/restore.log" ]]; then
             log_files+=("${root}/.criu/restore.log")
@@ -133,7 +150,7 @@ upload_portage_failure_logs() {
     archive="${archive_dir}/${archive_name}"
 
     tar --create --file="${archive}" \
-        --use-compress-program="zstd --long --threads=0 -9" \
+        --use-compress-program="zstd --long=31 --threads=0 -9" \
         --directory="/" \
         "${log_files[@]#/}" 2>/dev/null || true
 
@@ -201,7 +218,7 @@ install_portage_gpg_key() {
         2> /dev/null || true
 
     if [[ -f "${target_root}/etc/portage/make.conf" ]] && \
-        ! grep -q "BINPKG_GPG_SIGNING_KEY" \
+        ! grep --quiet "BINPKG_GPG_SIGNING_KEY" \
             "${target_root}/etc/portage/make.conf"; then
         printf "%s\n" \
             "BINPKG_GPG_SIGNING_KEY=\"${_signing_key_fingerprint}\"" \
@@ -241,7 +258,7 @@ install_secureboot_keys() {
     chmod 0644 "${secureboot_dir}/db.pem"
 
     if [[ -f "${target_root}/etc/portage/make.conf" ]] && \
-        ! grep -q "SECUREBOOT_SIGN_KEY" \
+        ! grep --quiet "SECUREBOOT_SIGN_KEY" \
             "${target_root}/etc/portage/make.conf"; then
         printf "%s\n" \
             "SECUREBOOT_SIGN_KEY=\"${PORTAGE_SECUREBOOT_DIR}/db.key\"" \
@@ -305,62 +322,11 @@ has_resume_stage() {
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local stage_prefix="${stage_type}-${repo_profile//\//-}"
     local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
-    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
 
     local output
     output="$(s3_rclone lsf \
         ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" 2> /dev/null || true)"
-    if [[ "${output//$'\r'/}" == "${image_filename}" ]]; then
-        return 0
-    fi
-    output="$(s3_rclone lsf \
-        ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" 2> /dev/null || true)"
-    [[ "${output//$'\r'/}" == "${stage_filename}" ]]
-}
-
-fetch_resume_stage() {
-    local target_root="${1}"
-    local profile="${2}"
-    local resume_id="${3}"
-    local stage_type="${4}"
-    log_info "Downloading and extracting ${stage_type} snapshot"
-
-    import_bundled_keys
-    import_public_keys
-
-    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
-        declare -F import_signing_key > /dev/null; then
-        import_signing_key
-    fi
-
-    create_directory "${target_root}"
-
-    local repo repo_profile
-    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local stage_prefix="${stage_type}-${repo_profile//\//-}"
-    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
-    local sig_filename="${stage_filename}.sig"
-    local download_dir
-    download_dir="$(mktemp --directory)"
-    local stage_file="${download_dir}/${stage_filename}"
-    local sig_file="${download_dir}/${sig_filename}"
-
-    log_info "Downloading resume stage archive ${stage_file}"
-    s3_rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
-        "${download_dir}"
-
-    log_info "Downloading resume stage signature ${sig_file}"
-    s3_rclone copy ":s3:${S3_BUCKET_NAME}/resumes/${sig_filename}" \
-        "${download_dir}"
-
-    verify_file "${sig_file}" "${stage_file}"
-
-    log_info "Extracting resume stage archive ${stage_file} to ${target_root}"
-    tar_extract "${stage_file}" "${target_root}"
-
-    force_remove "${stage_file}"
-    force_remove "${sig_file}"
-    force_remove "${download_dir}"
+    [[ "${output//$'\r'/}" == "${image_filename}" ]]
 }
 
 # === Stage Uploading ===
@@ -429,10 +395,11 @@ publish_stage_archive() {
     force_remove "${archive_dir}"
 }
 
-publish_resume_filesystem() {
-    local profile="${1}"
-    local resume_id="${2}"
-    local stage_type="${3}"
+publish_resume_stage() {
+    local target_root="${1}"
+    local profile="${2}"
+    local resume_id="${3}"
+    local stage_type="${4}"
     log_info "Uploading ${stage_type} resume filesystem image for ${profile}"
 
     import_signing_key
@@ -447,13 +414,17 @@ publish_resume_filesystem() {
     local image_file="${archive_dir}/${image_filename}"
     local sig_file="${archive_dir}/${sig_filename}"
 
+    # Strip private signing and Secure Boot keys before snapshotting /btrfs.img.
+    force_remove "${target_root}${PORTAGE_GPG_DIR}"
+    force_remove "${target_root}${PORTAGE_SECUREBOOT_DIR}"
+
     fstrim /mnt/btrfs 2> /dev/null || true
     btrfs filesystem sync /mnt/btrfs 2> /dev/null || true
     sync
-    mount -o remount,ro /mnt/btrfs 2> /dev/null || true
+    mount --options "remount,ro" /mnt/btrfs 2> /dev/null || true
 
     log_info "Creating resume filesystem image ${image_file}"
-    zstd --sparse -f -T0 /btrfs.img -o "${image_file}"
+    zstd --sparse --force --threads=0 /btrfs.img -o "${image_file}"
 
     sign_file "${image_file}" "${sig_file}"
 
@@ -470,58 +441,6 @@ publish_resume_filesystem() {
     force_remove "${archive_dir}"
 }
 
-publish_resume_stage() {
-    local target_root="${1}"
-    local profile="${2}"
-    local resume_id="${3}"
-    local stage_type="${4}"
-
-    if [[ -f "/btrfs.img" && -d "/mnt/btrfs" ]]; then
-        publish_resume_filesystem "${profile}" "${resume_id}" "${stage_type}"
-        return "${?}"
-    fi
-
-    log_info "Uploading ${stage_type} resume snapshot from ${target_root}"
-
-    import_signing_key
-
-    local repo repo_profile
-    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local stage_prefix="${stage_type}-${repo_profile//\//-}"
-    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
-    local sig_filename="${stage_filename}.sig"
-    local archive_dir
-    archive_dir="$(mktemp --directory)"
-    local stage_file="${archive_dir}/${stage_filename}"
-    local sig_file="${archive_dir}/${sig_filename}"
-    log_info "Creating resume stage archive ${stage_file}"
-    # Preserve /.criu, /var/tmp/portage, /tmp, /var/cache/distfiles,
-    # /var/db/pkg, and /var/cache/edb/resume* so CRIU can restore the live
-    # emerge process tree mid-build.
-    tar_create "${stage_file}" "${target_root}" \
-        --exclude=".${PORTAGE_GPG_DIR}" \
-        --exclude=".${PORTAGE_SECUREBOOT_DIR}" \
-        --exclude="./.oldroot" \
-        --exclude="./etc/resolv.conf" \
-        --exclude="./var/cache/binpkgs/*/*" \
-        --exclude="./var/db/repos/*" \
-        --exclude="./var/lib/systemd/catalog/database" \
-        "."
-    sign_file "${stage_file}" "${sig_file}"
-
-    log_info "Uploading resume archive ${stage_file}"
-    s3_rclone copy "${stage_file}" \
-        ":s3:${S3_BUCKET_NAME}/resumes"
-
-    log_info "Uploading resume archive signature ${sig_file}"
-    s3_rclone copy "${sig_file}" \
-        ":s3:${S3_BUCKET_NAME}/resumes"
-
-    force_remove "${stage_file}"
-    force_remove "${sig_file}"
-    force_remove "${archive_dir}"
-}
-
 clear_resume_stage() {
     local profile="${1}"
     local resume_id="${2}"
@@ -532,15 +451,10 @@ clear_resume_stage() {
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
     local stage_prefix="${stage_type}-${repo_profile//\//-}"
     local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
-    local stage_filename="${stage_prefix}-resume-${resume_id}.tar.zst"
 
     s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
         > /dev/null 2>&1 || true
     s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}.sig" \
-        > /dev/null 2>&1 || true
-    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}" \
-        > /dev/null 2>&1 || true
-    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${stage_filename}.sig" \
         > /dev/null 2>&1 || true
 }
 
@@ -646,17 +560,11 @@ prepare_stage_environment() {
             log_error "Resume snapshot for ${profile} (${resume_id}) not found"
             exit 1
         fi
-        if [[ -f "/btrfs.img" && -d "${stage_dir}/.criu" ]]; then
-            log_info "Resuming on mounted filesystem for ${profile}"
-        else
-            fetch_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
-                "stage3"
-            if [[ ! -d "${stage_dir}/.criu" ]]; then
-                log_error "CRIU checkpoint not found in ${stage_dir}"
-                exit 1
-            fi
-            download_ebuild_repositories "${stage_dir}"
+        if [[ ! -d "${stage_dir}/.criu" ]]; then
+            log_error "CRIU checkpoint not found in ${stage_dir}"
+            exit 1
         fi
+        log_info "Resuming on mounted filesystem for ${profile}"
     else
         fetch_project_stage "${stage_dir}" "${profile}" "stage3"
         configure_portage "${stage_dir}" "${profile}" "stage3"
@@ -681,12 +589,6 @@ handle_build_timeout() {
     if [[ -n "${resume_id}" ]]; then
         publish_resume_stage "${stage_dir}" "${profile}" "${resume_id}" \
             "stage3" || exit 1
-    fi
-    if [[ ! -f "/btrfs.img" ]]; then
-        remove_portage_configuration "${stage_dir}"
-        force_remove "${stage_dir}"
-    fi
-    if [[ -n "${resume_id}" ]]; then
         exit 0
     fi
     exit 124

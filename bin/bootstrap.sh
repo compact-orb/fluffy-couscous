@@ -5,15 +5,10 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
-    "criu"
     "dirname"
-    "mknod"
     "mv"
-    "pivot_root"
+    "nproc"
     "realpath"
-    "setsid"
-    "tail"
-    "unshare"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
@@ -100,12 +95,11 @@ if [[ "${resume_phase}" != "stage3" && \
     stage1_exit=0
 
     if [[ "${resume_phase}" == "stage1" ]]; then
-        fetch_resume_stage "${SEED_DIR}" "${PROFILE}" "${RESUME_ID}" "stage1"
         if [[ ! -d "${SEED_DIR}/.criu" ]]; then
             log_error "CRIU checkpoint not found in ${SEED_DIR}"
             exit 1
         fi
-        download_ebuild_repositories "${SEED_DIR}"
+        log_info "Resuming stage1 on mounted filesystem for ${PROFILE}"
         mount_repos "${SEED_DIR}"
         install_secureboot_keys "${SEED_DIR}"
     else
@@ -129,8 +123,8 @@ if [[ "${resume_phase}" != "stage3" && \
 
             if [[ -z "${SEED_STAGE}" ]]; then
                 chroot_run "${SEED_DIR}" '
-                    MAKEOPTS="--jobs=${make_jobs} \
---load-average=${make_jobs}" \
+                    MAKEOPTS="--jobs='"${make_jobs}"' \
+--load-average='"${make_jobs}"'" \
                         emerge --deep --getbinpkg \
                         --jobs='"${emerge_jobs}"' \
                         --load-average='"${cpus}"' \
@@ -165,10 +159,8 @@ if [[ "${resume_phase}" != "stage3" && \
         if [[ -n "${RESUME_ID}" ]]; then
             publish_resume_stage "${SEED_DIR}" "${PROFILE}" \
                 "${RESUME_ID}" "stage1" || exit 1
-            force_remove "${SEED_DIR}"
             exit 0
         fi
-        force_remove "${SEED_DIR}"
         exit 124
     elif (( stage1_exit != 0 )); then
         if [[ -n "${RESUME_ID}" ]]; then
@@ -192,7 +184,6 @@ if [[ "${resume_phase}" != "stage3" && \
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
             "${RESUME_ID}" "stage3-init" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
-        force_remove "${STAGE_DIR}"
         exit 0
     fi
 fi
@@ -200,16 +191,14 @@ fi
 # === Phase 3: Stage 3 Finalizing Rebuild ===
 
 if [[ "${resume_phase}" == "stage3" ]]; then
-    fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3"
     if [[ ! -d "${STAGE_DIR}/.criu" ]]; then
         log_error "CRIU checkpoint not found in ${STAGE_DIR}"
         exit 1
     fi
-    download_ebuild_repositories "${STAGE_DIR}"
+    log_info "Resuming stage3 on mounted filesystem for ${PROFILE}"
 else
     if [[ "${resume_phase}" == "stage3-init" ]]; then
-        fetch_resume_stage "${STAGE_DIR}" "${PROFILE}" \
-            "${RESUME_ID}" "stage3-init"
+        log_info "Resuming stage3-init on mounted filesystem for ${PROFILE}"
     fi
     create_directory "${STAGE_DIR}/etc/portage"
     configure_portage "${STAGE_DIR}" "${PROFILE}" "stage3"
@@ -231,18 +220,13 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
 if (( stage3_exit == 124 )); then
     log_warn "Stage 3 build timed out after ${TIMEOUT}"
     upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
+    unmount_repos
     if [[ -n "${RESUME_ID}" ]]; then
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
             "${RESUME_ID}" "stage3" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
-        unmount_repos
-        remove_portage_configuration "${STAGE_DIR}"
-        force_remove "${STAGE_DIR}"
         exit 0
     fi
-    unmount_repos
-    remove_portage_configuration "${STAGE_DIR}"
-    force_remove "${STAGE_DIR}"
     exit 124
 elif (( stage3_exit != 0 )); then
     log_warn "Stage 3 build failed with exit code ${stage3_exit};" \

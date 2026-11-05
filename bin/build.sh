@@ -5,14 +5,9 @@ IFS=$'\n\t'
 # === CLI Arguments & Setup ===
 
 required_commands=(
-    "criu"
     "dirname"
-    "mknod"
-    "pivot_root"
+    "nproc"
     "realpath"
-    "setsid"
-    "tail"
-    "unshare"
 )
 
 source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"

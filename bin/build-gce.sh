@@ -6,18 +6,12 @@ IFS=$'\n\t'
 
 required_commands=(
     "blkid"
-    "btrfs"
-    "chattr"
-    "chmod"
-    "chown"
+    "date"
     "dirname"
-    "losetup"
-    "mkdir"
+    "env"
     "mkfs.btrfs"
     "mkfs.fat"
-    "openssl"
     "partx"
-    "passwd"
     "realpath"
     "sfdisk"
     "tar"
@@ -65,7 +59,7 @@ log_info "Creating ${DISK_SIZE_GIB}GiB sparse raw disk image at ${RAW_IMAGE}"
 create_directory "${RAW_DIR}"
 truncate --size "${DISK_SIZE_GIB}G" "${RAW_IMAGE}"
 
-loop_dev="$(managed_losetup attach "${RAW_IMAGE}")"
+managed_losetup attach "${RAW_IMAGE}" loop_dev
 
 # Partition disk with GPT: 1GiB ESP (type=U) and Linux root (x86-64).
 # Conforms to systemd Discoverable Partitions Specification (DPS).
@@ -179,9 +173,9 @@ done
 managed_unmount_all "_active_gce_mounts"
 managed_losetup detach "${loop_dev}"
 
-repo_profile="${PROFILE#*:}"
+IFS=" " read -r _ repo_profile < <(parse_profile "${PROFILE}")
 profile_name="${repo_profile//\//-}"
-date_tag="$(date -u +"%Y%m%d")"
+date_tag="$(date --utc +"%Y%m%d")"
 image_filename="gce-${profile_name}-${date_tag}.tar.gz"
 archive_dir="${GCE_DIR}/archive"
 create_directory "${archive_dir}"
