@@ -23,7 +23,7 @@ required_commands+=(
     "mkdir"
     "mknod"
     "mktemp"
-    "modprobe"
+    # "modprobe" not strictly required
     "mount"
     "openssl"
     "pivot_root"
