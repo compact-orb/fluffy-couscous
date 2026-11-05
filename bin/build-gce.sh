@@ -146,7 +146,8 @@ chroot_run "${TARGET_ROOT}" '
     bootctl --no-variables install
     ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
     passwd --lock "root"
-    useradd --create-home --groups wheel --shell /bin/bash "${IMAGE_USER}"
+    useradd --create-home --groups wheel --shell /bin/bash \
+        --user-group "${IMAGE_USER}"
     IFS=: read -r _ _ _ _ _ home_dir _ <<< "$(getent passwd "${IMAGE_USER}")"
     mkdir --parents "${home_dir}/.ssh"
     chmod 0700 "${home_dir}/.ssh"
@@ -162,6 +163,7 @@ log_info "Resetting instance-specific identifiers for generic image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
+force_remove "${TARGET_ROOT}/root/.ansible"
 for path in "${TARGET_ROOT}"/etc/ssh/ssh_host_*; do
     if [[ -e "${path}" || -L "${path}" ]]; then
         force_remove "${path}"
