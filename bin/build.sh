@@ -67,7 +67,8 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
         app-portage/gentoolkit
-    if [[ -n "'"${PRE_PACKAGES}"'" ]]; then
+    # Strip whitespace so empty or comment-only inputs skip emerge.
+    if [[ -n "'"${PRE_PACKAGES//[[:space:]]/}"'" ]]; then
         MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
             --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \
