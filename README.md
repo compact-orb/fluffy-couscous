@@ -127,17 +127,22 @@ The `Build GCE Image` workflow
 To import the image into Google Cloud and run it with Shielded VM Secure Boot:
 
 1. Upload the built `.tar.gz` archive to a Google Cloud Storage bucket:
+
    ```bash
    gcloud storage cp gce-<profile>-<date>.tar.gz gs://<bucket-name>/
    ```
+
 2. Create the custom image with UEFI and Shielded VM custom Secure Boot:
+
    ```bash
    gcloud compute images create <image-name> \
      --source-uri="gs://<bucket-name>/gce-<profile>-<date>.tar.gz" \
      --guest-os-features="UEFI_COMPATIBLE,GVNIC,VIRTIO_SCSI_MULTIQUEUE" \
      --signature-database-file="Secure Boot Certificate.der"
    ```
+
 3. Launch a VM instance with Shielded VM Secure Boot enabled:
+
    ```bash
    gcloud compute instances create <instance-name> \
      --image=<image-name> \
