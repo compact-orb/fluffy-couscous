@@ -106,6 +106,10 @@ workflows run on GitHub-hosted runners using repository variables:
   Useful for toolchain components that must be installed before dependents are built.
 - **`BUILD_PACKAGES`**: Newline- or space-separated list of package atoms for
   `build.yml`. Inline `#` comments are supported and stripped at runtime.
+- **`BUILD_PACKAGES_A`**: Optional. Additional package atoms appended to
+  `BUILD_PACKAGES` only for profiles specified in `PROFILES_A`.
+- **`PROFILES_A`**: Optional. Newline-separated list of profiles eligible to
+  build `BUILD_PACKAGES_A`.
 
 Workflows enforce a 5.5-hour execution timer (`--timeout="330m"`), automatically
 checkpointing live `emerge` process trees mid-build via CRIU (`criu dump` /
