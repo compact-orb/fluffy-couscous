@@ -1,4 +1,4 @@
-name: Build GCE Image
+name: Build GCE
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ env:
 
 jobs:
   build-gce:
-    name: Build GCE Image
+    name: Build GCE
     runs-on: ubuntu-26.04
     steps:
       - uses: compact-orb/optimize-runner-network@v1
