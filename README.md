@@ -110,6 +110,10 @@ workflows run on GitHub-hosted runners using repository variables:
   `BUILD_PACKAGES` only for profiles specified in `PROFILES_A`.
 - **`PROFILES_A`**: Optional. Newline-separated list of profiles eligible to
   build `BUILD_PACKAGES_A`.
+- **`BUILD_PACKAGES_B`**: Optional. Additional package atoms appended to
+  `BUILD_PACKAGES` only for profiles specified in `PROFILES_B`.
+- **`PROFILES_B`**: Optional. Newline-separated list of profiles eligible to
+  build `BUILD_PACKAGES_B`.
 
 Workflows enforce a 5.5-hour execution timer (`--timeout="330m"`), automatically
 checkpointing live `emerge` process trees mid-build via CRIU (`criu dump` /

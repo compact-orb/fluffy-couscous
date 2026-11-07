@@ -64,6 +64,8 @@ env:
   BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
   BUILD_PACKAGES_A: ${{ vars.BUILD_PACKAGES_A }}
   PROFILES_A: ${{ vars.PROFILES_A }}
+  BUILD_PACKAGES_B: ${{ vars.BUILD_PACKAGES_B }}
+  PROFILES_B: ${{ vars.PROFILES_B }}
   INPUT_PRE_PACKAGES: ${{ inputs.pre_packages }}
   INPUT_PACKAGES: ${{ inputs.packages }}
   BUILD_USEPKG_EXCLUDE: ${{ inputs.usepkg_exclude }}
@@ -240,9 +242,15 @@ jobs:
           if [[ "${{ inputs.custom_packages }}" == "true" ]]; then
             BUILD_PRE_PACKAGES="${INPUT_PRE_PACKAGES}"
             BUILD_PACKAGES="${INPUT_PACKAGES}"
-          elif grep --fixed-strings --line-regexp --quiet \
-            "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
-            BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+          else
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+            fi
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_B//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_B}"
+            fi
           fi
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
@@ -484,9 +492,15 @@ jobs:
           if [[ "${{ inputs.custom_packages }}" == "true" ]]; then
             BUILD_PRE_PACKAGES="${INPUT_PRE_PACKAGES}"
             BUILD_PACKAGES="${INPUT_PACKAGES}"
-          elif grep --fixed-strings --line-regexp --quiet \
-            "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
-            BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+          else
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+            fi
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_B//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_B}"
+            fi
           fi
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
@@ -728,9 +742,15 @@ jobs:
           if [[ "${{ inputs.custom_packages }}" == "true" ]]; then
             BUILD_PRE_PACKAGES="${INPUT_PRE_PACKAGES}"
             BUILD_PACKAGES="${INPUT_PACKAGES}"
-          elif grep --fixed-strings --line-regexp --quiet \
-            "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
-            BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+          else
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+            fi
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_B//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_B}"
+            fi
           fi
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
@@ -972,9 +992,15 @@ jobs:
           if [[ "${{ inputs.custom_packages }}" == "true" ]]; then
             BUILD_PRE_PACKAGES="${INPUT_PRE_PACKAGES}"
             BUILD_PACKAGES="${INPUT_PACKAGES}"
-          elif grep --fixed-strings --line-regexp --quiet \
-            "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
-            BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+          else
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_A//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+            fi
+            if grep --fixed-strings --line-regexp --quiet \
+              "${{ matrix.profile }}" <<< "${PROFILES_B//$'\r'/}"; then
+              BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_B}"
+            fi
           fi
           # Normalize BUILD_PACKAGES: strip # comments, CRs (not in
           # SUDO_PRESERVE_ENV), and convert newlines to spaces.
