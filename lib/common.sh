@@ -610,8 +610,8 @@ download_ebuild_repositories() {
     load_ebuild_repositories
 
     for repo_entry in "${_repo_entries[@]}"; do
-        local repo_name repo_url
-        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+        local repo_name repo_url verify_mode
+        IFS=" " read -r repo_name repo_url verify_mode _ <<< "${repo_entry}"
 
         local repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
 
@@ -623,11 +623,16 @@ download_ebuild_repositories() {
             log_info "Cloning ${repo_url} into ${repo_dir}"
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
-        # Enforce GPG commit signature verification on all ebuild repositories
-        # using bundled keys (keys/*.asc) and REPO_PUBLIC_KEYS.
-        log_info "Verifying latest commit signature for ${repo_name}" \
-            "in ${repo_dir}"
-        git -C "${repo_dir}" verify-commit HEAD
+        # Enforce GPG commit signature verification on ebuild repositories
+        # using bundled keys (keys/*.asc) and REPO_PUBLIC_KEYS unless explicitly
+        # exempted (e.g. for contributor overlays like guru).
+        if [[ "${verify_mode:-}" == "no-verify" ]]; then
+            log_warn "Commit signature verification skipped for ${repo_name}"
+        else
+            log_info "Verifying latest commit signature for ${repo_name}" \
+                "in ${repo_dir}"
+            git -C "${repo_dir}" verify-commit HEAD
+        fi
     done
 
     readonly _ebuild_repositories_downloaded=1
@@ -661,7 +666,7 @@ configure_ebuild_repositories() {
 
     for repo_entry in "${_repo_entries[@]}"; do
         local repo_name repo_url
-        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+        IFS=" " read -r repo_name repo_url _ <<< "${repo_entry}"
 
         create_file "${repos_conf_dir}/${repo_name}.conf" "[${repo_name}]
 location = /var/db/repos/${repo_name}
@@ -683,8 +688,7 @@ mount_repos() {
 
     for repo_entry in "${_repo_entries[@]}"; do
         local repo_name
-        local repo_url
-        IFS=" " read -r repo_name repo_url <<< "${repo_entry}"
+        IFS=" " read -r repo_name _ <<< "${repo_entry}"
 
         local source_repo_dir="${LOCAL_REPOS_DIR}/${repo_name}"
         local target_repo_dir="${repos_dir}/${repo_name}"
