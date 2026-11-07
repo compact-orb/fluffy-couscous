@@ -75,8 +75,8 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 chroot_run "${STAGE_DIR}" '
     emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
         app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
-        dev-vcs/git net-misc/networkmanager net-misc/rclone sys-boot/shim \
-        sys-firmware/intel-microcode sys-firmware/sof-firmware \
+        dev-vcs/git net-misc/networkmanager net-misc/rclone sys-boot/mokutil \
+        sys-boot/shim sys-firmware/intel-microcode sys-firmware/sof-firmware \
         sys-fs/btrfs-progs sys-fs/dosfstools sys-fs/e2fsprogs sys-fs/xfsprogs \
         sys-kernel/gentoo-kernel sys-kernel/installkernel \
         sys-kernel/linux-firmware

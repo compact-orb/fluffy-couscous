@@ -223,6 +223,7 @@ install_packages=(
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
+    "sys-boot/mokutil"
     "sys-boot/shim"
     "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
