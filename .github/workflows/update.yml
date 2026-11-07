@@ -163,26 +163,27 @@ jobs:
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
 
-      - name: Initialize Runner Filesystem
-        run: |
-          free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
-          image_size=$(( free_bytes - 1073741824 ))
-
-          sudo truncate --size="${image_size}" /btrfs.img
-          sudo mkfs.btrfs --metadata single /btrfs.img
-
-          sudo mkdir --parents /mnt/btrfs
-          sudo mount \
-            --options=loop,noatime,compress-force=zstd:3 \
-            /btrfs.img /mnt/btrfs
-
-          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
-          sudo mount --bind /mnt/btrfs/usr/local /usr/local
-          sudo mkdir --parents /usr/local/bin
-
-          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
-          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+      # Not compatible / not needed for Avrea
+      # - name: Initialize Runner Filesystem
+      #   run: |
+      #     free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
+      #     image_size=$(( free_bytes - 1073741824 ))
+      # 
+      #     sudo truncate --size="${image_size}" /btrfs.img
+      #     sudo mkfs.btrfs --metadata single /btrfs.img
+      # 
+      #     sudo mkdir --parents /mnt/btrfs
+      #     sudo mount \
+      #       --options=loop,noatime,compress-force=zstd:3 \
+      #       /btrfs.img /mnt/btrfs
+      # 
+      #     sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+      #     sudo mount --bind /mnt/btrfs/usr/local /usr/local
+      #     sudo mkdir --parents /usr/local/bin
+      # 
+      #     sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+      #     sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+      #     sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
       - uses: actions/checkout@v7
 
@@ -258,7 +259,7 @@ jobs:
 
   # =========================================================================
   # Downstream CRIU Resumption & Cleanup Jobs (Disabled for Avrea)
-  # To re-enable when running on standard GitHub-hosted runners, uncomment below:
+  # To re-enable when running on GitHub-hosted runners, uncomment below:
   # =========================================================================
   # check-attempt-1:
   #   name: Check Resumes (After Attempt 1)
