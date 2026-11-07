@@ -223,6 +223,7 @@ install_packages=(
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
+    "sys-apps/zram-generator"
     "sys-boot/mokutil"
     "sys-boot/shim"
     "sys-firmware/intel-microcode"
