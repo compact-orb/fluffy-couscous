@@ -113,6 +113,7 @@ install_packages=(
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
+    "sys-apps/zram-generator"
     "sys-firmware/intel-microcode"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
