@@ -3,6 +3,21 @@ name: Update
 on:
   workflow_dispatch:
     inputs:
+      packages:
+        description: "Space-separated package atoms to emerge oneshot before @system update"
+        required: false
+        type: string
+        default: ""
+      usepkg_exclude:
+        description: "Binary packages to exclude"
+        required: false
+        type: string
+        default: ""
+      skip_system:
+        description: "Skip @system update"
+        required: false
+        type: boolean
+        default: false
       jobs:
         description: "Enable parallel emerge jobs using nproc (defaults to 1)"
         required: false
@@ -34,6 +49,8 @@ env:
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
   PROFILES: ${{ vars.PROFILES }}
+  BUILD_PACKAGES: ${{ inputs.packages }}
+  BUILD_USEPKG_EXCLUDE: ${{ inputs.usepkg_exclude }}
   BUILD_TIMEOUT: ${{ inputs.timeout || '330m' }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
@@ -204,13 +221,24 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_USEPKG_EXCLUDE="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_USEPKG_EXCLUDE}" | tr '\n' ' '
+          )"
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
+            --packages="${BUILD_PACKAGES}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
           )
+          if [[ "${{ inputs.skip_system }}" == "true" ]]; then
+            args+=(--skip-system)
+          fi
           if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
@@ -424,13 +452,24 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_USEPKG_EXCLUDE="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_USEPKG_EXCLUDE}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
+            --packages="${BUILD_PACKAGES}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume
           )
+          if [[ "${{ inputs.skip_system }}" == "true" ]]; then
+            args+=(--skip-system)
+          fi
           if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
@@ -644,13 +683,24 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_USEPKG_EXCLUDE="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_USEPKG_EXCLUDE}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
+            --packages="${BUILD_PACKAGES}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume
           )
+          if [[ "${{ inputs.skip_system }}" == "true" ]]; then
+            args+=(--skip-system)
+          fi
           if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi
@@ -864,13 +914,24 @@ jobs:
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
+          BUILD_PACKAGES="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_PACKAGES}" | tr '\n' ' '
+          )"
+          BUILD_USEPKG_EXCLUDE="$(
+            sed 's/#.*//; s/\r//' <<< "${BUILD_USEPKG_EXCLUDE}" | tr '\n' ' '
+          )"
           sudo mkdir --mode="0700" --parents "/run/user/0"
           args=(
             --profile="${{ matrix.profile }}"
+            --packages="${BUILD_PACKAGES}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume
           )
+          if [[ "${{ inputs.skip_system }}" == "true" ]]; then
+            args+=(--skip-system)
+          fi
           if [[ "${{ inputs.jobs }}" == "true" ]]; then
             args+=(--jobs)
           fi

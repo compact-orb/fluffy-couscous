@@ -261,7 +261,7 @@ jobs:
             --profile="${{ matrix.profile }}"
             --pre-packages="${BUILD_PRE_PACKAGES}"
             --packages="${BUILD_PACKAGES}"
-            --exclude="${BUILD_USEPKG_EXCLUDE}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
           )
@@ -504,7 +504,7 @@ jobs:
             --profile="${{ matrix.profile }}"
             --pre-packages="${BUILD_PRE_PACKAGES}"
             --packages="${BUILD_PACKAGES}"
-            --exclude="${BUILD_USEPKG_EXCLUDE}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume
@@ -748,7 +748,7 @@ jobs:
             --profile="${{ matrix.profile }}"
             --pre-packages="${BUILD_PRE_PACKAGES}"
             --packages="${BUILD_PACKAGES}"
-            --exclude="${BUILD_USEPKG_EXCLUDE}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume
@@ -992,7 +992,7 @@ jobs:
             --profile="${{ matrix.profile }}"
             --pre-packages="${BUILD_PRE_PACKAGES}"
             --packages="${BUILD_PACKAGES}"
-            --exclude="${BUILD_USEPKG_EXCLUDE}"
+            --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
             --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
             --resume

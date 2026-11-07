@@ -19,7 +19,7 @@ cli_define_option "PACKAGES" "-P|--packages" \
     "Space-separated package atoms" 1
 cli_define_option "PRE_PACKAGES" "-Q|--pre-packages" \
     "Package atoms to emerge before --packages" 0 ""
-cli_define_option "USEPKG_EXCLUDE" "-e|--exclude" \
+cli_define_option "USEPKG_EXCLUDE" "-e|--usepkg-exclude" \
     "Binary packages to exclude" 0 ""
 cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
     "Prune obsolete binary packages not installed" 0
