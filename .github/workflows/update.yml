@@ -28,7 +28,7 @@ on:
         description: "Timeout duration for emerge (e.g. 330m or 30m)"
         required: false
         type: string
-        default: "300m"
+        default: "330m"
         # default: "" # Disabled for Avrea
 
 env:
