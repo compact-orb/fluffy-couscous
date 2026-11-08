@@ -201,6 +201,14 @@ _active_install_mounts=()
 mount_target_subvolumes "_active_install_mounts" "${ROOT_TARGET_DEV}" \
     "${BOOT_PARTITION}" "${INSTALL_MOUNT_DIR}" "${SWAP_SIZE_GIB}"
 
+# Bind-mount temporary directory on target disk to local repo cache so
+# downloads use target disk space instead of the live RAM disk overlay.
+create_directory "${INSTALL_MOUNT_DIR}/var/tmp/repos"
+create_directory "${LOCAL_REPOS_DIR}"
+_active_repo_cache_mounts=()
+managed_mount "_active_repo_cache_mounts" --bind \
+    "${INSTALL_MOUNT_DIR}/var/tmp/repos" "${LOCAL_REPOS_DIR}"
+
 # === Install and Configure Gentoo ===
 
 fetch_project_stage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "stage3"
@@ -249,6 +257,9 @@ generate_target_fstab "${INSTALL_MOUNT_DIR}" "${ROOT_UUID}" "${BOOT_UUID}"
 install_secureboot_cert "${INSTALL_MOUNT_DIR}"
 
 finalize_target_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}"
+
+managed_unmount_all "_active_repo_cache_mounts"
+force_remove "${INSTALL_MOUNT_DIR}/var/tmp/repos"
 
 # Initialize machine-id, install systemd-boot to ESP (without writing NVRAM
 # variables from inside chroot), run Ansible pull for post-install setup,
