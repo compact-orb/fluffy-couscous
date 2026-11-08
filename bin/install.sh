@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# === CLI Arguments & Setup ===
+
+required_commands=(
+    "blkid"
+    "dirname"
+    "env"
+    "mkfs.btrfs"
+    "mkfs.fat"
+    "realpath"
+    "sfdisk"
+    "shred"
+    "udevadm"
+    "unshare"
+    "wipefs"
+)
+
+# Inner realpath resolves the symlink (/usr/local/bin/install.sh ->
+# /opt/fluffy-couscous/bin/install.sh) before dirname, so ../lib/ resolves
+# relative to the real script location.
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
+
+cli_define_option "PROFILE" "-p|--profile" \
+    "Profile in repository:profile format" 1
+cli_define_option "INSTALL_DRIVE" "-d|--drive" "Target disk device" 1
+cli_define_option "SWAP_SIZE_GIB" "-s|--swap" "Swap size in GiB" 1
+cli_define_flag "ENCRYPT" "-e|--encrypt" "Enable LUKS encryption"
+cli_define_option "USERNAME" "-u|--user" "Standard user username" 0
+cli_define_option "PASSWORD" "--password" "Standard user password" 0
+cli_define_option "TPM2_PIN" "--pin" "TPM2 LUKS PIN" 0
+
+cli_parse "${@}"
+readonly PROFILE INSTALL_DRIVE SWAP_SIZE_GIB ENCRYPT
+
+check_root
+
+if (( ENCRYPT )); then
+    required_commands+=(
+        "base32"
+        "chmod"
+        "cryptsetup"
+        "fold"
+        "head"
+        "mktemp"
+        "paste"
+        "systemd-cryptenroll"
+    )
+fi
+
+check_required_commands
+
+# Re-execute in a private mount namespace so installation mounts (binds,
+# chroot filesystems, tmpfs) remain isolated from the live host.
+if [[ "${_INSTALL_UNSHARED:-0}" != "1" ]]; then
+    exec unshare --mount --propagation private \
+        env _INSTALL_UNSHARED=1 "$0" "${@}"
+fi
+
+if [[ -z "${USERNAME:-}" ]]; then
+    while true; do
+        read -r -p "Enter username for standard user: " USERNAME
+        if [[ "${USERNAME}" =~ ^[a-z_][a-z0-9_-]*$ ]] && \
+            [[ "${USERNAME}" != "root" ]]; then
+            break
+        fi
+        log_error "Invalid username. Must be lowercase alphanumeric, not root."
+    done
+fi
+
+if [[ -z "${PASSWORD:-}" ]]; then
+    while true; do
+        read -r -s -p "Enter password for ${USERNAME}: " PASSWORD
+        echo
+        read -r -s -p "Confirm password: " password_confirm
+        echo
+        if [[ -n "${PASSWORD}" ]] && \
+            [[ "${PASSWORD}" == "${password_confirm}" ]]; then
+            unset password_confirm
+            break
+        fi
+        log_error "Passwords do not match or are empty. Try again."
+    done
+fi
+
+if (( ENCRYPT )) && [[ -z "${TPM2_PIN:-}" ]]; then
+    while true; do
+        read -r -s -p "Enter TPM2 PIN for LUKS: " TPM2_PIN
+        echo
+        read -r -s -p "Confirm TPM2 PIN: " tpm2_pin_confirm
+        echo
+        if [[ -n "${TPM2_PIN}" ]] && \
+            [[ "${TPM2_PIN}" == "${tpm2_pin_confirm}" ]]; then
+            unset tpm2_pin_confirm
+            break
+        fi
+        log_error "TPM2 PINs do not match or are empty. Try again."
+    done
+fi
+
+readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
+
+# === Prepare Drive ===
+
+wipefs --all --force "${INSTALL_DRIVE}"
+
+# Partition disk with GPT: 1GiB ESP (type=U) and Linux root (x86-64).
+# Conforms to systemd Discoverable Partitions Specification (DPS) so systemd
+# auto-discovers / and /boot without root= or rd.luks.uuid= in kernel cmdline.
+sfdisk "${INSTALL_DRIVE}" <<EOF
+label: gpt
+size=1GiB, type=U
+size=+, type="Linux root (x86-64)"
+EOF
+
+udevadm settle
+
+if [[ "${INSTALL_DRIVE}" =~ [0-9]$ ]]; then
+    part_prefix="${INSTALL_DRIVE}p"
+else
+    part_prefix="${INSTALL_DRIVE}"
+fi
+
+readonly BOOT_PARTITION="${part_prefix}1"
+readonly ROOT_PARTITION="${part_prefix}2"
+unset part_prefix
+
+if (( ENCRYPT )); then
+    # Format root with LUKS2 using a 20-byte random base32 emergency key.
+    # Pause execution so user has time to record the recovery key.
+    readonly RECOVERY_KEY="$(head --bytes=20 /dev/urandom | base32 | \
+        fold --width=5 | paste --delimiters='-' --serial -)"
+    luks_key_file="$(mktemp)"
+    chmod 0600 "${luks_key_file}"
+    printf "%s" "${RECOVERY_KEY}" > "${luks_key_file}"
+
+    log_info "Formatting ${ROOT_PARTITION} with LUKS2"
+    cryptsetup luksFormat \
+        --batch-mode \
+        --key-file "${luks_key_file}" \
+        --type luks2 \
+        "${ROOT_PARTITION}"
+
+    log_info "================================================================"
+    log_info "EMERGENCY RECOVERY KEY: ${RECOVERY_KEY}"
+    log_info "Please write this down and store it in a secure location!"
+    log_info "================================================================"
+    echo
+    read -r -p \
+        "Press [Enter] once you have securely recorded this key..."
+    echo
+
+    # Enroll TPM2 PCR 7 (Secure Boot state) with user PIN so volume unlocks
+    # automatically at boot only when the firmware boot chain is untampered.
+    log_info "Enrolling TPM2 device with PIN (PCR 7)..."
+    tpm2_creds_dir="$(mktemp --directory)"
+    chmod 0700 "${tpm2_creds_dir}"
+    printf "%s" "${TPM2_PIN}" > \
+        "${tpm2_creds_dir}/cryptenroll.new-tpm2-pin"
+
+    CREDENTIALS_DIRECTORY="${tpm2_creds_dir}" systemd-cryptenroll \
+        --tpm2-device="auto" \
+        --tpm2-pcrs="7" \
+        --tpm2-with-pin="yes" \
+        --unlock-key-file="${luks_key_file}" \
+        "${ROOT_PARTITION}"
+
+    shred --remove "${tpm2_creds_dir}/cryptenroll.new-tpm2-pin"
+    remove_directory "${tpm2_creds_dir}"
+    unset tpm2_creds_dir TPM2_PIN
+
+    managed_cryptsetup open \
+        --key-file "${luks_key_file}" \
+        "${ROOT_PARTITION}" \
+        "root"
+
+    shred --remove "${luks_key_file}"
+    unset luks_key_file
+
+    readonly ROOT_TARGET_DEV="/dev/mapper/root"
+else
+    readonly ROOT_TARGET_DEV="${ROOT_PARTITION}"
+fi
+
+mkfs.fat -F 32 "${BOOT_PARTITION}"
+mkfs.btrfs --force "${ROOT_TARGET_DEV}"
+
+udevadm settle
+
+readonly BOOT_UUID="$(blkid --match-tag "UUID" --output "value" \
+    "${BOOT_PARTITION}")"
+readonly ROOT_UUID="$(blkid --match-tag "UUID" --output "value" \
+    "${ROOT_TARGET_DEV}")"
+
+prepare_target_subvolumes "${ROOT_TARGET_DEV}"
+
+_active_install_mounts=()
+mount_target_subvolumes "_active_install_mounts" "${ROOT_TARGET_DEV}" \
+    "${BOOT_PARTITION}" "${INSTALL_MOUNT_DIR}" "${SWAP_SIZE_GIB}"
+
+# Bind-mount temporary directory on target disk to local repo cache so
+# downloads use target disk space instead of the live RAM disk overlay.
+create_directory "${INSTALL_MOUNT_DIR}/var/tmp/repos"
+create_directory "${LOCAL_REPOS_DIR}"
+_active_repo_cache_mounts=()
+managed_mount "_active_repo_cache_mounts" --bind \
+    "${INSTALL_MOUNT_DIR}/var/tmp/repos" "${LOCAL_REPOS_DIR}"
+
+# === Install and Configure Gentoo ===
+
+fetch_project_stage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "stage3"
+
+configure_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}" "install"
+
+mount_repos "${INSTALL_MOUNT_DIR}"
+
+configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
+
+create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
+create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
+    "rw console=tty0 console=ttyS0,115200 lsm=landlock,yama,apparmor,bpf"
+
+install_packages=(
+    "app-admin/ansible"
+    "app-admin/sudo"
+    "app-crypt/tpm2-tools"
+    "app-editors/nano"
+    "dev-vcs/git"
+    "net-misc/networkmanager"
+    "sec-policy/apparmor-d"
+    "sys-apps/zram-generator"
+    "sys-boot/mokutil"
+    "sys-boot/shim"
+    "sys-firmware/intel-microcode"
+    "sys-firmware/sof-firmware"
+    "sys-fs/btrfs-progs"
+    "sys-fs/dosfstools"
+    "sys-kernel/gentoo-kernel"
+    "sys-kernel/installkernel"
+    "sys-kernel/linux-firmware"
+    "sys-process/audit"
+)
+
+IFS=" "
+chroot_run "${INSTALL_MOUNT_DIR}" '
+    emerge --deep --jobs="$(nproc)" --newuse --update @world \
+        '"${install_packages[*]}"'
+    emerge --depclean
+    '
+IFS=$'\n\t'
+
+generate_target_fstab "${INSTALL_MOUNT_DIR}" "${ROOT_UUID}" "${BOOT_UUID}"
+
+install_secureboot_cert "${INSTALL_MOUNT_DIR}"
+
+finalize_target_portage "${INSTALL_MOUNT_DIR}" "${PROFILE}"
+
+managed_unmount_all "_active_repo_cache_mounts"
+force_remove "${INSTALL_MOUNT_DIR}/var/tmp/repos"
+
+# Initialize machine-id, install systemd-boot to ESP (without writing NVRAM
+# variables from inside chroot), run Ansible pull for post-install setup,
+# lock root account, and create unprivileged admin user in wheel group.
+
+export USERNAME PASSWORD
+chroot_run "${INSTALL_MOUNT_DIR}" '
+    systemd-machine-id-setup
+    systemctl preset-all
+    bootctl --no-variables install
+    ansible-pull --url="'"${ANSIBLE_PULL_URL}"'"
+    passwd --lock "root"
+    useradd --create-home --user-group --groups wheel \
+        --shell /bin/bash "${USERNAME}"
+    printf "%s\n" "${PASSWORD}" | passwd --stdin "${USERNAME}"
+    '
+unset USERNAME PASSWORD
+
+# === Clean Up ===
+
+managed_unmount_all "_active_install_mounts"
+
+managed_cryptsetup close "root"
+
+log_info "Installation finished successfully."

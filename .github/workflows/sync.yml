@@ -1,0 +1,26 @@
+name: Sync
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Sync Fork
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_FORK_PAT }}
+        run: |
+          gh repo sync "${{ github.repository_owner }}/gentoo-mirror" \
+            --source "gentoo-mirror/gentoo" \
+            --branch "stable" \
+            --force
+          gh repo sync "${{ github.repository_owner }}/guru" \
+            --source "gentoo/guru" \
+            --branch "master" \
+            --force
+          gh repo sync "${{ github.repository_owner }}/steam-overlay" \
+            --source "anyc/steam-overlay" \
+            --branch "master" \
+            --force
