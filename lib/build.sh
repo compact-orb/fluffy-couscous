@@ -12,9 +12,11 @@ required_commands+=(
     "basename"
     "btrfs"
     "chmod"
+    "criu"
     "curl"
     "date"
     "dirname"
+    "dmesg"
     "env"
     "find"
     "fstrim"
@@ -22,16 +24,25 @@ required_commands+=(
     "gpg"
     "gpgconf"
     "grep"
+    "mknod"
     "mktemp"
     "mount"
+    "pivot_root"
     "rclone"
+    "readlink"
     "realpath"
+    "rm"
+    "rmdir"
     "sed"
+    "setsid"
     "sleep"
     "storageto"
     "sync"
     "tail"
     "tar"
+    "tr"
+    "umount"
+    "unshare"
     "xz" # Required by tar for .tar.xz archives
     "zstd"
 )
@@ -541,6 +552,416 @@ upload_mounted_binary_packages() {
     # any packages removed or replaced in the upper layer are pruned on S3.
     s3_rclone sync "${binpkgs_dir}" \
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
+}
+
+# === CRIU Chroot & Resumption Execution ===
+
+parse_duration_seconds() {
+    local duration="${1}"
+    if [[ "${duration}" =~ ^([0-9]+)([smhd]?)$ ]]; then
+        local val="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+        case "${unit}" in
+            ""|s) printf "%s\n" "${val}" ;;
+            m) printf "%s\n" "$(( val * 60 ))" ;;
+            h) printf "%s\n" "$(( val * 3600 ))" ;;
+            d) printf "%s\n" "$(( val * 86400 ))" ;;
+        esac
+    else
+        log_error "Invalid timeout duration: ${duration}"
+        return 1
+    fi
+}
+
+prepare_criu_chroot_filesystem() {
+    local target_root="${1}"
+
+    create_directory "${target_root}/etc"
+    if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
+        cp --dereference --force "/etc/resolv.conf" \
+            "${target_root}/etc/resolv.conf"
+    fi
+
+    create_directory "${target_root}/proc"
+    create_directory "${target_root}/sys"
+    create_directory "${target_root}/run"
+    create_directory "${target_root}/run/lock"
+    chmod 1777 "${target_root}/run/lock"
+    create_directory "${target_root}/dev"
+    create_directory "${target_root}/dev/pts"
+    create_directory "${target_root}/dev/shm"
+    chmod 1777 "${target_root}/dev/shm"
+    create_directory "${target_root}/var/cache/binpkgs"
+    create_directory "${target_root}/var/tmp"
+    create_directory "${target_root}/.oldroot"
+
+    [[ -c "${target_root}/dev/null" ]] || \
+        mknod --mode="0666" "${target_root}/dev/null" c 1 3
+    [[ -c "${target_root}/dev/zero" ]] || \
+        mknod --mode="0666" "${target_root}/dev/zero" c 1 5
+    [[ -c "${target_root}/dev/full" ]] || \
+        mknod --mode="0666" "${target_root}/dev/full" c 1 7
+    [[ -c "${target_root}/dev/random" ]] || \
+        mknod --mode="0666" "${target_root}/dev/random" c 1 8
+    [[ -c "${target_root}/dev/urandom" ]] || \
+        mknod --mode="0666" "${target_root}/dev/urandom" c 1 9
+    [[ -c "${target_root}/dev/tty" ]] || \
+        mknod --mode="0666" "${target_root}/dev/tty" c 5 0
+    [[ -c "${target_root}/dev/console" ]] || \
+        mknod --mode="0600" "${target_root}/dev/console" c 5 1
+
+    create_symbolic_link "pts/ptmx" "${target_root}/dev/ptmx"
+    create_symbolic_link "/proc/self/fd" "${target_root}/dev/fd"
+    create_symbolic_link "/proc/self/fd/0" "${target_root}/dev/stdin"
+    create_symbolic_link "/proc/self/fd/1" "${target_root}/dev/stdout"
+    create_symbolic_link "/proc/self/fd/2" "${target_root}/dev/stderr"
+}
+
+collect_criu_ext_mount_maps() {
+    local real_target_root="${1}"
+    local -n dump_args_ref="${2}"
+    local -n restore_args_ref="${3}"
+
+    dump_args_ref=()
+    restore_args_ref=()
+
+    local -A seen_mounts=()
+    local m_dev m_point m_rest
+    while IFS=" " read -r m_dev m_point m_rest; do
+        if [[ "${m_point}" == "${real_target_root}/"* ]]; then
+            local rel_mount="${m_point#"${real_target_root}"}"
+            case "${rel_mount}" in
+                /proc|/proc/*|/dev|/dev/*|/sys|/sys/*|/run|/run/*|/.oldroot*)
+                    continue
+                    ;;
+            esac
+            if [[ -v seen_mounts["${rel_mount}"] ]]; then
+                continue
+            fi
+            seen_mounts["${rel_mount}"]=1
+            local mount_key="${rel_mount#/}"
+            mount_key="${mount_key//\//_}"
+            dump_args_ref+=(--ext-mount-map "${rel_mount}:${mount_key}")
+            restore_args_ref+=(
+                --ext-mount-map "${mount_key}:${real_target_root}${rel_mount}"
+            )
+        fi
+    done < /proc/mounts
+}
+
+wait_for_criu_safe_point() {
+    local real_target_root="${1}"
+
+    # Wait up to 600 seconds if a package is actively writing to
+    # /var/cache/binpkgs, fetching distfiles, or invoking gpg/signing keys so
+    # no binary package or excluded key file is open during criu dump.
+    local attempt
+    for (( attempt=0; attempt<1200; attempt++ )); do
+        local unsafe=0
+        local p
+        for p in /proc/[0-9]*; do
+            if ! is_chroot_process "${p}" "${real_target_root}"; then
+                continue
+            fi
+            local exe
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    continue
+                    ;;
+                gpg|gpgsm|wget|curl|aria2c)
+                    unsafe=1
+                    break
+                    ;;
+                bash|sh)
+                    local cmdline
+                    cmdline="$(tr '\0' ' ' < "${p}/cmdline" 2> /dev/null \
+                        || true)"
+                    if [[ "${cmdline}" == *"ebuild.sh"* && ( \
+                        "${cmdline}" == *"pretend"* || \
+                        "${cmdline}" == *"setup"* || \
+                        "${cmdline}" == *"qmerge"* || \
+                        "${cmdline}" == *"preinst"* || \
+                        "${cmdline}" == *"postinst"* || \
+                        "${cmdline}" == *"prerm"* || \
+                        "${cmdline}" == *"postrm"* ) ]]; then
+                        unsafe=1
+                        break
+                    fi
+                    ;;
+            esac
+            local fd fd_target
+            for fd in "${p}/fd/"*; do
+                fd_target="$(readlink "${fd}" 2> /dev/null || true)"
+                if [[ "${fd_target}" == *"/var/cache/binpkgs"* || \
+                    "${fd_target}" == *"/build/binpkgs/"* || \
+                    "${fd_target}" == *"${PORTAGE_GPG_DIR}"* || \
+                    "${fd_target}" == *"${PORTAGE_SECUREBOOT_DIR}"* ]]; then
+                    unsafe=1
+                    break 2
+                fi
+            done
+        done
+        if (( unsafe == 0 )); then
+            break
+        fi
+        sleep 0.5
+    done
+
+    # Terminate any idle gpg-agent/scdaemon/dirmngr inside the namespace and
+    # wait for them to exit before dumping.
+    local p exe
+    for p in /proc/[0-9]*; do
+        if is_chroot_process "${p}" "${real_target_root}"; then
+            exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                2> /dev/null || true)"
+            case "${exe}" in
+                gpg-agent|scdaemon|dirmngr)
+                    kill -s "TERM" "${p##*/}" 2> /dev/null || true
+                    ;;
+            esac
+        fi
+    done
+
+    for (( attempt=0; attempt<20; attempt++ )); do
+        local has_agent=0
+        for p in /proc/[0-9]*; do
+            if is_chroot_process "${p}" "${real_target_root}"; then
+                exe="$(basename "$(readlink "${p}/exe" 2> /dev/null)" \
+                    2> /dev/null || true)"
+                case "${exe}" in
+                    gpg-agent|scdaemon|dirmngr)
+                        has_agent=1
+                        break
+                        ;;
+                esac
+            fi
+        done
+        if (( has_agent == 0 )); then
+            break
+        fi
+        sleep 0.2
+    done
+
+    # Clean up any lingering agent sockets so future invocations after restore
+    # never encounter stale sockets.
+    rm --force \
+        "${real_target_root}/root/.gnupg/S."* \
+        "${real_target_root}${PORTAGE_GPG_DIR}/S."* 2> /dev/null || true
+}
+
+chroot_run_criu() {
+    local real_target_root
+    real_target_root="$(realpath "${1}")"
+    shift
+
+    modprobe --all \
+        af_packet_diag fuse inet_diag netlink_diag overlay raw_diag \
+        tcp_diag udp_diag unix_diag 2> /dev/null || true
+
+    prepare_criu_chroot_filesystem "${real_target_root}"
+
+    local criu_dir="${real_target_root}/.criu"
+    local log_file="${real_target_root}/var/tmp/.fluffy-chroot.log"
+    local exit_file="${real_target_root}/var/tmp/.fluffy-chroot.exit"
+    local cmd_file="${real_target_root}/var/tmp/.fluffy-chroot-cmd.sh"
+
+    local -a ext_dump_args=()
+    local -a ext_restore_args=()
+    collect_criu_ext_mount_maps "${real_target_root}" \
+        ext_dump_args ext_restore_args
+
+    local timeout_secs=0
+    if [[ -v CHROOT_TIMEOUT && -n "${CHROOT_TIMEOUT}" ]]; then
+        timeout_secs="$(parse_duration_seconds "${CHROOT_TIMEOUT}")"
+    fi
+
+    local ns_init_pid=""
+    local unshare_pid=""
+
+    if [[ -d "${criu_dir}" ]]; then
+        log_info "Restoring CRIU checkpoint for ${real_target_root}"
+        rm --force "${exit_file}"
+        rm --force \
+            "${real_target_root}/root/.gnupg/S."* \
+            "${real_target_root}${PORTAGE_GPG_DIR}/S."* 2> /dev/null || true
+
+        local pidfile="${criu_dir}/restore.pid"
+        rm --force "${pidfile}"
+        if ! criu restore \
+            --images-dir "${criu_dir}" \
+            --root "${real_target_root}" \
+            --restore-detached \
+            --pidfile "${pidfile}" \
+            --file-locks \
+            --link-remap \
+            --tcp-close \
+            --cpu-cap="none" \
+            "${ext_restore_args[@]}" \
+            --verbosity=4 --log-file="restore.log"; then
+            if [[ -f "${criu_dir}/restore.log" ]]; then
+                tail --lines=50 "${criu_dir}/restore.log" >&2 || true
+            fi
+            log_error "CRIU restore failed for ${real_target_root}"
+            return 1
+        fi
+        ns_init_pid="$(<"${pidfile}")"
+        log_info "Restored CRIU process tree (PID ${ns_init_pid})"
+    else
+        rm --force "${exit_file}" "${log_file}"
+        create_empty_file "${log_file}"
+
+        create_file "${cmd_file}" "#!/bin/bash
+export TERM=\"dumb\"
+exec < /dev/null >> /var/tmp/.fluffy-chroot.log 2>&1
+set +e
+(
+    source /etc/profile 2> /dev/null || true
+    set -e
+    ${*}
+)
+rc=\$?
+printf \"%s\n\" \"\${rc}\" > /var/tmp/.fluffy-chroot.exit
+exit \"\${rc}\""
+        chmod 0755 "${cmd_file}"
+
+        unshare --pid --fork setsid unshare --mount --uts --ipc /bin/bash -c "
+            set -e
+            mount --make-rprivate /
+            mount --rbind '${real_target_root}' '${real_target_root}'
+            cd '${real_target_root}'
+            pivot_root . .oldroot
+            mount --types proc proc /proc
+            mount --types devpts \
+                --options newinstance,ptmxmode=0666,mode=0620 devpts /dev/pts
+            umount --lazy /.oldroot
+            exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
+        " < /dev/null > /dev/null 2>&1 &
+        unshare_pid="${!}"
+
+        local attempt
+        for (( attempt=0; attempt<100; attempt++ )); do
+            ns_init_pid="$(awk '{print $1; exit}' \
+                "/proc/${unshare_pid}/task/${unshare_pid}/children" \
+                2> /dev/null || true)"
+            if [[ -n "${ns_init_pid}" ]] && \
+                is_chroot_process "/proc/${ns_init_pid}" \
+                    "${real_target_root}"; then
+                break
+            fi
+            if ! kill -0 "${unshare_pid}" 2> /dev/null; then
+                break
+            fi
+            sleep 0.05
+        done
+
+        if [[ -z "${ns_init_pid}" && ! -f "${exit_file}" ]]; then
+            wait "${unshare_pid}" 2> /dev/null || true
+            log_error "Failed to start CRIU namespace for ${real_target_root}"
+            return 1
+        fi
+    fi
+
+    local tail_start_arg="--lines=+1"
+    if [[ -f "${criu_dir}/restore.log" ]]; then
+        tail_start_arg="--lines=0"
+    fi
+    tail --follow=name --retry "${tail_start_arg}" "${log_file}" 2> /dev/null &
+    local tail_pid="${!}"
+
+    local start_secs="${SECONDS}"
+    local timed_out=0
+
+    while [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; do
+        if (( timeout_secs > 0 && \
+            (SECONDS - start_secs) >= timeout_secs )); then
+            timed_out=1
+            break
+        fi
+        sleep 1
+    done
+
+    if (( timed_out == 1 )) && [[ -n "${ns_init_pid}" ]] && \
+        kill -0 "${ns_init_pid}" 2> /dev/null; then
+        log_warn "Timeout (${CHROOT_TIMEOUT}) reached; checkpointing with CRIU"
+        wait_for_criu_safe_point "${real_target_root}"
+
+        if kill -0 "${ns_init_pid}" 2> /dev/null; then
+            kill "${tail_pid}" 2> /dev/null || true
+            wait "${tail_pid}" 2> /dev/null || true
+
+            force_remove "${criu_dir}"
+            create_directory "${criu_dir}"
+
+            if ! criu dump \
+                --tree "${ns_init_pid}" \
+                --images-dir "${criu_dir}" \
+                --file-locks \
+                --link-remap \
+                --ghost-limit "1G" \
+                --tcp-close \
+                --network-lock "skip" \
+                "${ext_dump_args[@]}" \
+                --verbosity=4 --log-file="dump.log"; then
+                if [[ -f "${criu_dir}/dump.log" ]]; then
+                    tail --lines=50 "${criu_dir}/dump.log" >&2 || true
+                fi
+                force_remove "${criu_dir}"
+                kill_chroot_processes "${real_target_root}"
+                if [[ -n "${unshare_pid}" ]]; then
+                    wait "${unshare_pid}" 2> /dev/null || true
+                fi
+                log_error "CRIU dump failed for ${real_target_root}"
+                return 1
+            fi
+
+            log_info "CRIU checkpoint saved to ${criu_dir}"
+            if [[ -n "${unshare_pid}" ]]; then
+                wait "${unshare_pid}" 2> /dev/null || true
+            fi
+            kill_chroot_processes "${real_target_root}"
+            return 124
+        fi
+        log_info "Chroot process finished while waiting for CRIU safe point"
+    fi
+
+    if [[ -n "${unshare_pid}" ]]; then
+        wait "${unshare_pid}" 2> /dev/null || true
+    fi
+    sleep 0.2
+    kill "${tail_pid}" 2> /dev/null || true
+    wait "${tail_pid}" 2> /dev/null || true
+
+    local exit_code=1
+    if [[ -f "${exit_file}" ]]; then
+        exit_code="$(<"${exit_file}")"
+    fi
+
+    if (( exit_code != 0 )); then
+        log_warn "Chroot execution failed with exit code ${exit_code}"
+        if [[ ! -f "${exit_file}" ]]; then
+            log_warn "Exit code file (${exit_file}) NOT FOUND"
+        fi
+        log_warn "Kernel dmesg (last 30 lines):"
+        dmesg --ctime 2> /dev/null | tail --lines=30 >&2 || true
+        if [[ -f "${criu_dir}/restore.log" ]]; then
+            log_warn "CRIU restore log output:"
+            tail --lines=100 "${criu_dir}/restore.log" >&2 || true
+        fi
+        if [[ -f "${log_file}" ]]; then
+            log_warn "Chroot command log output:"
+            tail --lines=200 "${log_file}" >&2 || true
+        fi
+    else
+        rm --force "${cmd_file}" "${exit_file}" "${log_file}"
+        force_remove "${criu_dir}"
+    fi
+    rmdir "${real_target_root}/.oldroot" 2> /dev/null || true
+    kill_chroot_processes "${real_target_root}"
+
+    return "${exit_code}"
 }
 
 # === Stage Build Lifecycle ===

@@ -73,7 +73,7 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes xorriso
+          sudo apt install --no-install-recommends --yes criu xorriso
 
       - name: Run build-install.sh
         run: |

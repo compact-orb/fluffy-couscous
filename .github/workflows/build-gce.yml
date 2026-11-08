@@ -75,7 +75,8 @@ jobs:
             "${HOME}/.cache/tools/storageto" /usr/local/bin/
           sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
-          sudo apt install --no-install-recommends --yes btrfs-progs dosfstools
+          sudo apt install --no-install-recommends --yes \
+            btrfs-progs criu dosfstools
 
       - name: Run build-gce.sh
         run: |
