@@ -495,7 +495,7 @@ mount_binary_packages() {
         ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}" "${lowerdir}" \
         > /dev/null 2>&1 &
 
-    local timeout=100
+    local timeout=300
     while [[ "$(</proc/mounts)" != *" ${lowerdir} "* ]]; do
         if (( timeout <= 0 )); then break; fi
         sleep 0.1
