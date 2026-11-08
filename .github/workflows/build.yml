@@ -71,7 +71,7 @@ env:
   INPUT_PRE_PACKAGES: ${{ inputs.pre_packages }}
   INPUT_PACKAGES: ${{ inputs.packages }}
   BUILD_USEPKG_EXCLUDE: ${{ inputs.usepkg_exclude }}
-  BUILD_TIMEOUT: ${{ inputs.timeout || '330m' }}
+  BUILD_TIMEOUT: ${{ inputs.timeout || '300m' }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 
