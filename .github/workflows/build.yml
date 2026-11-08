@@ -280,9 +280,8 @@ jobs:
             --pre-packages="${BUILD_PRE_PACKAGES}"
             --packages="${BUILD_PACKAGES}"
             --usepkg-exclude="${BUILD_USEPKG_EXCLUDE}"
-            # Disabled for Avrea (CRIU disabled)
-            # --timeout="${BUILD_TIMEOUT}"
-            # --resume-id="${{ github.run_id }}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
           )
           if [[ "${{ inputs.clean_binpkgs }}" == "true" ]]; then
             args+=(--clean)
