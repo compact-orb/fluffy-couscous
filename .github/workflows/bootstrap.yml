@@ -54,7 +54,7 @@ env:
   SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
-  BUILD_TIMEOUT: ${{ inputs.timeout || '300m' }}
+  BUILD_TIMEOUT: ${{ inputs.timeout }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 

@@ -53,7 +53,7 @@ env:
   PROFILES: ${{ vars.PROFILES }}
   BUILD_PACKAGES: ${{ inputs.packages }}
   BUILD_USEPKG_EXCLUDE: ${{ inputs.usepkg_exclude }}
-  BUILD_TIMEOUT: ${{ inputs.timeout || '300m' }}
+  BUILD_TIMEOUT: ${{ inputs.timeout }}
   TOOL_RCLONE_VERSION: "v1.75.2"
   TOOL_STORAGETO_VERSION: "v0.5.0"
 
