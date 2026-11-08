@@ -1040,8 +1040,7 @@ kill_chroot_processes() {
     for pid in "${pids[@]}"; do
         exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
             2> /dev/null || true)"
-        log_warn "Sending SIGTERM to lingering chroot process" \
-            "${pid} (${exe:-unknown})"
+        log_warn "Sending SIGTERM to lingering chroot process ${pid} (${exe:-unknown})"
         kill -s "TERM" "${pid}" 2> /dev/null || true
     done
 
@@ -1066,8 +1065,7 @@ kill_chroot_processes() {
             pid="${p##*/}"
             exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
                 2> /dev/null || true)"
-            log_warn "Sending SIGKILL to lingering chroot process" \
-                "${pid} (${exe:-unknown})"
+            log_warn "Sending SIGKILL to lingering chroot process ${pid} (${exe:-unknown})"
             kill -s "KILL" "${pid}" 2> /dev/null || true
         fi
     done
