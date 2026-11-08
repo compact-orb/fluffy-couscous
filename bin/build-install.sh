@@ -202,8 +202,10 @@ force_remove "${ISO_FILE}"
 xorriso \
     -outdev "${ISO_FILE}" \
     -append_partition "2" "0xef" "${ESP_IMG}" \
+    -boot_image "any" "appended_part_as=gpt" \
     -boot_image "any" "efi_path=--interval:appended_partition_2:all::" \
     -boot_image "any" "emul_type=no_emulation" \
+    -boot_image "any" "partition_cyl_align=all" \
     -boot_image "any" "partition_offset=16" \
     -compliance "iso_9660_level=3" \
     -map "${ISO_DIR}" "/" \
