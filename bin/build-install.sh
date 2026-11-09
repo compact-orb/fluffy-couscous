@@ -61,10 +61,9 @@ create_file "${STAGE_DIR}/etc/dracut.conf.d/install.conf" \
 add_dracutmodules+=" dmsquash-live "'
 
 # Configure live kernel command line: specify CDLABEL to locate live media,
-# enable writable overlayfs, serial/tty console, and security LSM order.
+# enable writable overlayfs, and security LSM order.
 create_directory "${STAGE_DIR}/etc/kernel"
 cmdline="root=live:CDLABEL=${ISO_VOLID} rd.live.overlay.overlayfs=1"
-cmdline="${cmdline} console=tty0 console=ttyS0,115200"
 cmdline="${cmdline} lsm=landlock,yama,apparmor,bpf"
 create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 
