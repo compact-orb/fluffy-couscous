@@ -223,11 +223,6 @@ create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
     "rw console=tty0 console=ttyS0,115200 lsm=landlock,yama,apparmor,bpf quiet splash"
 
-create_directory "${INSTALL_MOUNT_DIR}/etc/plymouth"
-create_file "${INSTALL_MOUNT_DIR}/etc/plymouth/plymouthd.conf" \
-"[Daemon]
-Theme=bgrt"
-
 install_packages=(
     "app-admin/ansible"
     "app-admin/sudo"
@@ -255,6 +250,8 @@ chroot_run "${INSTALL_MOUNT_DIR}" '
     emerge --deep --jobs="$(nproc)" --newuse --update @world \
         '"${install_packages[*]}"'
     emerge --depclean
+    plymouth-set-default-theme bgrt
+    emerge --config sys-kernel/gentoo-kernel
     '
 IFS=$'\n\t'
 
