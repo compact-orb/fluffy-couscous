@@ -221,7 +221,7 @@ configure_portage_binary_packages "${INSTALL_MOUNT_DIR}" "${PROFILE}"
 
 create_directory "${INSTALL_MOUNT_DIR}/etc/kernel"
 create_file "${INSTALL_MOUNT_DIR}/etc/kernel/cmdline" \
-    "rw lsm=landlock,yama,apparmor,bpf quiet splash"
+    "rw lsm=landlock,yama,apparmor,bpf quiet splash rd.systemd.show_status=false vt.global_cursor_default=0"
 
 install_packages=(
     "app-admin/ansible"
