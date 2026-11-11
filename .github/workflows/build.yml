@@ -167,14 +167,7 @@ jobs:
 
       - name: Install Host Dependencies
         run: |
-          # temporary: bypass degraded ubuntu.com DNS using Fastly CDN mirror
-          sudo sed -i 's|https\?://[^ ]*ubuntu\.com/ubuntu/\?|http://mirrors.edge.kernel.org/ubuntu/|g' \
-            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          printf "%s\n%s\n%s\n" \
-            "http://mirrors.edge.kernel.org/ubuntu/" \
-            "http://mirrors.mit.edu/ubuntu/" \
-            "http://ftp.osuosl.org/pub/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          sudo apt update -o Acquire::Retries=3
+          sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install \
             --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
@@ -383,14 +376,7 @@ jobs:
 
       - name: Install Host Dependencies
         run: |
-          # temporary: bypass degraded ubuntu.com DNS using Fastly CDN mirror
-          sudo sed -i 's|https\?://[^ ]*ubuntu\.com/ubuntu/\?|http://mirrors.edge.kernel.org/ubuntu/|g' \
-            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          printf "%s\n%s\n%s\n" \
-            "http://mirrors.edge.kernel.org/ubuntu/" \
-            "http://mirrors.mit.edu/ubuntu/" \
-            "http://ftp.osuosl.org/pub/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          sudo apt update -o Acquire::Retries=3
+          sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install \
             --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
@@ -634,14 +620,7 @@ jobs:
 
       - name: Install Host Dependencies
         run: |
-          # temporary: bypass degraded ubuntu.com DNS using Fastly CDN mirror
-          sudo sed -i 's|https\?://[^ ]*ubuntu\.com/ubuntu/\?|http://mirrors.edge.kernel.org/ubuntu/|g' \
-            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          printf "%s\n%s\n%s\n" \
-            "http://mirrors.edge.kernel.org/ubuntu/" \
-            "http://mirrors.mit.edu/ubuntu/" \
-            "http://ftp.osuosl.org/pub/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          sudo apt update -o Acquire::Retries=3
+          sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install \
             --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
@@ -885,14 +864,7 @@ jobs:
 
       - name: Install Host Dependencies
         run: |
-          # temporary: bypass degraded ubuntu.com DNS using Fastly CDN mirror
-          sudo sed -i 's|https\?://[^ ]*ubuntu\.com/ubuntu/\?|http://mirrors.edge.kernel.org/ubuntu/|g' \
-            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
-          printf "%s\n%s\n%s\n" \
-            "http://mirrors.edge.kernel.org/ubuntu/" \
-            "http://mirrors.mit.edu/ubuntu/" \
-            "http://ftp.osuosl.org/pub/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          sudo apt update -o Acquire::Retries=3
+          sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install \
             --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
