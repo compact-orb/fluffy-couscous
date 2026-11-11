@@ -124,22 +124,22 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
 
       - name: Initialize Runner Filesystem
         run: |
-          free_bytes=$(df --output=avail --block-size=1 / | tail --lines=1)
+          free_bytes=$(df --block-size=1 --output=avail / | tail --lines=1)
           image_size=$(( free_bytes - 1073741824 ))
 
           sudo truncate --size="${image_size}" /btrfs.img
@@ -306,15 +306,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -530,15 +530,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -754,15 +754,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -978,15 +978,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -1202,15 +1202,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -1426,15 +1426,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
@@ -1650,15 +1650,15 @@ jobs:
             af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
             raw_diag tcp_diag udp_diag unix_diag
 
-      - uses: compact-orb/maximize-runner-storage@v2
+      - uses: compact-orb/maximize-runner-storage@v3
         with:
           create-filesystem: 'false'
 
       - name: Install Host Dependencies
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install --yes \
-            --no-install-recommends \
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
             aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
             unzip util-linux-extra xz-utils zstd
           sudo apt clean
