@@ -143,14 +143,7 @@ jobs:
       - uses: compact-orb/optimize-runner-network@v1
 
       # Not compatible with Avrea
-      - name: Load Kernel Modules
-        run: |
-          sudo modprobe --all \
-            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
-            raw_diag tcp_diag udp_diag unix_diag
-
-      # Not compatible with Avrea
-      - uses: compact-orb/maximize-runner-storage@v3
+      - uses: compact-orb/maximize-runner-storage@v4
         with:
           create-filesystem: 'false'
 
@@ -340,13 +333,7 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - name: Load Kernel Modules
-        run: |
-          sudo modprobe --all \
-            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
-            raw_diag tcp_diag udp_diag unix_diag
-
-      - uses: compact-orb/maximize-runner-storage@v3
+      - uses: compact-orb/maximize-runner-storage@v4
         with:
           create-filesystem: 'false'
 
@@ -571,13 +558,7 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - name: Load Kernel Modules
-        run: |
-          sudo modprobe --all \
-            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
-            raw_diag tcp_diag udp_diag unix_diag
-
-      - uses: compact-orb/maximize-runner-storage@v3
+      - uses: compact-orb/maximize-runner-storage@v4
         with:
           create-filesystem: 'false'
 
@@ -802,13 +783,7 @@ jobs:
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 
-      - name: Load Kernel Modules
-        run: |
-          sudo modprobe --all \
-            af_packet_diag btrfs fuse inet_diag netlink_diag overlay \
-            raw_diag tcp_diag udp_diag unix_diag
-
-      - uses: compact-orb/maximize-runner-storage@v3
+      - uses: compact-orb/maximize-runner-storage@v4
         with:
           create-filesystem: 'false'
 

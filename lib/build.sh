@@ -756,10 +756,6 @@ chroot_run_criu() {
     real_target_root="$(realpath "${1}")"
     shift
 
-    modprobe --all \
-        af_packet_diag fuse inet_diag netlink_diag overlay raw_diag \
-        tcp_diag udp_diag unix_diag 2> /dev/null || true
-
     prepare_criu_chroot_filesystem "${real_target_root}"
 
     local criu_dir="${real_target_root}/.criu"
