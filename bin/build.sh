@@ -63,6 +63,7 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # versions and refresh the binhost index.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    emaint --fix binhost
     MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
     emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --usepkg-exclude="'"${USEPKG_EXCLUDE}"'" \

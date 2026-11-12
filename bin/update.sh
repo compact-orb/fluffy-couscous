@@ -60,6 +60,7 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # soname bumps before final depclean.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    emaint --fix binhost
     # Strip whitespace so empty or comment-only inputs skip emerge.
     if [[ -n "'"${PACKAGES//[[:space:]]/}"'" ]]; then
         MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
