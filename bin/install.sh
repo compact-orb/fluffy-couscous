@@ -231,6 +231,7 @@ install_packages=(
     "dev-vcs/git"
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
+    "sys-apps/fwupd"
     "sys-apps/zram-generator"
     "sys-boot/mokutil"
     "sys-boot/plymouth"
