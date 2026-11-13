@@ -9,6 +9,11 @@ on:
         type: string
 
 env:
+  SUDO_PRESERVE_ENV: "\
+    GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,ANSIBLE_PULL_URL,SIGNING_KEY,\
+    BINPKG_PUBLIC_KEY,REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,\
+    S3_RO_SECRET_ACCESS_KEY,S3_REGION,S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,\
+    SECUREBOOT_CERT,STORAGETO_KEY,IMAGE_USER,IMAGE_SSH_PUBLIC_KEY"
   GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
   REPOS: ${{ vars.REPOS }}
   BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
@@ -80,34 +85,14 @@ jobs:
 
       - name: Run build-gce.sh
         run: |
-          preserve_env=(
-            "GENTOO_MIRROR_URL"
-            "REPOS"
-            "BINPKG_REPOS"
-            "ANSIBLE_PULL_URL"
-            "SIGNING_KEY"
-            "BINPKG_PUBLIC_KEY"
-            "REPO_PUBLIC_KEYS"
-            "S3_ACCESS_KEY_ID"
-            "S3_SECRET_ACCESS_KEY"
-            "S3_RO_SECRET_ACCESS_KEY"
-            "S3_REGION"
-            "S3_ENDPOINT"
-            "S3_BUCKET_NAME"
-            "SECUREBOOT_KEY"
-            "SECUREBOOT_CERT"
-            "STORAGETO_KEY"
-            "IMAGE_USER"
-            "IMAGE_SSH_PUBLIC_KEY"
-          )
-          sudo_preserve="$(IFS=,; echo "${preserve_env[*]}")"
           # Workaround for stripping carriage return characters from GitHub
           # Actions environment variables set via the web interface.
-          for var in "${preserve_env[@]}"; do
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
             declare -n ref="${var}"
             ref="${ref//$'\r'/}"
           done
           # Workaround for missing `/run/user/0`.
           sudo mkdir --mode="0700" --parents "/run/user/0"
-          sudo --preserve-env="${sudo_preserve}" bin/build-gce.sh \
-            --profile="${{ inputs.profile }}"
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} \
+            bin/build-gce.sh --profile="${{ inputs.profile }}"
