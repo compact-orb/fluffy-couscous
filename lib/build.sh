@@ -342,18 +342,6 @@ has_resume_stage() {
 
 # === Stage Uploading ===
 
-upload_binary_packages() {
-    local target_root="${1}"
-    local profile="${2}"
-    log_info "Uploading binary packages from ${target_root}"
-
-    local portage_binpkgs_dir="${target_root}/var/cache/binpkgs"
-    local repo repo_profile
-    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    s3_rclone copy "${portage_binpkgs_dir}" \
-        ":s3:${S3_BUCKET_NAME}/binpkgs/${repo_profile}"
-}
-
 publish_stage_archive() {
     local target_root="${1}"
     local profile="${2}"

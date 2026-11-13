@@ -10,8 +10,10 @@ required_commands=(
     "realpath"
 )
 
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/build.sh")"
 
 cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1

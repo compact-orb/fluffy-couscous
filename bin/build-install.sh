@@ -18,8 +18,10 @@ required_commands=(
     "xorriso"
 )
 
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/build.sh")"
 
 cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
@@ -71,14 +73,32 @@ create_file "${STAGE_DIR}/etc/kernel/cmdline" "${cmdline}"
 
 # Install live environment packages. Delete root password to allow
 # passwordless console login, enable NetworkManager, and record system state.
+install_packages=(
+    "app-admin/sudo"
+    "app-arch/7zip"
+    "app-crypt/tpm2-tools"
+    "app-editors/nano"
+    "dev-vcs/git"
+    "net-misc/networkmanager"
+    "net-misc/rclone"
+    "sys-apps/fwupd"
+    "sys-boot/mokutil"
+    "sys-boot/shim"
+    "sys-firmware/intel-microcode"
+    "sys-firmware/sof-firmware"
+    "sys-fs/btrfs-progs"
+    "sys-fs/dosfstools"
+    "sys-fs/e2fsprogs"
+    "sys-fs/xfsprogs"
+    "sys-kernel/gentoo-kernel"
+    "sys-kernel/installkernel"
+    "sys-kernel/linux-firmware"
+)
+
+IFS=" "
 chroot_run "${STAGE_DIR}" '
     emerge --buildpkg=n --jobs="$(nproc)" --usepkgonly \
-        app-admin/sudo app-arch/7zip app-crypt/tpm2-tools app-editors/nano \
-        dev-vcs/git net-misc/networkmanager net-misc/rclone sys-apps/fwupd \
-        sys-boot/mokutil sys-boot/shim sys-firmware/intel-microcode \
-        sys-firmware/sof-firmware sys-fs/btrfs-progs sys-fs/dosfstools \
-        sys-fs/e2fsprogs sys-fs/xfsprogs sys-kernel/gentoo-kernel \
-        sys-kernel/installkernel sys-kernel/linux-firmware
+        '"${install_packages[*]}"'
     emerge --depclean
     passwd --delete "root"
     systemctl disable systemd-networkd.service \
@@ -87,6 +107,7 @@ chroot_run "${STAGE_DIR}" '
         NetworkManager-wait-online.service systemd-resolved.service
     /usr/lib/systemd/systemd-update-done
     '
+IFS=$'\n\t'
 
 # Point resolv.conf to systemd-resolved stub listener for DNS resolution.
 force_remove "${STAGE_DIR}/etc/resolv.conf"

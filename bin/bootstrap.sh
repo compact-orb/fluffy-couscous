@@ -11,8 +11,10 @@ required_commands=(
     "realpath"
 )
 
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh")"
-source "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../lib/build.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh")"
+source "$(realpath \
+    "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/build.sh")"
 
 cli_define_option "SEED_ARCH" "-a|--arch" "Stage seed architecture" 0 ""
 cli_define_option "SEED_NAME" "-n|--name" "Stage seed tarball name" 0 ""
@@ -123,9 +125,9 @@ if [[ "${resume_phase}" != "stage3" && \
 
             if [[ -z "${SEED_STAGE}" ]]; then
                 chroot_run "${SEED_DIR}" '
-                    MAKEOPTS="--jobs='"${make_jobs}"' \
---load-average='"${make_jobs}"'" \
-                        emerge --deep --getbinpkg \
+                    MAKEOPTS="--jobs='"${make_jobs}"'"
+                    MAKEOPTS+=" --load-average='"${make_jobs}"'"
+                    MAKEOPTS="${MAKEOPTS}" emerge --deep --getbinpkg \
                         --jobs='"${emerge_jobs}"' \
                         --load-average='"${cpus}"' \
                         --newuse --update @world
@@ -206,11 +208,13 @@ fi
 mount_repos "${STAGE_DIR}"
 install_portage_gpg_key "${STAGE_DIR}"
 install_secureboot_keys "${STAGE_DIR}"
+mount_binary_packages "${STAGE_DIR}" "${PROFILE}"
 
 stage3_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+    emaint --fix binhost
     MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
-        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
+    emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
         --emptytree @system
     emerge --depclean
     ' || stage3_exit="${?}"
@@ -218,44 +222,23 @@ CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
 # === Stage 3 Timeout & Completion Handling ===
 
 if (( stage3_exit == 124 )); then
-    log_warn "Stage 3 build timed out after ${TIMEOUT}"
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
-    unmount_repos
     if [[ -n "${RESUME_ID}" ]]; then
-        publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
-            "${RESUME_ID}" "stage3" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
-        exit 0
     fi
-    exit 124
+    handle_build_timeout "${STAGE_DIR}" "${PROFILE}" \
+        "${TIMEOUT}" "${RESUME_ID}"
 elif (( stage3_exit != 0 )); then
-    log_warn "Stage 3 build failed with exit code ${stage3_exit};" \
-        "uploading built packages"
     if [[ -n "${RESUME_ID}" ]]; then
-        clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3"
-        clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
+        clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
     fi
-    upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
-    unmount_repos
-    remove_portage_configuration "${STAGE_DIR}"
-    upload_portage_failure_logs "${stage3_exit}"
-    force_remove "${STAGE_DIR}"
-    exit "${stage3_exit}"
+    handle_build_failure "${STAGE_DIR}" "${PROFILE}" \
+        "${RESUME_ID}" "${stage3_exit}"
 fi
 
-unmount_repos
-remove_portage_configuration "${STAGE_DIR}"
-
-# === Artifact Upload & Cleanup ===
-
-upload_binary_packages "${STAGE_DIR}" "${PROFILE}"
-publish_stage_archive "${STAGE_DIR}" "${PROFILE}" "stage3"
+finish_stage_build "${STAGE_DIR}" "${PROFILE}" "${RESUME_ID}" "stage3"
 
 if [[ -n "${RESUME_ID}" ]]; then
     clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"
     clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3-init"
-    clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage3"
 fi
-
-force_remove "${STAGE_DIR}"
