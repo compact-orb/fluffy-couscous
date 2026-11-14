@@ -441,7 +441,7 @@ managed_unmount_all() {
 
     mounts_array_name=("${remaining_mounts[@]}")
     if (( exit_code != 0 )); then
-        log_error "Error unmounting one or more filesystems"
+        log_error "Failed to unmount one or more filesystems"
         return "${exit_code}"
     fi
 }
@@ -953,7 +953,7 @@ mount_chroot_filesystems() {
     log_info "Mounting chroot filesystems for ${target_root}"
 
     create_directory "${target_root}/etc"
-    # Avoid clobbering /etc/resolv.conf if it is already a symlink (e.g. to
+    # Keep /etc/resolv.conf if it is already a symlink (for example, to
     # systemd-resolved's stub-resolv.conf).
     if [[ ! -L "${target_root}/etc/resolv.conf" ]]; then
         cp --dereference --force "/etc/resolv.conf" \
@@ -1031,7 +1031,7 @@ kill_chroot_processes() {
     for pid in "${pids[@]}"; do
         exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
             2> /dev/null || true)"
-        log_warn "Sending SIGTERM to lingering chroot process ${pid} (${exe:-unknown})"
+        log_warn "Sending SIGTERM to chroot process ${pid} (${exe:-unknown})"
         kill -s "TERM" "${pid}" 2> /dev/null || true
     done
 
@@ -1050,13 +1050,13 @@ kill_chroot_processes() {
         fi
     done
 
-    log_warn "Lingering chroot processes did not exit; sending SIGKILL"
+    log_warn "Chroot processes did not exit; sending SIGKILL"
     for p in /proc/[0-9]*; do
         if is_chroot_process "${p}" "${target_root}"; then
             pid="${p##*/}"
             exe="$(basename "$(readlink "/proc/${pid}/exe" 2> /dev/null)" \
                 2> /dev/null || true)"
-            log_warn "Sending SIGKILL to lingering chroot process ${pid} (${exe:-unknown})"
+            log_warn "Sending SIGKILL to chroot process ${pid} (${exe:-unknown})"
             kill -s "KILL" "${pid}" 2> /dev/null || true
         fi
     done

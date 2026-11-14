@@ -67,7 +67,7 @@ if [[ -z "${USERNAME:-}" ]]; then
             [[ "${USERNAME}" != "root" ]]; then
             break
         fi
-        log_error "Invalid username. Must be lowercase alphanumeric, not root."
+        log_error "Invalid username. Use lowercase letters, numbers, '_', or '-', and not root."
     done
 fi
 
@@ -150,11 +150,11 @@ if (( ENCRYPT )); then
     log_info "================================================================"
     echo
     read -r -p \
-        "Press [Enter] once you have securely recorded this key..."
+        "Press [Enter] after you have saved this key..."
     echo
 
-    # Enroll TPM2 PCR 7 (Secure Boot state) with user PIN so volume unlocks
-    # automatically at boot only when the firmware boot chain is untampered.
+    # Enroll TPM2 PCR 7 (Secure Boot state) with a PIN so the disk
+    # unlocks at boot only when the boot state matches.
     log_info "Enrolling TPM2 device with PIN (PCR 7)..."
     tpm2_creds_dir="$(mktemp --directory)"
     chmod 0700 "${tpm2_creds_dir}"
@@ -288,4 +288,4 @@ managed_unmount_all "_active_install_mounts"
 
 managed_cryptsetup close "root"
 
-log_info "Installation finished successfully."
+log_info "Installation finished."

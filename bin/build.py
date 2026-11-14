@@ -9,9 +9,7 @@ import portage
 from portage.dep import dep_getkey
 from portage.util import grabfile_package, stack_lists
 
-# this loads files from the profiles ...
-# wrap it here to take care of the different
-# ways portage handles stacked profiles
+# Load files from stacked profiles using Portage's profile list.
 
 
 def scan_profile(path):
@@ -22,12 +20,9 @@ def scan_profile(path):
 pkgs = scan_profile("packages")
 buildpkgs = scan_profile("packages.build")
 
-# go through the packages list and strip off all the
-# crap to get just the <category>/<package> ... then
-# search the buildpkg list for it ... if it's found,
-# we replace the buildpkg item with the one in the
-# system profile (it may have <,>,=,etc... operators
-# and version numbers)
+# Match each <category>/<package> from packages against packages.build.
+# If found, replace it with the full atom (including version operators)
+# from the system profile.
 for pkg in pkgs:
     try:
         bidx = buildpkgs.index(dep_getkey(pkg))

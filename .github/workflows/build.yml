@@ -25,7 +25,7 @@ on:
         type: string
         default: ""
       clean_binpkgs:
-        description: "Prune obsolete binary packages not installed"
+        description: "Remove old binary packages that are not installed"
         required: false
         type: boolean
         default: false
@@ -129,7 +129,7 @@ jobs:
         run: |
           source lib/common.sh
           source lib/build.sh
-          # Purge any abandoned resume snapshots older than 24 hours
+          # Delete unfinished resume snapshots older than 24 hours
           s3_rclone delete --min-age="24h" \
             ":s3:${S3_BUCKET_NAME}/resumes/" || true
 

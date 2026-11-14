@@ -5,9 +5,8 @@ if [[ -z "${SEED_DIR:-}" ]] || [[ -z "${PROFILE:-}" ]]; then
     return 1 2> /dev/null || exit 1
 fi
 
-# Workarounds for preparing a non-LLVM seed for building a LLVM stage
-# without taking the time to update the seed's portage configuration
-# and re-merging the necessary packages.
+# Prepare a non-LLVM seed for an LLVM stage without a full Portage
+# reconfiguration and package rebuild first.
 
 create_file "${SEED_DIR}/etc/portage/package.use/clang-common" \
     "llvm-core/clang-common default-lld"
@@ -35,7 +34,7 @@ chroot_run "${SEED_DIR}" '
         "${llvm_bin}/i686-pc-linux-gnu-clang++-${LLVM_MAJOR}"
     '
 
-# Author's profile needs extra packages to be merged.
+# Install extra packages needed by the author's profile.
 chroot_run "${SEED_DIR}" \
     'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --getbinpkg --quiet-build --jobs='"${emerge_jobs}"' \
@@ -60,10 +59,8 @@ remove_portage_configuration "${SEED_DIR}"
 configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
 install_secureboot_keys "${SEED_DIR}"
 
-# Perl might hardcode the compiler, and since the seed was built with GCC,
-# Perl deps within a package will use GCC even though the rest of the package
-# is using Clang. This will result in LLVM flags being passed to GCC, resulting
-# in a build failure. To avoid this, Perl is rebuilt.
+# Perl can hardcode GCC from the seed stage, causing LLVM flags to fail
+# when building Perl dependencies with Clang. Rebuild Perl first.
 chroot_run "${SEED_DIR}" \
     'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
         emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \

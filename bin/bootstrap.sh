@@ -27,9 +27,9 @@ cli_define_flag "WORKAROUND" "-w|--workaround" \
 cli_define_option "TIMEOUT" "-t|--timeout" \
     "Timeout duration for emerge (e.g. 330m)" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
-    "Unique snapshot identifier for resumption" 0 ""
+    "Unique ID for resume snapshots" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
-    "Resume build from intermediate snapshot" 0
+    "Resume build from a saved snapshot" 0
 cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
@@ -57,7 +57,7 @@ if [[ -n "${SEED_STAGE}" ]]; then
     fi
 else
     if [[ -z "${SEED_ARCH}" || -z "${SEED_NAME}" ]]; then
-        log_error "Must specify either --seed-stage" \
+        log_error "Specify either --seed-stage" \
             "or both --arch and --name."
         exit 1
     fi
@@ -182,7 +182,7 @@ if [[ "${resume_phase}" != "stage3" && \
     force_remove "${STAGE_DIR}/var/cache/edb"
 
     if [[ -n "${RESUME_ID}" ]]; then
-        log_info "Stage 1 complete. Publishing stage3-init and yielding."
+        log_info "Stage 1 finished. Uploading stage3-init snapshot and stopping."
         publish_resume_stage "${STAGE_DIR}" "${PROFILE}" \
             "${RESUME_ID}" "stage3-init" || exit 1
         clear_resume_stage "${PROFILE}" "${RESUME_ID}" "stage1"

@@ -159,8 +159,8 @@ chroot_run "${TARGET_ROOT}" '
     '
 unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY
 
-# Reset instance-specific state to produce a generic reusable base image
-log_info "Resetting instance-specific identifiers for generic image"
+# Remove machine-specific files so the image can be reused.
+log_info "Removing machine-specific identifiers from image"
 create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
@@ -200,4 +200,4 @@ force_remove "${RAW_IMAGE}"
 force_remove "${TARGET_ROOT}"
 force_remove "${GCE_DIR}"
 
-log_info "Google Cloud image build completed successfully."
+log_info "Google Cloud image build finished."

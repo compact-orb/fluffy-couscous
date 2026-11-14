@@ -154,7 +154,7 @@ upload_portage_failure_logs() {
         return 0
     fi
 
-    log_warn "Build failed; gathering Portage failure logs for upload..."
+    log_warn "Build failed; collecting Portage failure logs..."
     local archive_dir archive_name archive
     archive_dir="$(mktemp --directory)"
     archive_name="portage-failure-logs-$(date +%Y%m%d%H%M%S).tar.zst"
@@ -501,15 +501,15 @@ mount_binary_packages() {
         ((timeout--))
     done
     if [[ "$(</proc/mounts)" != *" ${lowerdir} "* ]]; then
-        log_error "Timed out waiting for rclone mount to become ready"
+        log_error "Timed out waiting for rclone mount"
         return 1
     fi
 
     # Manually add rclone mount to the list of mounts to be unmounted later
     _active_binpkg_mounts+=("${lowerdir}")
 
-    # Pre-warm the FUSE directory cache in a single request so Portage
-    # dependency resolution does not stall on per-directory S3 listings.
+    # Pre-load the FUSE directory cache in one request so Portage does not
+    # stall listing S3 directories one by one.
     log_info "Pre-loading metadata for ${lowerdir}"
     rclone rc --no-output --unix-socket "${rc_sock}" "vfs/refresh" \
         "recursive=true"
@@ -926,7 +926,7 @@ exit \"\${rc}\""
     if (( exit_code != 0 )); then
         log_warn "Chroot execution failed with exit code ${exit_code}"
         if [[ ! -f "${exit_file}" ]]; then
-            log_warn "Exit code file (${exit_file}) NOT FOUND"
+            log_warn "Exit code file (${exit_file}) not found"
         fi
         log_warn "Kernel dmesg (last 30 lines):"
         dmesg --ctime 2> /dev/null | tail --lines=30 >&2 || true

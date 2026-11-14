@@ -26,9 +26,9 @@ cli_define_flag "SKIP_SYSTEM" "-s|--skip-system" \
 cli_define_option "TIMEOUT" "-t|--timeout" \
     "Timeout duration for emerge (e.g. 330m)" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
-    "Unique snapshot identifier for resumption" 0 ""
+    "Unique ID for resume snapshots" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
-    "Resume build from intermediate snapshot" 0
+    "Resume build from a saved snapshot" 0
 cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
@@ -56,10 +56,9 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 
 # === System Update ===
 
-# Optionally emerge oneshot packages before @system. Update @system with new
-# USE flags and deep dependency tree unless --skip-system is specified.
-# Rebuild packages with preserved libraries (@preserved-rebuild) across library
-# soname bumps before final depclean.
+# Optionally emerge oneshot packages first, then update @system unless
+# --skip-system is set. Run @preserved-rebuild for library soname changes
+# before the final depclean.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     emaint --fix binhost

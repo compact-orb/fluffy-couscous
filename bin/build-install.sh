@@ -176,9 +176,9 @@ create_directory "${STAGE_DIR}/usr/local/bin"
 create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
     "${STAGE_DIR}/usr/local/bin/install.sh"
 
-# Write sanitized .env containing only public repo, verification, and
-# read-only S3 keys; write-capable secrets (SIGNING_KEY, SECUREBOOT_KEY,
-# S3_SECRET_ACCESS_KEY) are strictly omitted.
+# Write a stripped .env with only public keys, repo URLs, and read-only
+# S3 keys. Write-capable secrets (SIGNING_KEY, SECUREBOOT_KEY,
+# S3_SECRET_ACCESS_KEY) are omitted.
 create_file "${INSTALLER_TARGET_DIR}/.env" \
 "GENTOO_MIRROR_URL=\"${GENTOO_MIRROR_URL}\"
 REPOS=\"${REPOS}\"

@@ -24,13 +24,13 @@ cli_define_option "PRE_PACKAGES" "-Q|--pre-packages" \
 cli_define_option "USEPKG_EXCLUDE" "-e|--usepkg-exclude" \
     "Binary packages to exclude" 0 ""
 cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
-    "Prune obsolete binary packages not installed" 0
+    "Remove old binary packages that are not installed" 0
 cli_define_option "TIMEOUT" "-t|--timeout" \
     "Timeout duration for emerge (e.g. 330m)" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
-    "Unique snapshot identifier for resumption" 0 ""
+    "Unique ID for resume snapshots" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
-    "Resume build from intermediate snapshot" 0
+    "Resume build from a saved snapshot" 0
 cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
@@ -59,10 +59,9 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 
 # === Build Packages ===
 
-# Emerge requested packages. Rebuild reverse dependencies from source
-# (--usepkg=n) to fix broken linkage before cleaning unused dependencies.
-# When --clean is requested, prune binary packages not matching installed
-# versions and refresh the binhost index.
+# Emerge requested packages, rebuild reverse dependencies from source
+# (--usepkg=n) to fix broken links, then clean unused dependencies.
+# With --clean, remove old binary packages and refresh the binhost index.
 build_exit=0
 CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
     emaint --fix binhost
