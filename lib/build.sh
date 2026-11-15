@@ -774,16 +774,17 @@ chroot_run_criu() {
         local pidfile="${criu_dir}/restore.pid"
         rm --force "${pidfile}"
         if ! criu restore \
-            --images-dir "${criu_dir}" \
-            --root "${real_target_root}" \
-            --restore-detached \
-            --pidfile "${pidfile}" \
-            --file-locks \
-            --link-remap \
-            --tcp-close \
             --cpu-cap="none" \
-            "${ext_restore_args[@]}" \
-            --verbosity=4 --log-file="restore.log"; then
+            --file-locks \
+            --images-dir "${criu_dir}" \
+            --link-remap \
+            --log-file="restore.log" \
+            --pidfile "${pidfile}" \
+            --restore-detached \
+            --root "${real_target_root}" \
+            --tcp-close \
+            --verbosity=4 \
+            "${ext_restore_args[@]}"; then
             if [[ -f "${criu_dir}/restore.log" ]]; then
                 tail --lines=50 "${criu_dir}/restore.log" >&2 || true
             fi
@@ -810,15 +811,15 @@ printf \"%s\n\" \"\${rc}\" > /var/tmp/.fluffy-chroot.exit
 exit \"\${rc}\""
         chmod 0755 "${cmd_file}"
 
-        unshare --pid --fork setsid unshare --mount --uts --ipc /bin/bash -c "
+        unshare --fork --pid setsid unshare --ipc --mount --uts /bin/bash -c "
             set -e
             mount --make-rprivate /
             mount --rbind '${real_target_root}' '${real_target_root}'
             cd '${real_target_root}'
             pivot_root . .oldroot
             mount --types proc proc /proc
-            mount --types devpts \
-                --options newinstance,ptmxmode=0666,mode=0620 devpts /dev/pts
+            mount --options newinstance,ptmxmode=0666,mode=0620 \
+                --types devpts devpts /dev/pts
             umount --lazy /.oldroot
             exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
         " < /dev/null > /dev/null 2>&1 &
@@ -880,15 +881,16 @@ exit \"\${rc}\""
             create_directory "${criu_dir}"
 
             if ! criu dump \
-                --tree "${ns_init_pid}" \
-                --images-dir "${criu_dir}" \
                 --file-locks \
-                --link-remap \
                 --ghost-limit "1G" \
-                --tcp-close \
+                --images-dir "${criu_dir}" \
+                --link-remap \
+                --log-file="dump.log" \
                 --network-lock "skip" \
-                "${ext_dump_args[@]}" \
-                --verbosity=4 --log-file="dump.log"; then
+                --tcp-close \
+                --tree "${ns_init_pid}" \
+                --verbosity=4 \
+                "${ext_dump_args[@]}"; then
                 if [[ -f "${criu_dir}/dump.log" ]]; then
                     tail --lines=50 "${criu_dir}/dump.log" >&2 || true
                 fi
