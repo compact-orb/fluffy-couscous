@@ -739,6 +739,32 @@ wait_for_criu_safe_point() {
         "${real_target_root}${PORTAGE_GPG_DIR}/S."* 2> /dev/null || true
 }
 
+get_criu_glibc_tunables() {
+    case "${CRIU_CPU_CLAMP:-none}" in
+        none|"")
+            return 0
+            ;;
+        auto)
+            local arch
+            arch="$(uname --machine)"
+            case "${arch}" in
+                x86_64)
+                    printf "%s" "\
+glibc.cpu.hwcaps=-AVX512F,-AVX512CD,-AVX512BW,-AVX512DQ,-AVX512VL,-RTM,-HLE"
+                    ;;
+                *)
+                    # Architecture does not require clamping or unsupported.
+                    ;;
+            esac
+            ;;
+        *)
+            log_warn \
+                "Unknown CRIU_CPU_CLAMP value '${CRIU_CPU_CLAMP}'; ignoring"
+            return 0
+            ;;
+    esac
+}
+
 chroot_run_criu() {
     local real_target_root
     real_target_root="$(realpath "${1}")"
@@ -750,6 +776,13 @@ chroot_run_criu() {
     local log_file="${real_target_root}/var/tmp/.fluffy-chroot.log"
     local exit_file="${real_target_root}/var/tmp/.fluffy-chroot.exit"
     local cmd_file="${real_target_root}/var/tmp/.fluffy-chroot-cmd.sh"
+
+    local criu_tunables
+    criu_tunables="$(get_criu_glibc_tunables)"
+    local tunables_export=""
+    if [[ -n "${criu_tunables}" ]]; then
+        tunables_export="export GLIBC_TUNABLES=\"${criu_tunables}\""
+    fi
 
     local -a ext_dump_args=()
     local -a ext_restore_args=()
@@ -799,6 +832,7 @@ chroot_run_criu() {
 
         create_file "${cmd_file}" "#!/bin/bash
 export TERM=\"dumb\"
+${tunables_export}
 exec < /dev/null >> /var/tmp/.fluffy-chroot.log 2>&1
 set +e
 (
@@ -821,6 +855,7 @@ exit \"\${rc}\""
             mount --options newinstance,ptmxmode=0666,mode=0620 \
                 --types devpts devpts /dev/pts
             umount --lazy /.oldroot
+            ${tunables_export}
             exec /bin/bash /var/tmp/.fluffy-chroot-cmd.sh
         " < /dev/null > /dev/null 2>&1 &
         unshare_pid="${!}"
