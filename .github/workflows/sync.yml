@@ -24,3 +24,7 @@ jobs:
             --source "anyc/steam-overlay" \
             --branch "master" \
             --force
+          gh repo sync "${{ github.repository_owner }}/gentoo-zh" \
+            --source "gentoo-zh/overlay" \
+            --branch "master" \
+            --force
