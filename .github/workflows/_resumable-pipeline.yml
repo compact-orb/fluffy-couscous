@@ -44,7 +44,8 @@ on:
         type: string
         default: ""
       workaround:
-        description: Apply bootstrap workaround instead of full rebuild (bootstrap)
+        description: >-
+          Apply bootstrap workaround instead of full rebuild (bootstrap)
         required: false
         type: boolean
         default: false
@@ -132,12 +133,12 @@ jobs:
         run: |
           # Strip carriage returns added by the GitHub web UI.
           if [[ "${MODE}" == "bootstrap" ]]; then
-            matrix_json="$(jq --null-input --compact-output \
-              --arg profile "${INPUT_PROFILE//$'\r'/}" '[$profile]')"
+            matrix_json="$(jq --arg profile "${INPUT_PROFILE//$'\r'/}" \
+              --compact-output --null-input '[$profile]')"
           else
             PROFILES="${PROFILES//$'\r'/}"
             matrix_json="$(printf '%s\n' "${PROFILES}" | \
-              jq --raw-input --slurp --compact-output \
+              jq --compact-output --raw-input --slurp \
               '[split("\n")[] | select(test("\\S"))]')"
           fi
           echo "profiles=${matrix_json}" >> "$GITHUB_OUTPUT"
@@ -157,7 +158,9 @@ jobs:
   attempt-2:
     name: Attempt 2
     needs: attempt-1
-    if: always() && !cancelled() && needs.attempt-1.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-1.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 2
@@ -170,7 +173,9 @@ jobs:
   attempt-3:
     name: Attempt 3
     needs: attempt-2
-    if: always() && !cancelled() && needs.attempt-2.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-2.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 3
@@ -183,7 +188,9 @@ jobs:
   attempt-4:
     name: Attempt 4
     needs: attempt-3
-    if: always() && !cancelled() && needs.attempt-3.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-3.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 4
@@ -196,7 +203,9 @@ jobs:
   attempt-5:
     name: Attempt 5
     needs: attempt-4
-    if: always() && !cancelled() && needs.attempt-4.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-4.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 5
@@ -209,7 +218,9 @@ jobs:
   attempt-6:
     name: Attempt 6
     needs: attempt-5
-    if: always() && !cancelled() && needs.attempt-5.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-5.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 6
@@ -222,7 +233,9 @@ jobs:
   attempt-7:
     name: Attempt 7
     needs: attempt-6
-    if: always() && !cancelled() && needs.attempt-6.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-6.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 7
@@ -235,7 +248,9 @@ jobs:
   attempt-8:
     name: Attempt 8
     needs: attempt-7
-    if: always() && !cancelled() && needs.attempt-7.outputs.has_resumes == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.attempt-7.outputs.has_resumes == 'true'
     uses: ./.github/workflows/_resumable-attempt.yml
     with:
       attempt: 8

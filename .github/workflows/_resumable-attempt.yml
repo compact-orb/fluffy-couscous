@@ -182,9 +182,9 @@ jobs:
           gpg --batch --verify "/tmp/resume/${sig_filename}" \
             "/tmp/resume/${image_filename}"
 
-          sudo zstd --decompress --sparse --force \
+          sudo zstd --decompress --force --sparse \
             "/tmp/resume/${image_filename}" -o /btrfs.img
-          rm --recursive --force /tmp/resume
+          rm --force --recursive /tmp/resume
 
           sudo mkdir --parents /mnt/btrfs
           sudo mount \
@@ -202,8 +202,8 @@ jobs:
           sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
           sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
 
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --add --global safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --add --global safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Run ${{ fromJson(inputs.config).mode }}.sh
         env:
@@ -225,14 +225,14 @@ jobs:
 
           args=(
             --profile="${TARGET_PROFILE}"
-            --timeout="${BUILD_TIMEOUT}"
             --resume-id="${{ github.run_id }}"
+            --timeout="${BUILD_TIMEOUT}"
           )
-          if (( ATTEMPT_NUM > 1 )); then
-            args+=(--resume)
-          fi
           if [[ "${ENABLE_JOBS}" == "true" ]]; then
             args+=(--jobs)
+          fi
+          if (( ATTEMPT_NUM > 1 )); then
+            args+=(--resume)
           fi
 
           case "${MODE}" in
@@ -266,8 +266,8 @@ jobs:
                 fi
               fi
               args+=(
-                --pre-packages="$(normalize_atoms "${BUILD_PRE_PACKAGES}")"
                 --packages="$(normalize_atoms "${BUILD_PACKAGES}")"
+                --pre-packages="$(normalize_atoms "${BUILD_PRE_PACKAGES}")"
                 --usepkg-exclude="$(normalize_atoms "${BUILD_USEPKG_EXCLUDE}")"
               )
               if [[ "${CLEAN_BINPKGS}" == "true" ]]; then
@@ -352,9 +352,9 @@ jobs:
               fi
             done < <(jq --raw-output '.[]' <<< "${PROFILES_JSON}")
 
-            if [[ ${#resuming[@]} -gt 0 ]]; then
+            if (( ${#resuming[@]} > 0 )); then
               json="$(printf '%s\n' "${resuming[@]}" | \
-                jq --raw-input --slurp --compact-output \
+                jq --compact-output --raw-input --slurp \
                 'split("\n") | map(select(length > 0))')"
               echo "has_resumes=true" >> "$GITHUB_OUTPUT"
               echo "profiles=${json}" >> "$GITHUB_OUTPUT"

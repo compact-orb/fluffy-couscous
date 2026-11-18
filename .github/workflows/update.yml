@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: "Space-separated package atoms to emerge oneshot before @system update"
+        description: >-
+          Space-separated package atoms to emerge oneshot before @system update
         required: false
         type: string
         default: ""
