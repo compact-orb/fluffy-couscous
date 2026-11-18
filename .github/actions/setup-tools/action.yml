@@ -1,0 +1,63 @@
+name: Setup Tools
+description: Cache and install rclone and optionally storageto
+
+inputs:
+  rclone-version:
+    description: rclone version to install
+    required: false
+    default: v1.75.2
+  storageto-version:
+    description: storageto CLI version to install
+    required: false
+    default: v0.5.0
+  storageto:
+    description: Whether to install storageto CLI
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Tools
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/tools
+        key: >-
+          tools-${{ runner.os }}-${{ inputs.rclone-version }}-${{
+          inputs.storageto-version }}
+
+    - name: Install Dependencies
+      shell: bash
+      env:
+        TOOL_RCLONE_VERSION: ${{ inputs.rclone-version }}
+        TOOL_STORAGETO_VERSION: ${{ inputs.storageto-version }}
+        INSTALL_STORAGETO: ${{ inputs.storageto }}
+      run: |
+        mkdir --parents "${HOME}/.cache/tools"
+        if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
+          rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
+          rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+          aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
+          unzip -j "/tmp/${rclone_pkg}" \
+            "*/rclone" -d "${HOME}/.cache/tools"
+          rm --force "/tmp/${rclone_pkg}"
+          chmod 0755 "${HOME}/.cache/tools/rclone"
+        fi
+        sudo mkdir --parents /usr/local/bin
+        sudo cp "${HOME}/.cache/tools/rclone" /usr/local/bin/
+        sudo chown root:root /usr/local/bin/rclone
+
+        if [[ "${INSTALL_STORAGETO}" == "true" ]]; then
+          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
+            sg_url="https://github.com/storageto/cli/releases/download"
+            sg_pkg="storageto-linux-amd64.tar.gz"
+            aria2c --dir="/tmp" \
+              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
+            tar --directory="${HOME}/.cache/tools" --extract \
+              --file="/tmp/${sg_pkg}"
+            rm --force "/tmp/${sg_pkg}"
+            chmod 0755 "${HOME}/.cache/tools/storageto"
+          fi
+          sudo cp "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/storageto
+        fi

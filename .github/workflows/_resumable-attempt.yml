@@ -1,0 +1,367 @@
+name: Resumable Attempt
+
+on:
+  workflow_call:
+    inputs:
+      attempt:
+        description: Attempt number, starting at 1
+        required: true
+        type: number
+      check_resume:
+        description: Check S3 for resume snapshots after this attempt
+        required: true
+        type: boolean
+      profiles:
+        description: JSON array of profiles to build in this attempt
+        required: true
+        type: string
+      resume_stage:
+        description: Stage snapshot prefix to restore when resuming
+        required: false
+        type: string
+        default: stage3
+      config:
+        description: Pipeline inputs as a JSON string
+        required: true
+        type: string
+    outputs:
+      has_resumes:
+        description: Whether any profile needs another attempt
+        value: ${{ jobs.check.outputs.has_resumes }}
+      profiles:
+        description: JSON array of profiles that need another attempt
+        value: ${{ jobs.check.outputs.profiles }}
+      resume_stage:
+        description: Stage snapshot prefix for the next attempt
+        value: ${{ jobs.check.outputs.resume_stage }}
+
+env:
+  SUDO_PRESERVE_ENV: "\
+    GENTOO_MIRROR_URL,REPOS,BINPKG_REPOS,SIGNING_KEY,BINPKG_PUBLIC_KEY,\
+    REPO_PUBLIC_KEYS,S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY,S3_REGION,\
+    S3_ENDPOINT,S3_BUCKET_NAME,SECUREBOOT_KEY,SECUREBOOT_CERT,STORAGETO_KEY,\
+    CRIU_CPU_CLAMP"
+  GENTOO_MIRROR_URL: ${{ vars.GENTOO_MIRROR_URL }}
+  REPOS: ${{ vars.REPOS }}
+  BINPKG_REPOS: ${{ vars.BINPKG_REPOS }}
+  SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+  BINPKG_PUBLIC_KEY: ${{ vars.BINPKG_PUBLIC_KEY }}
+  REPO_PUBLIC_KEYS: ${{ vars.REPO_PUBLIC_KEYS }}
+  S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
+  S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+  S3_REGION: ${{ vars.S3_REGION }}
+  S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+  S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+  SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
+  SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
+  STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
+  BUILD_PRE_PACKAGES: ${{ vars.BUILD_PRE_PACKAGES }}
+  BUILD_PACKAGES: ${{ vars.BUILD_PACKAGES }}
+  BUILD_PACKAGES_A: ${{ vars.BUILD_PACKAGES_A }}
+  PROFILES_A: ${{ vars.PROFILES_A }}
+  BUILD_PACKAGES_B: ${{ vars.BUILD_PACKAGES_B }}
+  PROFILES_B: ${{ vars.PROFILES_B }}
+  CRIU_CPU_CLAMP: "auto"
+
+jobs:
+  run:
+    name: Run
+    runs-on: ${{ fromJson(inputs.config).runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJson(inputs.profiles) }}
+    env:
+      MODE: ${{ fromJson(inputs.config).mode }}
+      BUILD_TIMEOUT: ${{ fromJson(inputs.config).timeout }}
+      ENABLE_JOBS: ${{ fromJson(inputs.config).jobs }}
+      SEED_ARCH: ${{ fromJson(inputs.config).seed_arch }}
+      SEED_NAME: ${{ fromJson(inputs.config).seed_name }}
+      SEED_STAGE: ${{ fromJson(inputs.config).seed_stage }}
+      WORKAROUND: ${{ fromJson(inputs.config).workaround }}
+      CUSTOM_PACKAGES: ${{ fromJson(inputs.config).custom_packages }}
+      INPUT_PRE_PACKAGES: ${{ fromJson(inputs.config).pre_packages }}
+      INPUT_PACKAGES: ${{ fromJson(inputs.config).packages }}
+      BUILD_USEPKG_EXCLUDE: ${{ fromJson(inputs.config).usepkg_exclude }}
+      CLEAN_BINPKGS: ${{ fromJson(inputs.config).clean_binpkgs }}
+      SKIP_SYSTEM: ${{ fromJson(inputs.config).skip_system }}
+    steps:
+      - if: ${{ fromJson(inputs.config).github_hosted }}
+        uses: compact-orb/optimize-runner-network@v1
+
+      - if: ${{ fromJson(inputs.config).github_hosted }}
+        uses: compact-orb/maximize-runner-storage@v4
+        with:
+          create-filesystem: 'false'
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install \
+            --no-install-recommends --yes \
+            aria2 btrfs-progs criu cryptsetup curl fuse3 gawk git gnupg udev \
+            unzip util-linux-extra xz-utils zstd
+          sudo apt clean
+
+      - name: Initialize Runner Filesystem
+        if: ${{ inputs.attempt == 1 && fromJson(inputs.config).github_hosted }}
+        run: |
+          free_bytes=$(df --block-size=1 --output=avail / | tail --lines=1)
+          image_size=$(( free_bytes - 1073741824 ))
+
+          sudo truncate --size="${image_size}" /btrfs.img
+          sudo mkfs.btrfs --metadata single /btrfs.img
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
+      - name: Checkout Repository
+        if: ${{ inputs.attempt == 1 }}
+        uses: actions/checkout@v7
+
+      # Resumed attempts restore the workspace from the Btrfs snapshot below.
+      # Only fetch .github/actions so setup-tools can run before the mount.
+      - name: Checkout Actions
+        if: ${{ inputs.attempt > 1 }}
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-tools
+
+      - name: Download & Mount Resume Filesystem
+        if: ${{ inputs.attempt > 1 }}
+        env:
+          TARGET_PROFILE: ${{ matrix.profile }}
+          RESUME_STAGE: ${{ inputs.resume_stage }}
+        run: |
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+
+          repo_profile="${TARGET_PROFILE#*:}"
+          stage_prefix="${RESUME_STAGE}-${repo_profile//\//-}"
+          image_filename="${stage_prefix}-resume-${{ github.run_id }}.img.zst"
+          sig_filename="${image_filename}.sig"
+
+          secret_key="${S3_SECRET_ACCESS_KEY:-${S3_RO_SECRET_ACCESS_KEY:-}}"
+
+          mkdir --parents /tmp/resume
+          for file in "${image_filename}" "${sig_filename}"; do
+            rclone copy \
+              --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+              --s3-endpoint "${S3_ENDPOINT}" \
+              --s3-no-check-bucket \
+              --s3-provider "Other" \
+              --s3-region "${S3_REGION}" \
+              --s3-secret-access-key "${secret_key}" \
+              --transfers "16" \
+              --verbose \
+              ":s3:${S3_BUCKET_NAME}/resumes/${file}" \
+              /tmp/resume/
+          done
+
+          if [[ -n "${SIGNING_KEY:-}" ]]; then
+            gpg --batch --import --quiet <<< "${SIGNING_KEY}"
+          fi
+          if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
+            gpg --batch --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
+          fi
+          gpg --batch --verify "/tmp/resume/${sig_filename}" \
+            "/tmp/resume/${image_filename}"
+
+          sudo zstd --decompress --sparse --force \
+            "/tmp/resume/${image_filename}" -o /btrfs.img
+          rm --recursive --force /tmp/resume
+
+          sudo mkdir --parents /mnt/btrfs
+          sudo mount \
+            --options=loop,noatime,compress-force=zstd:3 \
+            /btrfs.img /mnt/btrfs
+
+          sudo mkdir --parents /mnt/btrfs/usr/local /usr/local
+          sudo mount --bind /mnt/btrfs/usr/local /usr/local
+          sudo mkdir --parents /usr/local/bin
+          sudo cp "${HOME}/.cache/tools/rclone" \
+            "${HOME}/.cache/tools/storageto" /usr/local/bin/
+          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
+
+          sudo mkdir --parents /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo mount --bind /mnt/btrfs/workspace "${GITHUB_WORKSPACE}"
+          sudo chown "$(id --user):$(id --group)" "${GITHUB_WORKSPACE}"
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          sudo git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Run ${{ fromJson(inputs.config).mode }}.sh
+        env:
+          TARGET_PROFILE: ${{ matrix.profile }}
+          ATTEMPT_NUM: ${{ inputs.attempt }}
+        run: |
+          # Workaround for stripping carriage return characters from GitHub
+          # Actions environment variables set via the web interface.
+          for var in ${SUDO_PRESERVE_ENV//,/ }; do
+            declare -n ref="${var}"
+            ref="${ref//$'\r'/}"
+          done
+          # Workaround for missing `/run/user/0`.
+          sudo mkdir --mode="0700" --parents "/run/user/0"
+
+          normalize_atoms() {
+            sed 's/#.*//; s/\r//' <<< "${1}" | tr '\n' ' '
+          }
+
+          args=(
+            --profile="${TARGET_PROFILE}"
+            --timeout="${BUILD_TIMEOUT}"
+            --resume-id="${{ github.run_id }}"
+          )
+          if (( ATTEMPT_NUM > 1 )); then
+            args+=(--resume)
+          fi
+          if [[ "${ENABLE_JOBS}" == "true" ]]; then
+            args+=(--jobs)
+          fi
+
+          case "${MODE}" in
+            bootstrap)
+              if [[ -n "${SEED_ARCH}" ]]; then
+                args+=(--arch="${SEED_ARCH}")
+              fi
+              if [[ -n "${SEED_NAME}" ]]; then
+                args+=(--name="${SEED_NAME}")
+              fi
+              if [[ -n "${SEED_STAGE}" ]]; then
+                args+=(--seed-stage="${SEED_STAGE}")
+              fi
+              if [[ "${WORKAROUND}" == "true" ]]; then
+                args+=(--workaround)
+              fi
+              script="bin/bootstrap.sh"
+              ;;
+            build)
+              if [[ "${CUSTOM_PACKAGES}" == "true" ]]; then
+                BUILD_PRE_PACKAGES="${INPUT_PRE_PACKAGES}"
+                BUILD_PACKAGES="${INPUT_PACKAGES}"
+              else
+                if grep --fixed-strings --line-regexp --quiet \
+                  "${TARGET_PROFILE}" <<< "${PROFILES_A//$'\r'/}"; then
+                  BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_A}"
+                fi
+                if grep --fixed-strings --line-regexp --quiet \
+                  "${TARGET_PROFILE}" <<< "${PROFILES_B//$'\r'/}"; then
+                  BUILD_PACKAGES+=$'\n'"${BUILD_PACKAGES_B}"
+                fi
+              fi
+              args+=(
+                --pre-packages="$(normalize_atoms "${BUILD_PRE_PACKAGES}")"
+                --packages="$(normalize_atoms "${BUILD_PACKAGES}")"
+                --usepkg-exclude="$(normalize_atoms "${BUILD_USEPKG_EXCLUDE}")"
+              )
+              if [[ "${CLEAN_BINPKGS}" == "true" ]]; then
+                args+=(--clean)
+              fi
+              script="bin/build.sh"
+              ;;
+            update)
+              args+=(
+                --packages="$(normalize_atoms "${INPUT_PACKAGES}")"
+                --usepkg-exclude="$(normalize_atoms "${BUILD_USEPKG_EXCLUDE}")"
+              )
+              if [[ "${SKIP_SYSTEM}" == "true" ]]; then
+                args+=(--skip-system)
+              fi
+              script="bin/update.sh"
+              ;;
+            *)
+              echo "Unknown mode: ${MODE}" >&2
+              exit 1
+              ;;
+          esac
+
+          sudo --preserve-env=${SUDO_PRESERVE_ENV} "${script}" "${args[@]}"
+
+  check:
+    name: Check Resumes
+    needs: run
+    if: >-
+      always() && !cancelled() &&
+      inputs.check_resume &&
+      needs.run.result != 'skipped'
+    runs-on: ${{ fromJson(inputs.config).runner }}
+    outputs:
+      has_resumes: ${{ steps.check.outputs.has_resumes }}
+      profiles: ${{ steps.check.outputs.profiles }}
+      resume_stage: ${{ steps.check.outputs.resume_stage }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-tools
+        with:
+          storageto: "false"
+
+      - name: Check S3 for Resume Snapshots
+        id: check
+        env:
+          MODE: ${{ fromJson(inputs.config).mode }}
+          PROFILES_JSON: ${{ inputs.profiles }}
+        run: |
+          source lib/common.sh
+          source lib/build.sh
+          run_id="${{ github.run_id }}"
+
+          if [[ "${MODE}" == "bootstrap" ]]; then
+            profile="$(jq --raw-output '.[0]' <<< "${PROFILES_JSON}")"
+            found=""
+            for stage in "stage3" "stage3-init" "stage1"; do
+              if has_resume_stage "${profile}" "${run_id}" "${stage}"; then
+                found="${stage}"
+                break
+              fi
+            done
+            if [[ -n "${found}" ]]; then
+              log_info "Found ${found} resume snapshot for ${profile}"
+              compact="$(jq --compact-output '.' <<< "${PROFILES_JSON}")"
+              echo "has_resumes=true" >> "$GITHUB_OUTPUT"
+              echo "profiles=${compact}" >> "$GITHUB_OUTPUT"
+              echo "resume_stage=${found}" >> "$GITHUB_OUTPUT"
+            else
+              log_warn "No resume snapshot found for ${profile}"
+              echo "has_resumes=false" >> "$GITHUB_OUTPUT"
+              echo "profiles=[]" >> "$GITHUB_OUTPUT"
+              echo "resume_stage=" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            resuming=()
+            while IFS= read -r profile; do
+              [[ -z "${profile}" ]] && continue
+              if has_resume_stage "${profile}" "${run_id}" "stage3"; then
+                resuming+=("${profile}")
+              fi
+            done < <(jq --raw-output '.[]' <<< "${PROFILES_JSON}")
+
+            if [[ ${#resuming[@]} -gt 0 ]]; then
+              json="$(printf '%s\n' "${resuming[@]}" | \
+                jq --raw-input --slurp --compact-output \
+                'split("\n") | map(select(length > 0))')"
+              echo "has_resumes=true" >> "$GITHUB_OUTPUT"
+              echo "profiles=${json}" >> "$GITHUB_OUTPUT"
+              echo "resume_stage=stage3" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_resumes=false" >> "$GITHUB_OUTPUT"
+              echo "profiles=[]" >> "$GITHUB_OUTPUT"
+              echo "resume_stage=" >> "$GITHUB_OUTPUT"
+            fi
+          fi

@@ -30,8 +30,6 @@ env:
   SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
   SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
   STORAGETO_KEY: ${{ secrets.STORAGETO_KEY }}
-  TOOL_RCLONE_VERSION: "v1.75.2"
-  TOOL_STORAGETO_VERSION: "v0.5.0"
 
 jobs:
   build-install:
@@ -42,41 +40,10 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - name: Cache Tools
-        id: cache-tools
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/tools
-          key: >-
-            tools-${{ runner.os }}-${{ env.TOOL_RCLONE_VERSION }}-${{
-            env.TOOL_STORAGETO_VERSION }}
+      - uses: ./.github/actions/setup-tools
 
-      - name: Install Dependencies
+      - name: Install Host Dependencies
         run: |
-          mkdir --parents "${HOME}/.cache/tools"
-          if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
-            rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
-            rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
-            aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
-            unzip -j "/tmp/${rclone_pkg}" \
-              "*/rclone" -d "${HOME}/.cache/tools"
-            rm --force "/tmp/${rclone_pkg}"
-            chmod 0755 "${HOME}/.cache/tools/rclone"
-          fi
-          if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
-            sg_url="https://github.com/storageto/cli/releases/download"
-            sg_pkg="storageto-linux-amd64.tar.gz"
-            aria2c --dir="/tmp" \
-              "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
-            tar --directory="${HOME}/.cache/tools" --extract \
-              --file="/tmp/${sg_pkg}"
-            rm --force "/tmp/${sg_pkg}"
-            chmod 0755 "${HOME}/.cache/tools/storageto"
-          fi
-          sudo mkdir --parents /usr/local/bin
-          sudo cp "${HOME}/.cache/tools/rclone" \
-            "${HOME}/.cache/tools/storageto" /usr/local/bin/
-          sudo chown root:root /usr/local/bin/rclone /usr/local/bin/storageto
           sudo apt update
           sudo apt install --no-install-recommends --yes criu xorriso
 
