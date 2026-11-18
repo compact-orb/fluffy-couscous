@@ -22,7 +22,9 @@ on:
         type: string
         default: ""
       clean_binpkgs:
-        description: "Remove old binary packages that are not installed"
+        description: >-
+          Remove old binary packages that are not installed (only when packages
+          is empty)
         required: false
         type: boolean
         default: false

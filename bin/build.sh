@@ -40,6 +40,9 @@ if [[ -z "${PACKAGES//[[:space:]]/}" ]]; then
     if [[ -z "${PRE_PACKAGES//[[:space:]]/}" ]]; then
         PRE_PACKAGES="$(resolve_pre_packages)"
     fi
+elif (( CLEAN_BINPKGS == 1 )); then
+    log_error "--clean cannot be used with --packages."
+    exit 1
 fi
 readonly PROFILE PACKAGES PRE_PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
     TIMEOUT RESUME_ID RESUME JOBS
