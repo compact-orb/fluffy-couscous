@@ -30,13 +30,13 @@ on:
         type: boolean
         default: false
       jobs:
-        description: "Enable parallel emerge jobs using nproc (defaults to 1)"
+        description: "Enable parallel emerge jobs using nproc"
         required: false
         type: boolean
         default: false
         # default: true # For Avrea
       timeout:
-        description: "Timeout duration for emerge (e.g. 330m or 30m)"
+        description: "Timeout duration for emerge (e.g. 330m)"
         required: false
         type: string
         default: "330m"

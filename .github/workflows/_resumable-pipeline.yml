@@ -11,7 +11,7 @@ on:
         description: Maximum number of build attempts (1 to 8)
         required: false
         type: number
-        default: 4
+        default: 8
       runner:
         description: GitHub Actions runner label
         required: false

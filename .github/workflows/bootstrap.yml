@@ -20,17 +20,17 @@ on:
         required: false
         type: string
       workaround:
-        description: "Apply bootstrap workaround instead of full rebuild"
+        description: "Apply bootstrap workaround instead of default"
         required: false
         type: boolean
         default: false
       jobs:
-        description: "Enable parallel emerge jobs using nproc (defaults to 1)"
+        description: "Enable parallel emerge jobs using nproc"
         required: false
         type: boolean
         default: false
       timeout:
-        description: "Timeout duration for emerge (e.g. 330m or 30m)"
+        description: "Timeout duration for emerge (e.g. 330m)"
         required: false
         type: string
         default: "330m"
