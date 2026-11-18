@@ -1,0 +1,3 @@
+# Format: <repo:profile/path> <package_set ...>
+automatic-journey:amd64/goldmont-plus/gnome common goldmont-plus
+automatic-journey:amd64/x86-64-v3/gnome     common x86-64-v3

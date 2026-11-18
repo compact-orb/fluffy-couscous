@@ -157,7 +157,7 @@ chroot_run "${TARGET_ROOT}" '
     chmod 0600 "${home_dir}/.ssh/authorized_keys"
     chown --recursive "${IMAGE_USER}:${IMAGE_USER}" "${home_dir}/.ssh"
     '
-unset IMAGE_USER IMAGE_SSH_PUBLIC_KEY
+unset IMAGE_SSH_PUBLIC_KEY
 
 # Remove machine-specific files so the image can be reused.
 log_info "Removing machine-specific identifiers from image"

@@ -49,13 +49,6 @@ on:
         required: false
         type: boolean
         default: false
-      custom_packages:
-        description: >-
-          Use packages and pre_packages inputs instead of repository variables
-          (build)
-        required: false
-        type: boolean
-        default: false
       packages:
         description: Space-separated package atoms (build/update)
         required: false
@@ -93,12 +86,7 @@ on:
         default: "330m"
 
 env:
-  S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
   S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-  S3_REGION: ${{ vars.S3_REGION }}
-  S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
-  S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
-  PROFILES: ${{ vars.PROFILES }}
 
 jobs:
   setup:
@@ -110,8 +98,7 @@ jobs:
       - if: ${{ inputs.github_hosted }}
         uses: compact-orb/optimize-runner-network@v1
 
-      - if: ${{ inputs.github_hosted }}
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
       - if: ${{ inputs.github_hosted }}
         uses: ./.github/actions/setup-tools
@@ -131,13 +118,12 @@ jobs:
           MODE: ${{ inputs.mode }}
           INPUT_PROFILE: ${{ inputs.profile }}
         run: |
-          # Strip carriage returns added by the GitHub web UI.
           if [[ "${MODE}" == "bootstrap" ]]; then
             matrix_json="$(jq --arg profile "${INPUT_PROFILE//$'\r'/}" \
               --compact-output --null-input '[$profile]')"
           else
-            PROFILES="${PROFILES//$'\r'/}"
-            matrix_json="$(printf '%s\n' "${PROFILES}" | \
+            source lib/common.sh
+            matrix_json="$(list_profiles | \
               jq --compact-output --raw-input --slurp \
               '[split("\n")[] | select(test("\\S"))]')"
           fi

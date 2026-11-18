@@ -3,19 +3,16 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
-      custom_packages:
-        description: >-
-          Use packages and pre_packages inputs instead of environment variables
-        required: false
-        type: boolean
-        default: false
       packages:
-        description: "Space-separated package atoms"
+        description: >-
+          Space-separated package atoms (leave empty to build configured sets)
         required: false
         type: string
         default: ""
       pre_packages:
-        description: "Package atoms to emerge before --packages"
+        description: >-
+          Package atoms to emerge before --packages (defaults to config when
+          packages is empty)
         required: false
         type: string
         default: ""
@@ -52,7 +49,6 @@ jobs:
       # For Avrea:
       # runner: avrea-ubuntu-26.04-32-vcpu
       # github_hosted: false
-      custom_packages: ${{ inputs.custom_packages }}
       packages: ${{ inputs.packages }}
       pre_packages: ${{ inputs.pre_packages }}
       usepkg_exclude: ${{ inputs.usepkg_exclude }}

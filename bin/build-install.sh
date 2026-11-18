@@ -164,7 +164,7 @@ force_remove "${ESP_MOUNT_DIR}"
 log_info "Bundling installer into image"
 readonly INSTALLER_TARGET_DIR="${STAGE_DIR}/opt/fluffy-couscous"
 create_directory "${INSTALLER_TARGET_DIR}"
-for dir in "bin" "lib" "keys" "portage"; do
+for dir in "bin" "config" "lib" "keys" "portage"; do
     if [[ -d "${WORK_DIR}/${dir}" ]]; then
         create_directory "${INSTALLER_TARGET_DIR}/${dir}"
         recursive_copy "${WORK_DIR}/${dir}/." "${INSTALLER_TARGET_DIR}/${dir}"
@@ -176,23 +176,11 @@ create_directory "${STAGE_DIR}/usr/local/bin"
 create_symbolic_link "/opt/fluffy-couscous/bin/install.sh" \
     "${STAGE_DIR}/usr/local/bin/install.sh"
 
-# Write a stripped .env with only public keys, repo URLs, and read-only
-# S3 keys. Write-capable secrets (SIGNING_KEY, SECUREBOOT_KEY,
-# S3_SECRET_ACCESS_KEY) are omitted.
+# Write a stripped .env with only the read-only S3 secret. All non-secret
+# settings and public keys/certificates are bundled from config/ and keys/.
 create_file "${INSTALLER_TARGET_DIR}/.env" \
-"GENTOO_MIRROR_URL=\"${GENTOO_MIRROR_URL}\"
-REPOS=\"${REPOS}\"
-BINPKG_REPOS=\"${BINPKG_REPOS}\"
-ANSIBLE_PULL_URL=\"${ANSIBLE_PULL_URL}\"
-BINPKG_PUBLIC_KEY=\"${BINPKG_PUBLIC_KEY:-}\"
-REPO_PUBLIC_KEYS=\"${REPO_PUBLIC_KEYS:-}\"
-SECUREBOOT_CERT=\"${SECUREBOOT_CERT:-}\"
-S3_ACCESS_KEY_ID=\"${S3_ACCESS_KEY_ID}\"
-S3_RO_SECRET_ACCESS_KEY=\"${S3_RO_SECRET_ACCESS_KEY:-}\"
-S3_REGION=\"${S3_REGION}\"
-S3_ENDPOINT=\"${S3_ENDPOINT}\"
-S3_BUCKET_NAME=\"${S3_BUCKET_NAME}\""
-chmod 0644 "${INSTALLER_TARGET_DIR}/.env"
+    "S3_RO_SECRET_ACCESS_KEY=\"${S3_RO_SECRET_ACCESS_KEY:-}\""
+chmod 0600 "${INSTALLER_TARGET_DIR}/.env"
 
 # === Build SquashFS Image ===
 

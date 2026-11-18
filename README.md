@@ -46,8 +46,23 @@ This project uses four external services or repositories:
 
 ### 1. Configuration
 
-Copy `.env.example` to `.env` and set your repository URLs, PGP signing keys,
-Secure Boot credentials, and S3 credentials:
+Non-secret configuration is tracked directly in the repository:
+
+- **`config/env`**: Mirror URL, ebuild/binary package repositories, Ansible
+  repository URL, S3 endpoint/region/bucket/access key ID, and `IMAGE_USER`.
+- **`config/profiles`**: Target profiles and their package sets
+  (`<repo:profile/path> <package_set ...>`). Used by `bin/build.sh` and the
+  `Build` / `Update` GitHub Actions workflows.
+- **`config/packages/`**: Plain-text package lists (one atom per line, `#`
+  comments supported). `config/packages/pre` is emerged first in a separate
+  `emerge` call before the profile's configured sets (`common`, `goldmont-plus`,
+  `x86-64-v3`, etc.).
+- **`keys/`**: Bundled public PGP keys (`*.asc`, including `signing.asc` for
+  binary package and stage verification and `repo.asc` for Git commit
+  verification) and the Secure Boot public certificate (`secureboot.pem`).
+
+Secrets stay out of git. For local runs, copy `.env.example` to `.env` and fill
+in your private keys and credentials:
 
 ```bash
 cp .env.example .env
@@ -64,34 +79,37 @@ details:
 sudo ./bin/bootstrap.sh \
   --arch amd64 \
   --name stage3-amd64-systemd \
-  --profile "custom-overlay:amd64/x86-64-v3/base" \
+  --profile "automatic-journey:amd64/x86-64-v3/gnome" \
   --workaround
 
 # Or bootstrap using an existing custom stage3 as seed
 sudo ./bin/bootstrap.sh \
-  --profile "custom-overlay:amd64/x86-64-v3/gnome" \
+  --profile "automatic-journey:amd64/x86-64-v3/gnome" \
   --seed-stage \
-  "custom-overlay:amd64/x86-64-v3/base"
+  "automatic-journey:amd64/x86-64-v3/base"
 
 # Update base system packages and refresh the stage3 archive
-sudo ./bin/update.sh --profile "custom-overlay:amd64/x86-64-v3/base"
+sudo ./bin/update.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
 
-# Build additional binary packages
+# Build the profile's configured package sets from config/
+sudo ./bin/build.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
+
+# Or build a custom list of packages (skips config/packages/*)
 sudo ./bin/build.sh \
   --packages "app-admin/ansible sys-kernel/gentoo-kernel" \
-  --profile "custom-overlay:amd64/x86-64-v3/base"
+  --profile "automatic-journey:amd64/x86-64-v3/gnome"
 
 # Build live installer ISO
-sudo ./bin/build-install.sh --profile "custom-overlay:amd64/x86-64-v3/base"
+sudo ./bin/build-install.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
 
 # Build Google Cloud custom image
-sudo ./bin/build-gce.sh --profile "custom-overlay:amd64/x86-64-v3/base"
+sudo ./bin/build-gce.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
 
 # Install target system from booted live media
 sudo install.sh \
   --drive /dev/nvme0n1 \
   --encrypt \
-  --profile "custom-overlay:amd64/x86-64-v3/base" \
+  --profile "automatic-journey:amd64/x86-64-v3/gnome" \
   --swap 16
 ```
 
@@ -114,29 +132,17 @@ updates your forks on demand in GitHub Actions:
 
 The `Build` ([`.github/workflows/build.yml`](.github/workflows/build.yml)) and
 `Update` ([`.github/workflows/update.yml`](.github/workflows/update.yml))
-workflows run on GitHub-hosted runners using repository variables:
-
-- **`PROFILES`**: Newline-separated list of target profiles built in parallel.
-- **`BUILD_PRE_PACKAGES`**: Optional. Same format as `BUILD_PACKAGES`. When set,
-  these atoms are emerged first in a separate `emerge` call before
-  `BUILD_PACKAGES`. Useful for toolchain packages that must be installed before
-  packages that depend on them.
-- **`BUILD_PACKAGES`**: Newline- or space-separated list of package atoms for
-  `build.yml`. Inline `#` comments are supported and stripped at runtime.
-- **`BUILD_PACKAGES_A`**: Optional. Additional package atoms appended to
-  `BUILD_PACKAGES` only for profiles listed in `PROFILES_A`.
-- **`PROFILES_A`**: Optional. Newline-separated list of profiles that include
-  `BUILD_PACKAGES_A`.
-- **`BUILD_PACKAGES_B`**: Optional. Additional package atoms appended to
-  `BUILD_PACKAGES` only for profiles listed in `PROFILES_B`.
-- **`PROFILES_B`**: Optional. Newline-separated list of profiles that include
-  `BUILD_PACKAGES_B`.
+workflows run on GitHub-hosted runners using the profiles in `config/profiles`
+and package sets in `config/packages/` (no GitHub Actions repository variables
+are used; only repository secrets such as `SIGNING_KEY`, `SECUREBOOT_KEY`,
+`S3_SECRET_ACCESS_KEY`, `S3_RO_SECRET_ACCESS_KEY`, `STORAGETO_KEY`,
+`IMAGE_SSH_PUBLIC_KEY`, and `SYNC_FORK_PAT`).
 
 Workflows set a 5.5-hour timer (`--timeout="330m"`) by default. When a build
 times out, CRIU (`criu dump` / `criu restore`) saves the running `emerge`
 processes, uploads the intermediate Btrfs image to S3, and resumes on the next
-job (up to 4 attempts for `Build` and `Update`, and up to 8 attempts for
-`Bootstrap`). Old snapshots are deleted automatically, though setting a 1–2 day
+job (up to 8 attempts for `Build` and `Bootstrap`, and up to 4 attempts for
+`Update`). Old snapshots are deleted automatically, though setting a 1–2 day
 expiration rule on `resumes/` in S3 is recommended.
 
 ## Google Cloud Custom Images (Secure Boot)

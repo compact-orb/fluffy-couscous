@@ -18,7 +18,7 @@ source "$(realpath \
 cli_define_option "PROFILE" "-p|--profile" \
     "Profile in repository:profile format" 1
 cli_define_option "PACKAGES" "-P|--packages" \
-    "Space-separated package atoms" 1
+    "Space-separated package atoms (defaults to config for --profile)" 0 ""
 cli_define_option "PRE_PACKAGES" "-Q|--pre-packages" \
     "Package atoms to emerge before --packages" 0 ""
 cli_define_option "USEPKG_EXCLUDE" "-e|--usepkg-exclude" \
@@ -35,6 +35,12 @@ cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
+if [[ -z "${PACKAGES//[[:space:]]/}" ]]; then
+    PACKAGES="$(resolve_profile_packages "${PROFILE}")"
+    if [[ -z "${PRE_PACKAGES//[[:space:]]/}" ]]; then
+        PRE_PACKAGES="$(resolve_pre_packages)"
+    fi
+fi
 readonly PROFILE PACKAGES PRE_PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
     TIMEOUT RESUME_ID RESUME JOBS
 

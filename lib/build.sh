@@ -252,7 +252,7 @@ sign_file() {
 install_secureboot_keys() {
     local target_root="${1}"
 
-    if [[ ! -v SECUREBOOT_KEY ]] || [[ ! -v SECUREBOOT_CERT ]]; then
+    if [[ -z "${SECUREBOOT_KEY:-}" ]]; then
         return
     fi
 
@@ -265,7 +265,7 @@ install_secureboot_keys() {
     create_file "${secureboot_dir}/db.key" "${SECUREBOOT_KEY}"
     chmod 0600 "${secureboot_dir}/db.key"
 
-    create_file "${secureboot_dir}/db.pem" "${SECUREBOOT_CERT}"
+    copy_file "${SECUREBOOT_CERT_FILE}" "${secureboot_dir}/db.pem"
     chmod 0644 "${secureboot_dir}/db.pem"
 
     if [[ -f "${target_root}/etc/portage/make.conf" ]] && \

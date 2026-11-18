@@ -1,0 +1,53 @@
+# ==============================================================================
+# Ebuild & Binary Package Repositories
+# ==============================================================================
+
+# Gentoo distfiles mirror used by bootstrap.sh to fetch the initial seed stage3.
+GENTOO_MIRROR_URL="http://gentoo.mirrors.ovh.net/gentoo-distfiles"
+
+# Newline-separated list of "<repo_name> <git_url> [no-verify]" entries.
+# Every repository's HEAD commit must be signed by a PGP key present in
+# keys/*.asc (verified via `git verify-commit HEAD`), unless explicitly marked
+# with "no-verify" (e.g. for contributor overlays like guru).
+REPOS="gentoo https://github.com/compact-orb/gentoo-mirror.git
+automatic-journey https://github.com/compact-orb/automatic-journey.git
+guru https://github.com/compact-orb/guru.git no-verify
+steam-overlay https://github.com/compact-orb/steam-overlay.git no-verify
+gentoo-zh https://github.com/compact-orb/gentoo-zh.git no-verify"
+
+# Newline-separated list of "<repo_name> <base_url>" binary package mirrors.
+# Used by install.sh to generate /etc/portage/binrepos.conf/<repo_name>.conf
+# with sync-uri = <base_url>/<profile_path>.
+BINPKG_REPOS="automatic-journey https://lively-flower-f91a.compact-orb.workers.dev/binpkgs"
+
+# ==============================================================================
+# Post-Install Provisioning
+# ==============================================================================
+
+# Git repository URL passed to `ansible-pull --url=...` inside the target chroot
+# by install.sh and build-gce.sh (expected to configure sudoers and services).
+ANSIBLE_PULL_URL="https://github.com/compact-orb/potential-memory.git"
+
+# ==============================================================================
+# S3-Compatible Storage (rclone)
+# ==============================================================================
+
+# Non-secret storage settings used by s3_rclone() in lib/common.sh to access:
+#   - :s3:<S3_BUCKET_NAME>/stage3-<profile>.tar.zst (and .sig)
+#   - :s3:<S3_BUCKET_NAME>/binpkgs/<profile>/
+#   - :s3:<S3_BUCKET_NAME>/resumes/
+# Secret access keys (S3_SECRET_ACCESS_KEY, S3_RO_SECRET_ACCESS_KEY) live in
+# .env / GitHub Secrets.
+S3_ACCESS_KEY_ID="fluffy-couscous"
+S3_REGION="uk"
+S3_ENDPOINT="https://uk-s3.storage.bunnycdn.com"
+S3_BUCKET_NAME="fluffy-couscous"
+
+# ==============================================================================
+# Cloud & VM Images
+# ==============================================================================
+
+# Primary administrator account created in cloud/virtualization images (e.g.,
+# GCE disk images). Added to the wheel group for administrative access.
+# The authorized SSH public key (IMAGE_SSH_PUBLIC_KEY) lives in .env / Secrets.
+IMAGE_USER="compact-orb"

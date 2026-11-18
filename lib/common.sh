@@ -20,7 +20,6 @@ required_commands+=(
     "losetup"
     "mkdir"
     "mktemp"
-    # "modprobe" not strictly required
     "mount"
     "openssl"
     "rclone"
@@ -40,7 +39,7 @@ readonly WORK_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 env_file="${WORK_DIR}/.env"
 if [[ -f "${env_file}" ]]; then
     # Preserve environment variables already set before sourcing .env so
-    # caller/CI overrides take precedence over values in the .env file.
+    # caller/CI secrets take precedence over values in the .env file.
     declare -A _preserved_env=()
     while IFS= read -r _var_name; do
         if [[ -n "${_var_name}" && -n "${!_var_name}" ]]; then
@@ -57,11 +56,15 @@ if [[ -f "${env_file}" ]]; then
     unset _preserved_env _var_name
 fi
 unset env_file
+source "${WORK_DIR}/config/env"
+readonly GENTOO_MIRROR_URL REPOS BINPKG_REPOS ANSIBLE_PULL_URL \
+    S3_ACCESS_KEY_ID S3_REGION S3_ENDPOINT S3_BUCKET_NAME IMAGE_USER
 readonly BUILD_DIR="${WORK_DIR}/build"
 readonly LOCAL_REPOS_DIR="${BUILD_DIR}/repos"
-readonly GENTOO_MIRROR_URL="${GENTOO_MIRROR_URL:-http://distfiles.gentoo.org}"
 readonly PORTAGE_GPG_DIR="/var/lib/portage/gnupg-sign"
 readonly PORTAGE_SECUREBOOT_DIR="/var/lib/portage/secureboot"
+readonly SIGNING_PUBLIC_KEY_FILE="${WORK_DIR}/keys/signing.asc"
+readonly SECUREBOOT_CERT_FILE="${WORK_DIR}/keys/secureboot.pem"
 
 # === Logging Helpers ===
 
@@ -396,6 +399,70 @@ parse_profile() {
     printf "%s %s\n" "${repo}" "${repo_profile}"
 }
 
+# Lists profiles from config/profiles (ignoring # comments and blank lines).
+list_profiles() {
+    awk '{sub(/\r$/, ""); sub(/#.*/, ""); if (NF) print $1}' \
+        "${WORK_DIR}/config/profiles"
+}
+
+# Reads space-separated package atoms from one or more plain-text list files.
+read_package_list() {
+    awk '
+        {
+            sub(/\r$/, "")
+            sub(/#.*/, "")
+            for (i = 1; i <= NF; i++) {
+                atoms[++n] = $i
+            }
+        }
+        END {
+            for (i = 1; i <= n; i++) {
+                printf "%s%s", (i > 1 ? " " : ""), atoms[i]
+            }
+            if (n > 0) {
+                printf "\n"
+            }
+        }
+    ' "${@}"
+}
+
+resolve_profile_packages() {
+    local target_profile="${1}"
+    local line
+    line="$(awk -v p="${target_profile}" \
+        '{sub(/\r$/, ""); sub(/#.*/, ""); if (NF && $1 == p) {print; exit}}' \
+        "${WORK_DIR}/config/profiles")"
+    if [[ -z "${line}" ]]; then
+        log_error "Profile '${target_profile}' not found in config/profiles"
+        return 1
+    fi
+
+    local -a fields=()
+    IFS=$' \t' read -ra fields <<< "${line}"
+    if (( ${#fields[@]} < 2 )); then
+        log_error "No package sets configured for profile '${target_profile}'"
+        return 1
+    fi
+
+    local -a files=()
+    local group
+    for group in "${fields[@]:1}"; do
+        files+=("${WORK_DIR}/config/packages/${group}")
+    done
+
+    local packages
+    packages="$(read_package_list "${files[@]}")"
+    if [[ -z "${packages}" ]]; then
+        log_error "No packages resolved for profile '${target_profile}'"
+        return 1
+    fi
+    printf "%s\n" "${packages}"
+}
+
+resolve_pre_packages() {
+    read_package_list "${WORK_DIR}/config/packages/pre"
+}
+
 # === Mount Management ===
 
 _registered_mount_arrays=()
@@ -596,7 +663,6 @@ download_ebuild_repositories() {
     log_info "Downloading ebuild repositories"
 
     import_bundled_keys
-    import_public_keys
 
     load_ebuild_repositories
 
@@ -615,8 +681,8 @@ download_ebuild_repositories() {
             git clone --depth 1 --quiet "${repo_url}" "${repo_dir}"
         fi
         # Enforce GPG commit signature verification on ebuild repositories
-        # using bundled keys (keys/*.asc) and REPO_PUBLIC_KEYS unless explicitly
-        # exempted (e.g. for contributor overlays like guru).
+        # using bundled keys (keys/*.asc) unless explicitly exempted (e.g.
+        # for contributor overlays like guru).
         if [[ "${verify_mode:-}" == "no-verify" ]]; then
             log_warn "Commit signature verification skipped for ${repo_name}"
         else
@@ -719,35 +785,6 @@ import_bundled_keys() {
     readonly _BUNDLED_KEYS_IMPORTED=1
 }
 
-import_public_keys() {
-    if [[ -v _public_keys_imported ]]; then
-        return
-    fi
-
-    log_info "Importing public keys"
-
-    local all_keys=""
-    if [[ -n "${REPO_PUBLIC_KEYS:-}" ]]; then
-        all_keys+="${REPO_PUBLIC_KEYS}"$'\n'
-    fi
-    if [[ -n "${BINPKG_PUBLIC_KEY:-}" ]]; then
-        all_keys+="${BINPKG_PUBLIC_KEY}"$'\n'
-    fi
-    if [[ -n "${SEED_PUBLIC_KEYS:-}" ]]; then
-        all_keys+="${SEED_PUBLIC_KEYS}"$'\n'
-    fi
-
-    if [[ -n "${all_keys//[[:space:]]/}" ]]; then
-        gpg --import --quiet <<< "${all_keys}"
-
-        gpg --show-keys --with-colons <<< "${all_keys}" | \
-            awk -F: '/^fpr/ {print $10 ":6:"}' | \
-            gpg --batch --import-ownertrust --quiet
-    fi
-
-    readonly _public_keys_imported=1
-}
-
 # === S3 & Stage Archives ===
 
 s3_rclone() {
@@ -772,12 +809,6 @@ fetch_project_stage() {
     log_info "Downloading and extracting Gentoo ${stage_type} to ${target_root}"
 
     import_bundled_keys
-    import_public_keys
-
-    if [[ -v SIGNING_KEY && -n "${SIGNING_KEY}" ]] && \
-        declare -F import_signing_key > /dev/null; then
-        import_signing_key
-    fi
 
     create_directory "${target_root}"
 
@@ -868,28 +899,12 @@ configure_portage() {
     local portage_gnupg_dir="${target_root}/etc/portage/gnupg"
     create_directory "${portage_gnupg_dir}"
 
-    # Build scripts derive the verification key from SIGNING_KEY; live
-    # installer environments have no private key and use BINPKG_PUBLIC_KEY.
-    if [[ -n "${SIGNING_KEY:-}" ]] && \
-        declare -F import_signing_key > /dev/null; then
-        import_signing_key
-        gpg --batch --export "${_signing_key_fingerprint}" | \
-            gpg --batch --homedir "${portage_gnupg_dir}" --import
-
-        printf "%s\n" "${_signing_key_fingerprint}:6:" | \
-            gpg --batch --homedir "${portage_gnupg_dir}" \
+    gpg --batch --homedir "${portage_gnupg_dir}" \
+        --import --quiet "${SIGNING_PUBLIC_KEY_FILE}"
+    gpg --show-keys --with-colons "${SIGNING_PUBLIC_KEY_FILE}" | \
+        awk -F: '/^fpr/ {print $10 ":6:"}' | \
+        gpg --batch --homedir "${portage_gnupg_dir}" \
             --import-ownertrust --quiet
-    else
-        if [[ -n "${BINPKG_PUBLIC_KEY//[[:space:]]/}" ]]; then
-            gpg --batch --homedir "${portage_gnupg_dir}" \
-                --import --quiet <<< "${BINPKG_PUBLIC_KEY}"
-            gpg --batch --homedir "${portage_gnupg_dir}" \
-                --list-keys --with-colons 2> /dev/null | \
-                awk -F: '/^fpr/ {print $10 ":6:"}' | \
-                gpg --batch --homedir "${portage_gnupg_dir}" \
-                    --import-ownertrust --quiet
-        fi
-    fi
 
     gpg --batch --check-trustdb \
         --homedir "${portage_gnupg_dir}" 2> /dev/null || true
@@ -1271,15 +1286,10 @@ install_secureboot_cert() {
     local target_root="${1}"
     local dest_cert="${target_root}/boot/Secure Boot Certificate.der"
 
-    if [[ -n "${SECUREBOOT_CERT:-}" ]]; then
-        log_info "Exporting Secure Boot certificate to ESP"
-        openssl x509 -inform "PEM" -outform "DER" \
-            -out "${dest_cert}" \
-            <<< "${SECUREBOOT_CERT}"
-    elif [[ -f "/boot/Secure Boot Certificate.der" ]]; then
-        log_info "Copying Secure Boot certificate to ESP"
-        copy_file "/boot/Secure Boot Certificate.der" "${dest_cert}"
-    fi
+    log_info "Exporting Secure Boot certificate to ESP"
+    openssl x509 -inform "PEM" -outform "DER" \
+        -in "${SECUREBOOT_CERT_FILE}" \
+        -out "${dest_cert}"
 }
 
 persist_ebuild_repositories() {
