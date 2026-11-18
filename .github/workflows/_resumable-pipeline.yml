@@ -130,6 +130,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           INPUT_PROFILE: ${{ inputs.profile }}
         run: |
+          # Strip carriage returns added by the GitHub web UI.
           if [[ "${MODE}" == "bootstrap" ]]; then
             matrix_json="$(jq --null-input --compact-output \
               --arg profile "${INPUT_PROFILE//$'\r'/}" '[$profile]')"
