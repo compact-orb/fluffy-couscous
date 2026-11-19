@@ -75,6 +75,9 @@ jobs:
         with:
           create-filesystem: 'false'
 
+      - if: ${{ fromJson(inputs.config).github_hosted }}
+        uses: compact-orb/switch-runner-mirror@v1
+
       - name: Install Host Dependencies
         run: |
           sudo apt update
