@@ -1,0 +1,2 @@
+# Avoid circular dependencies
+gnome-base/gnome-keyring -ssh-agent
