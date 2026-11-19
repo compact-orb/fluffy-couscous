@@ -1,2 +1,4 @@
 # Avoid circular dependencies
+dev-python/pillow -truetype
 gnome-base/gnome-keyring -ssh-agent
+media-libs/libavif -gdk-pixbuf
