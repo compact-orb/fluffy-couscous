@@ -165,7 +165,7 @@ To import the image into Google Cloud and run it with Shielded VM Secure Boot:
    ```bash
    gcloud compute images create <image-name> \
      --source-uri="gs://<bucket-name>/gce-<profile>-<date>.tar.gz" \
-     --guest-os-features="UEFI_COMPATIBLE,GVNIC,VIRTIO_SCSI_MULTIQUEUE" \
+     --guest-os-features="GVNIC,IDPF,UEFI_COMPATIBLE,VIRTIO_SCSI_MULTIQUEUE" \
      --signature-database-file="Secure Boot Certificate.der"
    ```
 
