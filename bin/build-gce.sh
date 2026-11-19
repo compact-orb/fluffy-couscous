@@ -161,7 +161,7 @@ unset IMAGE_SSH_PUBLIC_KEY
 
 # Remove machine-specific files so the image can be reused.
 log_info "Removing machine-specific identifiers from image"
-create_empty_file "${TARGET_ROOT}/etc/machine-id"
+create_file "${TARGET_ROOT}/etc/machine-id" "uninitialized"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
 force_remove "${TARGET_ROOT}/root/.ansible"
