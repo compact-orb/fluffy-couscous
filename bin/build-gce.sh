@@ -103,7 +103,7 @@ mount_binary_packages "${TARGET_ROOT}" "${PROFILE}"
 
 create_directory "${TARGET_ROOT}/etc/kernel"
 create_file "${TARGET_ROOT}/etc/kernel/cmdline" \
-    "rw console=ttyS0,38400n8d console=tty0 lsm=landlock,yama,apparmor,bpf"
+    "rw console=tty0 console=ttyS0,38400n8d lsm=landlock,yama,apparmor,bpf"
 
 install_packages=(
     "app-admin/ansible"
@@ -161,7 +161,7 @@ unset IMAGE_SSH_PUBLIC_KEY
 
 # Remove machine-specific files so the image can be reused.
 log_info "Removing machine-specific identifiers from image"
-create_file "${TARGET_ROOT}/etc/machine-id" "uninitialized"
+create_empty_file "${TARGET_ROOT}/etc/machine-id"
 force_remove "${TARGET_ROOT}/var/lib/dbus/machine-id"
 force_remove "${TARGET_ROOT}/etc/hostname"
 force_remove "${TARGET_ROOT}/root/.ansible"
