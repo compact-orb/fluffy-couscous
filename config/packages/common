@@ -4,6 +4,7 @@ app-admin/eclean-kernel
 app-admin/sudo
 app-arch/7zip
 app-containers/podman
+app-crypt/certbot
 app-crypt/seahorse
 app-crypt/tpm2-tools
 app-editors/antigravity
