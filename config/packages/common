@@ -110,6 +110,7 @@ sys-kernel/linux-firmware
 sec-policy/apparmor-profiles
 sec-policy/apparmor-d
 sys-process/audit
+sys-process/htop
 www-client/firefox-bin
 www-client/google-chrome
 www-servers/nginx
