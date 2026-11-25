@@ -35,6 +35,7 @@ cli_define_option "TPM2_PIN" "--pin" "TPM2 LUKS PIN" 0
 
 cli_parse "${@}"
 readonly PROFILE INSTALL_DRIVE SWAP_SIZE_GIB ENCRYPT
+readonly TARGET_ARCH="$(get_profile_arch "${PROFILE}")"
 
 check_root
 
@@ -107,13 +108,13 @@ readonly INSTALL_MOUNT_DIR="${BUILD_DIR}/install"
 
 wipefs --all --force "${INSTALL_DRIVE}"
 
-# Partition disk with GPT: 1GiB ESP (type=U) and Linux root (x86-64).
-# Conforms to systemd Discoverable Partitions Specification (DPS) so systemd
-# auto-discovers / and /boot without root= or rd.luks.uuid= in kernel cmdline.
+# Partition disk with GPT: 1GiB ESP (type=U) and Discoverable Partitions
+# Specification (DPS) root so systemd auto-discovers / and /boot without
+# root= or rd.luks.uuid= in kernel cmdline.
 sfdisk "${INSTALL_DRIVE}" <<EOF
 label: gpt
 size=1GiB, type=U
-size=+, type="Linux root (x86-64)"
+size=+, type="$(get_root_partition_type "${TARGET_ARCH}")"
 EOF
 
 udevadm settle
@@ -236,7 +237,6 @@ install_packages=(
     "sys-boot/mokutil"
     "sys-boot/plymouth"
     "sys-boot/shim"
-    "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
@@ -245,6 +245,10 @@ install_packages=(
     "sys-kernel/linux-firmware"
     "sys-process/audit"
 )
+
+if [[ "${TARGET_ARCH}" == "amd64" || "${TARGET_ARCH}" == "x86_64" ]]; then
+    install_packages+=("sys-firmware/intel-microcode")
+fi
 
 IFS=" "
 chroot_run "${INSTALL_MOUNT_DIR}" '

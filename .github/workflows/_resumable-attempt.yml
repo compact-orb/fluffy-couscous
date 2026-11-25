@@ -48,7 +48,9 @@ env:
 jobs:
   run:
     name: Run
-    runs-on: ${{ fromJson(inputs.config).runner }}
+    runs-on: >-
+      ${{ contains(matrix.profile, 'arm64') && 'ubuntu-24.04-arm64' ||
+      fromJson(inputs.config).runner }}
     strategy:
       fail-fast: false
       matrix:

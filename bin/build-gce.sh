@@ -30,6 +30,7 @@ cli_define_option "PROFILE" "-p|--profile" \
 
 cli_parse "${@}"
 readonly PROFILE
+readonly TARGET_ARCH="$(get_profile_arch "${PROFILE}")"
 
 check_root
 check_required_commands
@@ -61,12 +62,12 @@ truncate --size "${DISK_SIZE_GIB}G" "${RAW_IMAGE}"
 
 managed_losetup attach "${RAW_IMAGE}" loop_dev
 
-# Partition disk with GPT: 1GiB ESP (type=U) and Linux root (x86-64).
-# Conforms to systemd Discoverable Partitions Specification (DPS).
+# Partition disk with GPT: 1GiB ESP (type=U) and Discoverable Partitions
+# Specification (DPS) root.
 sfdisk "${loop_dev}" <<EOF
 label: gpt
 size=1GiB, type=U
-size=+, type="Linux root (x86-64)"
+size=+, type="$(get_root_partition_type "${TARGET_ARCH}")"
 EOF
 
 partx --update "${loop_dev}" 2> /dev/null || true
@@ -114,7 +115,6 @@ install_packages=(
     "net-misc/networkmanager"
     "sec-policy/apparmor-d"
     "sys-apps/zram-generator"
-    "sys-firmware/intel-microcode"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
     "sys-kernel/gentoo-kernel"
@@ -122,6 +122,10 @@ install_packages=(
     "sys-kernel/linux-firmware"
     "sys-process/audit"
 )
+
+if [[ "${TARGET_ARCH}" == "amd64" || "${TARGET_ARCH}" == "x86_64" ]]; then
+    install_packages+=("sys-firmware/intel-microcode")
+fi
 
 IFS=" "
 chroot_run "${TARGET_ROOT}" '

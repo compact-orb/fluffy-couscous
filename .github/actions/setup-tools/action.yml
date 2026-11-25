@@ -23,8 +23,8 @@ runs:
       with:
         path: ~/.cache/tools
         key: >-
-          tools-${{ runner.os }}-${{ inputs.rclone-version }}-${{
-          inputs.storageto-version }}
+          tools-${{ runner.os }}-${{ runner.arch }}-${{
+          inputs.rclone-version }}-${{ inputs.storageto-version }}
 
     - name: Install Dependencies
       shell: bash
@@ -32,11 +32,22 @@ runs:
         TOOL_RCLONE_VERSION: ${{ inputs.rclone-version }}
         TOOL_STORAGETO_VERSION: ${{ inputs.storageto-version }}
         INSTALL_STORAGETO: ${{ inputs.storageto }}
+        RUNNER_ARCH: ${{ runner.arch }}
       run: |
+        case "${RUNNER_ARCH:-$(uname --machine)}" in
+          X64|x86_64|amd64) mapped_arch="amd64" ;;
+          ARM64|aarch64|arm64) mapped_arch="arm64" ;;
+          *)
+            printf "ERROR: Unsupported runner arch: %s\n" \
+              "${RUNNER_ARCH}" >&2
+            exit 1
+            ;;
+        esac
+
         mkdir --parents "${HOME}/.cache/tools"
         if [[ ! -x "${HOME}/.cache/tools/rclone" ]]; then
           rclone_url="https://downloads.rclone.org/${TOOL_RCLONE_VERSION}"
-          rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-amd64.zip"
+          rclone_pkg="rclone-${TOOL_RCLONE_VERSION}-linux-${mapped_arch}.zip"
           aria2c --dir="/tmp" "${rclone_url}/${rclone_pkg}"
           unzip -j "/tmp/${rclone_pkg}" \
             "*/rclone" -d "${HOME}/.cache/tools"
@@ -50,7 +61,7 @@ runs:
         if [[ "${INSTALL_STORAGETO}" == "true" ]]; then
           if [[ ! -x "${HOME}/.cache/tools/storageto" ]]; then
             sg_url="https://github.com/storageto/cli/releases/download"
-            sg_pkg="storageto-linux-amd64.tar.gz"
+            sg_pkg="storageto-linux-${mapped_arch}.tar.gz"
             aria2c --dir="/tmp" \
               "${sg_url}/${TOOL_STORAGETO_VERSION}/${sg_pkg}"
             tar --directory="${HOME}/.cache/tools" --extract \

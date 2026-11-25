@@ -75,11 +75,16 @@ All scripts require `root` privileges and support `-h` / `--help` for option
 details:
 
 ```bash
-# Bootstrap from an official Gentoo seed stage
+# Bootstrap from an official Gentoo seed stage (AMD64)
 sudo ./bin/bootstrap.sh \
   --arch amd64 \
   --name stage3-amd64-systemd \
   --profile "automatic-journey:amd64/x86-64-v3/gnome" \
+  --workaround
+
+# Or bootstrap for ARM64 (defaults to stage3-arm64-systemd automatically)
+sudo ./bin/bootstrap.sh \
+  --profile "automatic-journey:arm64/armv8.2-a/gnome" \
   --workaround
 
 # Or bootstrap using an existing custom stage3 as seed
@@ -90,9 +95,11 @@ sudo ./bin/bootstrap.sh \
 
 # Update base system packages and refresh the stage3 archive
 sudo ./bin/update.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
+sudo ./bin/update.sh --profile "automatic-journey:arm64/armv8.2-a/gnome"
 
 # Build the profile's configured package sets from config/
 sudo ./bin/build.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
+sudo ./bin/build.sh --profile "automatic-journey:arm64/armv8.2-a/gnome"
 
 # Or build a custom list of packages (skips config/packages/*)
 sudo ./bin/build.sh \
@@ -101,9 +108,11 @@ sudo ./bin/build.sh \
 
 # Build live installer ISO
 sudo ./bin/build-install.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
+sudo ./bin/build-install.sh --profile "automatic-journey:arm64/armv8.2-a/gnome"
 
 # Build Google Cloud custom image
 sudo ./bin/build-gce.sh --profile "automatic-journey:amd64/x86-64-v3/gnome"
+sudo ./bin/build-gce.sh --profile "automatic-journey:arm64/armv8.2-a/gnome"
 
 # Install target system from booted live media
 sudo install.sh \
@@ -160,10 +169,19 @@ To import the image into Google Cloud and run it with Shielded VM Secure Boot:
    gcloud storage cp gce-<profile>-<date>.tar.gz gs://<bucket-name>/
    ```
 
-2. Create the custom image with UEFI and Shielded VM custom Secure Boot:
+2. Create the custom image with UEFI and Shielded VM custom Secure Boot (add
+   `--architecture=ARM64` when importing ARM64 images):
 
    ```bash
+   # For x86_64:
    gcloud compute images create <image-name> \
+     --source-uri="gs://<bucket-name>/gce-<profile>-<date>.tar.gz" \
+     --guest-os-features="GVNIC,IDPF,UEFI_COMPATIBLE,VIRTIO_SCSI_MULTIQUEUE" \
+     --signature-database-file="Secure Boot Certificate.der"
+
+   # For ARM64:
+   gcloud compute images create <image-name> \
+     --architecture=ARM64 \
      --source-uri="gs://<bucket-name>/gce-<profile>-<date>.tar.gz" \
      --guest-os-features="GVNIC,IDPF,UEFI_COMPATIBLE,VIRTIO_SCSI_MULTIQUEUE" \
      --signature-database-file="Secure Boot Certificate.der"
@@ -180,8 +198,8 @@ To import the image into Google Cloud and run it with Shielded VM Secure Boot:
    ```
 
 Because `systemd-boot` is signed directly with `SECUREBOOT_KEY`, UEFI firmware
-checks `BOOTX64.EFI` against your custom signature database without needing
-Microsoft third-party UEFI CA certificates.
+checks `BOOTX64.EFI` (or `BOOTAA64.EFI` on ARM64) against your custom signature
+database without needing Microsoft third-party UEFI CA certificates.
 
 ## Attribution
 

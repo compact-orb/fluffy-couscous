@@ -23,16 +23,20 @@ chroot_run "${SEED_DIR}" '
         llvm-core/lld llvm-runtimes/clang-runtime
     '
 
-# Clang binary package might not have abi_x86_32 forced, which might mean
-# that 32-bit symlinks were not created.
-chroot_run "${SEED_DIR}" '
-    LLVM_MAJOR=$(clang -dumpversion | cut --delimiter="." --fields="1")
-    llvm_bin="/usr/lib/llvm/${LLVM_MAJOR}/bin"
-    ln --force --symbolic "clang-${LLVM_MAJOR}" \
-        "${llvm_bin}/i686-pc-linux-gnu-clang-${LLVM_MAJOR}"
-    ln --force --symbolic "clang++-${LLVM_MAJOR}" \
-        "${llvm_bin}/i686-pc-linux-gnu-clang++-${LLVM_MAJOR}"
-    '
+case "$(get_profile_arch "${PROFILE}")" in
+    amd64|x86)
+        # Clang binary package might not have abi_x86_32 forced, which might
+        # mean that 32-bit symlinks were not created.
+        chroot_run "${SEED_DIR}" '
+            LLVM_MAJOR=$(clang -dumpversion | cut --delimiter="." --fields="1")
+            llvm_bin="/usr/lib/llvm/${LLVM_MAJOR}/bin"
+            ln --force --symbolic "clang-${LLVM_MAJOR}" \
+                "${llvm_bin}/i686-pc-linux-gnu-clang-${LLVM_MAJOR}"
+            ln --force --symbolic "clang++-${LLVM_MAJOR}" \
+                "${llvm_bin}/i686-pc-linux-gnu-clang++-${LLVM_MAJOR}"
+            '
+        ;;
+esac
 
 # Install extra packages needed by the author's profile.
 chroot_run "${SEED_DIR}" \

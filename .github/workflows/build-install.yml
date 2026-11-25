@@ -21,7 +21,9 @@ env:
 jobs:
   build-install:
     name: Build Install
-    runs-on: ubuntu-26.04
+    runs-on: >-
+      ${{ contains(inputs.profile, 'arm64') && 'ubuntu-24.04-arm64' ||
+      'ubuntu-26.04' }}
     steps:
       - uses: compact-orb/optimize-runner-network@v1
 

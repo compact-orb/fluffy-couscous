@@ -399,6 +399,54 @@ parse_profile() {
     printf "%s %s\n" "${repo}" "${repo_profile}"
 }
 
+# Extracts the architecture prefix from a "repo:arch/..." or "arch/..." profile.
+get_profile_arch() {
+    local profile="${1}"
+    local repo repo_profile
+    IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
+    local arch="${repo_profile%%/*}"
+    if [[ -z "${arch}" ]]; then
+        log_error "Unable to determine architecture from profile: ${profile}"
+        return 1
+    fi
+    printf "%s\n" "${arch}"
+}
+
+# Returns the systemd DPS root partition type name for the target architecture.
+get_root_partition_type() {
+    local arch="${1}"
+    case "${arch}" in
+        arm64|aarch64)
+            printf "%s\n" "Linux root (ARM-64)"
+            ;;
+        amd64|x86_64)
+            printf "%s\n" "Linux root (x86-64)"
+            ;;
+        *)
+            log_error "Unsupported architecture for root" \
+                "partition type: ${arch}"
+            return 1
+            ;;
+    esac
+}
+
+# Returns the UEFI binary architecture suffix (aa64 or x64).
+get_efi_arch() {
+    local arch="${1}"
+    case "${arch}" in
+        arm64|aarch64)
+            printf "%s\n" "aa64"
+            ;;
+        amd64|x86_64)
+            printf "%s\n" "x64"
+            ;;
+        *)
+            log_error "Unsupported architecture for EFI: ${arch}"
+            return 1
+            ;;
+    esac
+}
+
 # Lists profiles from config/profiles (ignoring # comments and blank lines).
 list_profiles() {
     awk '{sub(/\r$/, ""); sub(/#.*/, ""); if (NF) print $1}' \

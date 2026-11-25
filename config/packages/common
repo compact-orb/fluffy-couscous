@@ -1,5 +1,4 @@
 app-admin/ansible
-app-admin/bitwarden-desktop-bin
 app-admin/eclean-kernel
 app-admin/sudo
 app-arch/7zip
@@ -37,14 +36,12 @@ dev-util/antigravity-cli
 dev-util/github-cli
 dev-vcs/git
 dev-vcs/git-lfs
-games-util/steam-launcher
 gnome-base/gnome
 gnome-base/gnome-light
 gnome-extra/gnome-logs
 gnome-extra/gnome-shell-extension-appindicator
 gnome-extra/gnome-system-monitor
 gnome-extra/gnome-tweaks
-mail-client/thunderbird-bin
 media-fonts/fonts-meta
 media-fonts/intel-one-mono
 media-gfx/darktable
@@ -94,7 +91,6 @@ sys-devel/bc
 sys-devel/bison
 sys-devel/flex
 sys-devel/m4
-sys-firmware/intel-microcode
 sys-firmware/sof-firmware
 sys-fs/btrfs-progs
 sys-fs/compsize
@@ -112,5 +108,4 @@ sec-policy/apparmor-d
 sys-process/audit
 sys-process/htop
 www-client/firefox-bin
-www-client/google-chrome
 www-servers/nginx

@@ -28,6 +28,8 @@ cli_define_option "PROFILE" "-p|--profile" \
 
 cli_parse "${@}"
 readonly PROFILE
+readonly TARGET_ARCH="$(get_profile_arch "${PROFILE}")"
+readonly EFI_ARCH="$(get_efi_arch "${TARGET_ARCH}")"
 
 check_root
 check_required_commands
@@ -84,7 +86,6 @@ install_packages=(
     "sys-apps/fwupd"
     "sys-boot/mokutil"
     "sys-boot/shim"
-    "sys-firmware/intel-microcode"
     "sys-firmware/sof-firmware"
     "sys-fs/btrfs-progs"
     "sys-fs/dosfstools"
@@ -94,6 +95,10 @@ install_packages=(
     "sys-kernel/installkernel"
     "sys-kernel/linux-firmware"
 )
+
+if [[ "${TARGET_ARCH}" == "amd64" || "${TARGET_ARCH}" == "x86_64" ]]; then
+    install_packages+=("sys-firmware/intel-microcode")
+fi
 
 IFS=" "
 chroot_run "${STAGE_DIR}" '
@@ -127,15 +132,22 @@ unmount_binary_packages
 log_info "Creating EFI Partition"
 
 # Set up UEFI bootloader directory on ESP. Copy signed systemd-boot to
-# grubx64.efi because standard Microsoft-signed Shim chainloads grubx64.efi.
-create_directory "${STAGE_DIR}/boot/EFI/BOOT"
+# grub<arch>.efi because standard Microsoft-signed Shim chainloads it.
+esp_boot_dir="${STAGE_DIR}/boot/EFI/BOOT"
+shim_dir="${STAGE_DIR}/usr/share/shim"
+systemd_boot_efi=\
+"${STAGE_DIR}/usr/lib/systemd/boot/efi/systemd-boot${EFI_ARCH}.efi.signed"
 
-copy_file "${STAGE_DIR}/usr/share/shim/BOOTX64.EFI" \
-    "${STAGE_DIR}/boot/EFI/BOOT/BOOTX64.EFI"
-copy_file "${STAGE_DIR}/usr/share/shim/mmx64.efi" \
-    "${STAGE_DIR}/boot/EFI/BOOT/mmx64.efi"
-copy_file "${STAGE_DIR}/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed" \
-    "${STAGE_DIR}/boot/EFI/BOOT/grubx64.efi"
+create_directory "${esp_boot_dir}"
+
+copy_file "${shim_dir}/BOOT${EFI_ARCH^^}.EFI" \
+    "${esp_boot_dir}/BOOT${EFI_ARCH^^}.EFI"
+if [[ -f "${shim_dir}/mm${EFI_ARCH}.efi" ]]; then
+    copy_file "${shim_dir}/mm${EFI_ARCH}.efi" \
+        "${esp_boot_dir}/mm${EFI_ARCH}.efi"
+fi
+copy_file "${systemd_boot_efi}" "${esp_boot_dir}/grub${EFI_ARCH}.efi"
+unset esp_boot_dir shim_dir systemd_boot_efi
 
 # systemd-boot loader entry paths are relative to the ESP root, not /boot.
 sed --in-place 's| /boot/| /|g' "${STAGE_DIR}"/boot/loader/entries/*.conf

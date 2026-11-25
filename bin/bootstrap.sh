@@ -34,6 +34,16 @@ cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
+if [[ -z "${SEED_STAGE}" ]]; then
+    if [[ -z "${SEED_ARCH}" ]]; then
+        SEED_ARCH="$(get_profile_arch "${PROFILE}")"
+    fi
+    if [[ -z "${SEED_NAME}" ]]; then
+        case "${SEED_ARCH}" in
+            arm64|amd64) SEED_NAME="stage3-${SEED_ARCH}-systemd" ;;
+        esac
+    fi
+fi
 readonly SEED_ARCH SEED_NAME SEED_STAGE PROFILE WORKAROUND \
     TIMEOUT RESUME_ID RESUME JOBS
 
