@@ -8,11 +8,11 @@ on:
         required: true
         type: string
       seed_arch:
-        description: "Stage seed architecture (e.g. amd64)"
+        description: "Stage seed architecture (defaults from profile)"
         required: false
         type: string
       seed_name:
-        description: "Stage seed tarball name"
+        description: "Stage seed tarball name (defaults for arm64/amd64)"
         required: false
         type: string
       seed_stage:

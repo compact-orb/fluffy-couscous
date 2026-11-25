@@ -16,8 +16,10 @@ source "$(realpath \
 source "$(realpath \
     "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/build.sh")"
 
-cli_define_option "SEED_ARCH" "-a|--arch" "Stage seed architecture" 0 ""
-cli_define_option "SEED_NAME" "-n|--name" "Stage seed tarball name" 0 ""
+cli_define_option "SEED_ARCH" "-a|--arch" \
+    "Stage seed architecture (defaults from --profile)" 0 ""
+cli_define_option "SEED_NAME" "-n|--name" \
+    "Stage seed tarball name (defaults for arm64/amd64)" 0 ""
 cli_define_option "SEED_STAGE" "-s|--seed-stage" \
     "Custom stage3 profile to use as seed" 0 ""
 cli_define_option "PROFILE" "-p|--profile" \
@@ -67,8 +69,8 @@ if [[ -n "${SEED_STAGE}" ]]; then
     fi
 else
     if [[ -z "${SEED_ARCH}" || -z "${SEED_NAME}" ]]; then
-        log_error "Specify either --seed-stage" \
-            "or both --arch and --name."
+        log_error "Specify --seed-stage, or --name" \
+            "(and --arch if not defaulted from --profile)."
         exit 1
     fi
 fi
