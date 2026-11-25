@@ -1,4 +1,7 @@
 # Avoid circular dependencies
 dev-python/pillow -truetype
+dev-qt/qtbase -cups -gtk
 gnome-base/gnome-keyring -ssh-agent
 media-libs/libavif -gdk-pixbuf
+net-dns/avahi -gtk -qt6
+net-print/cups -zeroconf
