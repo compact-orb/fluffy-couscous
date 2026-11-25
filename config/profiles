@@ -1,4 +1,4 @@
 # Format: <repo:profile/path> <package_set ...>
 automatic-journey:amd64/goldmont-plus/gnome common amd64 goldmont-plus
 automatic-journey:amd64/x86-64-v3/gnome     common amd64 x86-64-v3
-automatic-journey:arm64/armv8.2-a/gnome     common
+# automatic-journey:arm64/armv8.2-a/gnome   common
