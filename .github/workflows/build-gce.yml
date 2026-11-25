@@ -22,7 +22,7 @@ jobs:
   build-gce:
     name: Build GCE
     runs-on: >-
-      ${{ contains(inputs.profile, 'arm64') && 'ubuntu-24.04-arm64' ||
+      ${{ contains(inputs.profile, 'arm64') && 'ubuntu-26.04-arm' ||
       'ubuntu-26.04' }}
     steps:
       - uses: compact-orb/optimize-runner-network@v1
