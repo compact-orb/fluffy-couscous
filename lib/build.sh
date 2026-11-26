@@ -443,18 +443,24 @@ publish_resume_stage() {
 clear_resume_stage() {
     local profile="${1}"
     local resume_id="${2}"
-    local stage_type="${3}"
-    log_info "Removing ${stage_type} snapshot for ${profile} (${resume_id})"
+    shift 2
 
     local repo repo_profile
     IFS=" " read -r repo repo_profile < <(parse_profile "${profile}")
-    local stage_prefix="${stage_type}-${repo_profile//\//-}"
-    local image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
 
-    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
-        > /dev/null 2>&1 || true
-    s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}.sig" \
-        > /dev/null 2>&1 || true
+    local stage_type stage_prefix image_filename
+    for stage_type in "${@}"; do
+        log_info "Removing ${stage_type} snapshot for ${profile}" \
+            "(${resume_id})"
+        stage_prefix="${stage_type}-${repo_profile//\//-}"
+        image_filename="${stage_prefix}-resume-${resume_id}.img.zst"
+
+        s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}" \
+            > /dev/null 2>&1 || true
+        s3_rclone delete \
+            ":s3:${S3_BUCKET_NAME}/resumes/${image_filename}.sig" \
+            > /dev/null 2>&1 || true
+    done
 }
 
 # === Binary Package Caching Mount ===
@@ -559,6 +565,55 @@ parse_duration_seconds() {
         log_error "Invalid timeout duration: ${duration}"
         return 1
     fi
+}
+
+TIMEOUT_DEADLINE=0
+
+# Initializes TIMEOUT_DEADLINE when both duration and start epoch are given.
+# Without start_epoch (e.g. outside Actions), deadline tracking stays off.
+init_timeout_deadline() {
+    local duration="${1}"
+    local start_epoch="${2:-}"
+
+    if [[ -z "${duration}" || -z "${start_epoch}" ]]; then
+        TIMEOUT_DEADLINE=0
+        return 0
+    fi
+    if [[ ! "${start_epoch}" =~ ^[0-9]+$ ]]; then
+        log_error "Invalid start timestamp: ${start_epoch}"
+        return 1
+    fi
+
+    local total_secs
+    total_secs="$(parse_duration_seconds "${duration}")"
+    TIMEOUT_DEADLINE="$(( start_epoch + total_secs ))"
+}
+
+# Prints remaining timeout in seconds, or fallback duration if deadline is off.
+get_remaining_timeout() {
+    local fallback="${1:-}"
+    if (( TIMEOUT_DEADLINE == 0 )); then
+        if [[ -n "${fallback}" ]]; then
+            printf "%s\n" "${fallback}"
+        fi
+        return 0
+    fi
+    local remaining="$(( TIMEOUT_DEADLINE - $(date +%s) ))"
+    # Clamp to 1s; 0s disables the timeout check in chroot_run_criu.
+    if (( remaining < 1 )); then
+        remaining=1
+    fi
+    printf "%ss\n" "${remaining}"
+}
+
+# Returns 0 if no timeout is active or more than min_secs (default 600) remain.
+has_enough_timeout() {
+    local min_secs="${1:-600}"
+    if (( TIMEOUT_DEADLINE == 0 )); then
+        return 0
+    fi
+    local remaining="$(( TIMEOUT_DEADLINE - $(date +%s) ))"
+    (( remaining > min_secs ))
 }
 
 prepare_criu_chroot_filesystem() {

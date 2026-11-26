@@ -25,6 +25,8 @@ cli_define_flag "SKIP_SYSTEM" "-s|--skip-system" \
     "Skip @system update" 0
 cli_define_option "TIMEOUT" "-t|--timeout" \
     "Timeout duration for emerge (e.g. 330m)" 0 ""
+cli_define_option "START_TIME" "--start-time" \
+    "Job start epoch timestamp in seconds" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique ID for resume snapshots" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
@@ -33,8 +35,9 @@ cli_define_flag "JOBS" "-j|--jobs" \
     "Enable parallel emerge jobs using nproc (defaults to 1)" 0
 
 cli_parse "${@}"
-readonly PROFILE PACKAGES USEPKG_EXCLUDE SKIP_SYSTEM TIMEOUT RESUME_ID \
-    RESUME JOBS
+readonly PROFILE PACKAGES USEPKG_EXCLUDE SKIP_SYSTEM TIMEOUT START_TIME \
+    RESUME_ID RESUME JOBS
+init_timeout_deadline "${TIMEOUT}" "${START_TIME}"
 
 emerge_jobs=1
 if (( JOBS == 1 )); then
@@ -60,7 +63,8 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # --skip-system is set. Run @preserved-rebuild for library soname changes
 # before the final depclean.
 build_exit=0
-CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+CHROOT_TIMEOUT="$(get_remaining_timeout "${TIMEOUT}")" \
+    chroot_run "${STAGE_DIR}" '
     emaint --fix binhost
     # Strip whitespace so empty or comment-only inputs skip emerge.
     if [[ -n "'"${PACKAGES//[[:space:]]/}"'" ]]; then

@@ -27,6 +27,8 @@ cli_define_flag "CLEAN_BINPKGS" "-c|--clean" \
     "Remove old binary packages that are not installed" 0
 cli_define_option "TIMEOUT" "-t|--timeout" \
     "Timeout duration for emerge (e.g. 330m)" 0 ""
+cli_define_option "START_TIME" "--start-time" \
+    "Job start epoch timestamp in seconds" 0 ""
 cli_define_option "RESUME_ID" "-r|--resume-id" \
     "Unique ID for resume snapshots" 0 ""
 cli_define_flag "RESUME" "-R|--resume" \
@@ -45,7 +47,8 @@ elif (( CLEAN_BINPKGS == 1 )); then
     exit 1
 fi
 readonly PROFILE PACKAGES PRE_PACKAGES USEPKG_EXCLUDE CLEAN_BINPKGS \
-    TIMEOUT RESUME_ID RESUME JOBS
+    TIMEOUT START_TIME RESUME_ID RESUME JOBS
+init_timeout_deadline "${TIMEOUT}" "${START_TIME}"
 
 emerge_jobs=1
 if (( JOBS == 1 )); then
@@ -72,7 +75,8 @@ prepare_stage_environment "${STAGE_DIR}" "${PROFILE}" \
 # (--usepkg=n) to fix broken links, then clean unused dependencies.
 # With --clean, remove old binary packages and refresh the binhost index.
 build_exit=0
-CHROOT_TIMEOUT="${TIMEOUT}" chroot_run "${STAGE_DIR}" '
+CHROOT_TIMEOUT="$(get_remaining_timeout "${TIMEOUT}")" \
+    chroot_run "${STAGE_DIR}" '
     emaint --fix binhost
     MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
     emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \

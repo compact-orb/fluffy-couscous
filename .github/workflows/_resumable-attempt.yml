@@ -69,6 +69,10 @@ jobs:
       CLEAN_BINPKGS: ${{ fromJson(inputs.config).clean_binpkgs }}
       SKIP_SYSTEM: ${{ fromJson(inputs.config).skip_system }}
     steps:
+      - name: Record Job Start Time
+        run: |
+          printf "JOB_START_TIME=%s\n" "$(date +%s)" >> "${GITHUB_ENV}"
+
       - if: ${{ fromJson(inputs.config).github_hosted }}
         uses: compact-orb/optimize-runner-network@v1
 
@@ -202,6 +206,7 @@ jobs:
           args=(
             --profile="${TARGET_PROFILE}"
             --resume-id="${{ github.run_id }}"
+            --start-time="${JOB_START_TIME}"
             --timeout="${BUILD_TIMEOUT}"
           )
           if [[ "${ENABLE_JOBS}" == "true" ]]; then
@@ -294,7 +299,8 @@ jobs:
           if [[ "${MODE}" == "bootstrap" ]]; then
             profile="$(jq --raw-output '.[0]' <<< "${PROFILES_JSON}")"
             found=""
-            for stage in "stage3" "stage3-init" "stage1"; do
+            for stage in "stage3" "stage3-init" "stage1" \
+              "seed-ready" "seed-update"; do
               if has_resume_stage "${profile}" "${run_id}" "${stage}"; then
                 found="${stage}"
                 break

@@ -277,7 +277,7 @@ jobs:
           source lib/build.sh
           include="stage3-*-resume-${{ github.run_id }}.*"
           if [[ "${MODE}" == "bootstrap" ]]; then
-            include="stage*-*-resume-${{ github.run_id }}.*"
+            include="*-resume-${{ github.run_id }}.*"
           fi
           s3_rclone delete ":s3:${S3_BUCKET_NAME}/resumes/" \
             --include="${include}" || true

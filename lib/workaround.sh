@@ -62,16 +62,3 @@ remove_portage_configuration "${SEED_DIR}"
 
 configure_portage "${SEED_DIR}" "${PROFILE}" "stage1"
 install_secureboot_keys "${SEED_DIR}"
-
-# Perl can hardcode GCC from the seed stage, causing LLVM flags to fail
-# when building Perl dependencies with Clang. Rebuild Perl first.
-chroot_run "${SEED_DIR}" \
-    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
-        emerge --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
-        dev-lang/perl'
-
-# Update everything with the new profile to reduce the chance of issues.
-chroot_run "${SEED_DIR}" \
-    'MAKEOPTS="--jobs='"${make_jobs}"' --load-average='"${make_jobs}"'" \
-        emerge --deep --jobs='"${emerge_jobs}"' --load-average='"${cpus}"' \
-        --newuse --update @world'
