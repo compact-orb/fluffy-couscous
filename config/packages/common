@@ -73,6 +73,7 @@ net-p2p/qbittorrent
 net-print/cups-filters
 net-print/cups-meta
 net-print/gutenprint
+net-vpn/amneziawg-modules
 net-vpn/windscribe-bin
 net-vpn/wireguard-tools
 sys-apps/apparmor
